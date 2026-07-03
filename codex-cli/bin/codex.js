@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Unified entry point for the Codex CLI.
+// Unified entry point for Midnight Coder.
 
 import { spawn } from "node:child_process";
 import { existsSync, realpathSync } from "fs";
@@ -13,12 +13,12 @@ const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 
 const PLATFORM_PACKAGE_BY_TARGET = {
-  "x86_64-unknown-linux-musl": "@openai/codex-linux-x64",
-  "aarch64-unknown-linux-musl": "@openai/codex-linux-arm64",
-  "x86_64-apple-darwin": "@openai/codex-darwin-x64",
-  "aarch64-apple-darwin": "@openai/codex-darwin-arm64",
-  "x86_64-pc-windows-msvc": "@openai/codex-win32-x64",
-  "aarch64-pc-windows-msvc": "@openai/codex-win32-arm64",
+  "x86_64-unknown-linux-musl": "midnight-coder-linux-x64",
+  "aarch64-unknown-linux-musl": "midnight-coder-linux-arm64",
+  "x86_64-apple-darwin": "midnight-coder-darwin-x64",
+  "aarch64-apple-darwin": "midnight-coder-darwin-arm64",
+  "x86_64-pc-windows-msvc": "midnight-coder-win32-x64",
+  "aarch64-pc-windows-msvc": "midnight-coder-win32-arm64",
 };
 
 const { platform, arch } = process;
@@ -75,7 +75,7 @@ if (!platformPackage) {
   throw new Error(`Unsupported target triple: ${targetTriple}`);
 }
 
-function findCodexExecutable() {
+function findMidnightCoderExecutable() {
   let vendorRoot;
   try {
     const packageJsonPath = require.resolve(`${platformPackage}/package.json`);
@@ -97,14 +97,14 @@ function findCodexExecutable() {
   const packageManager = detectPackageManager();
   const updateCommand =
     packageManager === "bun"
-      ? "bun install -g @openai/codex@latest"
-      : "npm install -g @openai/codex@latest";
+      ? "bun install -g midnight-coder@latest"
+      : "npm install -g midnight-coder@latest";
   throw new Error(
-    `Missing optional dependency ${platformPackage}. Reinstall Codex: ${updateCommand}`,
+    `Missing optional dependency ${platformPackage}. Reinstall Midnight Coder: ${updateCommand}`,
   );
 }
 
-const binaryPath = findCodexExecutable();
+const binaryPath = findMidnightCoderExecutable();
 
 // Use an asynchronous spawn instead of spawnSync so that Node is able to
 // respond to signals (e.g. Ctrl-C / SIGINT) while the native binary is
@@ -113,7 +113,7 @@ const binaryPath = findCodexExecutable();
 // receives a fatal signal, both processes exit in a predictable manner.
 
 /**
- * Use heuristics to detect the package manager that was used to install Codex
+ * Use heuristics to detect the package manager that was used to install Midnight Coder
  * in order to give the user a hint about how to update it.
  */
 function detectPackageManager() {
