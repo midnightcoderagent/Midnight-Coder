@@ -9,14 +9,14 @@ use codex_utils_absolute_path::AbsolutePathBuf;
 const DEFAULT_AGENTS_MD_FILENAME: &str = "AGENTS.md";
 const LOCAL_AGENTS_MD_FILENAME: &str = "AGENTS.override.md";
 
-/// Loads user instructions from a Codex home directory.
+/// Loads user instructions from a MidnightCoder home directory.
 #[derive(Clone, Debug)]
-pub struct CodexHomeUserInstructionsProvider {
+pub struct MidnightCoderHomeUserInstructionsProvider {
     codex_home: AbsolutePathBuf,
 }
 
-impl CodexHomeUserInstructionsProvider {
-    /// Creates a provider rooted at the supplied absolute Codex home directory.
+impl MidnightCoderHomeUserInstructionsProvider {
+    /// Creates a provider rooted at the supplied absolute MidnightCoder home directory.
     pub fn new(codex_home: AbsolutePathBuf) -> Self {
         Self { codex_home }
     }
@@ -67,7 +67,7 @@ impl CodexHomeUserInstructionsProvider {
     }
 }
 
-impl UserInstructionsProvider for CodexHomeUserInstructionsProvider {
+impl UserInstructionsProvider for MidnightCoderHomeUserInstructionsProvider {
     fn load_user_instructions(&self) -> LoadUserInstructionsFuture<'_> {
         Box::pin(self.load_from_codex_home())
     }

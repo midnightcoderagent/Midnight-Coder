@@ -51,8 +51,8 @@ use core_test_support::skip_if_no_remote_env;
 use core_test_support::skip_if_remote;
 use core_test_support::skip_if_target_windows;
 use core_test_support::skip_if_wine_exec;
-use core_test_support::test_codex::TestCodexBuilder;
-use core_test_support::test_codex::TestCodexHarness;
+use core_test_support::test_codex::TestMidnightCoderBuilder;
+use core_test_support::test_codex::TestMidnightCoderHarness;
 use core_test_support::test_codex::local;
 use core_test_support::test_codex::test_codex;
 use core_test_support::test_codex::turn_permission_fields;
@@ -65,20 +65,20 @@ use wiremock::ResponseTemplate;
 use wiremock::matchers::method;
 use wiremock::matchers::path_regex;
 
-pub async fn apply_patch_harness() -> Result<TestCodexHarness> {
+pub async fn apply_patch_harness() -> Result<TestMidnightCoderHarness> {
     apply_patch_harness_with(|builder| builder).await
 }
 
 async fn apply_patch_harness_with(
-    configure: impl FnOnce(TestCodexBuilder) -> TestCodexBuilder,
-) -> Result<TestCodexHarness> {
+    configure: impl FnOnce(TestMidnightCoderBuilder) -> TestMidnightCoderBuilder,
+) -> Result<TestMidnightCoderHarness> {
     let builder = configure(test_codex());
     // Box harness construction so apply_patch_cli tests do not inline the
     // full test-thread startup path into each test future.
-    Box::pin(TestCodexHarness::with_auto_env_builder(builder)).await
+    Box::pin(TestMidnightCoderHarness::with_auto_env_builder(builder)).await
 }
 
-async fn submit_without_wait(harness: &TestCodexHarness, prompt: &str) -> Result<()> {
+async fn submit_without_wait(harness: &TestMidnightCoderHarness, prompt: &str) -> Result<()> {
     submit_without_wait_with_turn_permissions(
         harness,
         prompt,
@@ -89,7 +89,7 @@ async fn submit_without_wait(harness: &TestCodexHarness, prompt: &str) -> Result
 }
 
 async fn submit_without_wait_with_turn_permissions(
-    harness: &TestCodexHarness,
+    harness: &TestMidnightCoderHarness,
     prompt: &str,
     sandbox_policy: SandboxPolicy,
     permission_profile: Option<PermissionProfile>,
@@ -195,7 +195,7 @@ fn create_file_symlink(_source: &std::path::Path, _link: &std::path::Path) -> st
 }
 
 pub async fn mount_apply_patch(
-    harness: &TestCodexHarness,
+    harness: &TestMidnightCoderHarness,
     call_id: &str,
     patch: &str,
     assistant_msg: &str,
@@ -213,7 +213,7 @@ pub async fn mount_apply_patch(
 }
 
 async fn mount_apply_patch_model_output(
-    harness: &TestCodexHarness,
+    harness: &TestMidnightCoderHarness,
     call_id: &str,
     patch: &str,
     assistant_msg: &str,

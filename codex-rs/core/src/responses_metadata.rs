@@ -96,25 +96,27 @@ impl CompactionTurnMetadata {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum CodexResponsesRequestKind {
+pub(crate) enum MidnightCoderResponsesRequestKind {
     Turn,
     Prewarm,
     Compaction(CompactionTurnMetadata),
     Memory,
 }
 
-impl CodexResponsesRequestKind {
+impl MidnightCoderResponsesRequestKind {
     fn metadata(self) -> (&'static str, Option<CompactionTurnMetadata>) {
         match self {
-            CodexResponsesRequestKind::Turn => ("turn", None),
-            CodexResponsesRequestKind::Prewarm => ("prewarm", None),
-            CodexResponsesRequestKind::Compaction(metadata) => ("compaction", Some(metadata)),
-            CodexResponsesRequestKind::Memory => ("memory", None),
+            MidnightCoderResponsesRequestKind::Turn => ("turn", None),
+            MidnightCoderResponsesRequestKind::Prewarm => ("prewarm", None),
+            MidnightCoderResponsesRequestKind::Compaction(metadata) => {
+                ("compaction", Some(metadata))
+            }
+            MidnightCoderResponsesRequestKind::Memory => ("memory", None),
         }
     }
 
     fn has_turn_identity(self) -> bool {
-        !matches!(self, CodexResponsesRequestKind::Memory)
+        !matches!(self, MidnightCoderResponsesRequestKind::Memory)
     }
 }
 
@@ -128,20 +130,20 @@ pub(crate) struct TurnMetadataWorkspace {
     pub(crate) has_changes: Option<bool>,
 }
 
-/// Caller-owned snapshot of Codex metadata sent to ResponsesAPI.
+/// Caller-owned snapshot of MidnightCoder metadata sent to ResponsesAPI.
 ///
-/// The full Codex turn metadata blob is transported canonically as
+/// The full MidnightCoder turn metadata blob is transported canonically as
 /// `client_metadata["x-codex-turn-metadata"]`. Flat `client_metadata` keys and direct HTTP/ws
 /// headers are generated compatibility projections of this snapshot, not separate sources of
 /// truth.
 #[derive(Clone, Debug)]
-pub struct CodexResponsesMetadata {
+pub struct MidnightCoderResponsesMetadata {
     pub(crate) installation_id: String,
     pub(crate) session_id: String,
     pub(crate) thread_id: String,
     pub(crate) turn_id: Option<String>,
     pub(crate) window_id: String,
-    pub(crate) request_kind: Option<CodexResponsesRequestKind>,
+    pub(crate) request_kind: Option<MidnightCoderResponsesRequestKind>,
     pub(crate) forked_from_thread_id: Option<ThreadId>,
     pub(crate) parent_thread_id: Option<ThreadId>,
     pub(crate) subagent_header: Option<String>,
@@ -153,7 +155,7 @@ pub struct CodexResponsesMetadata {
     pub(crate) extra: BTreeMap<String, String>,
 }
 
-impl CodexResponsesMetadata {
+impl MidnightCoderResponsesMetadata {
     pub(crate) fn new(
         installation_id: String,
         session_id: String,
@@ -251,17 +253,17 @@ impl CodexResponsesMetadata {
         headers
     }
 
-    fn turn_metadata_payload(&self) -> CodexTurnMetadataPayload<'_> {
+    fn turn_metadata_payload(&self) -> MidnightCoderTurnMetadataPayload<'_> {
         let request_kind = self.request_kind;
         let (request_kind_value, compaction) = request_kind.map_or((None, None), |request_kind| {
             let (request_kind, compaction) = request_kind.metadata();
             (Some(request_kind), compaction)
         });
         let has_turn_identity =
-            request_kind.is_none_or(CodexResponsesRequestKind::has_turn_identity);
+            request_kind.is_none_or(MidnightCoderResponsesRequestKind::has_turn_identity);
         let has_request_identity =
-            request_kind.is_some_and(CodexResponsesRequestKind::has_turn_identity);
-        CodexTurnMetadataPayload {
+            request_kind.is_some_and(MidnightCoderResponsesRequestKind::has_turn_identity);
+        MidnightCoderTurnMetadataPayload {
             installation_id: has_request_identity.then_some(self.installation_id.as_str()),
             session_id: has_turn_identity.then_some(self.session_id.as_str()),
             thread_id: has_turn_identity.then_some(self.thread_id.as_str()),
@@ -278,8 +280,8 @@ impl CodexResponsesMetadata {
             workspaces: non_empty_workspaces(&self.workspaces),
             turn_started_at_unix_ms: self.turn_started_at_unix_ms,
             compaction,
-            // responsesapi_client_metadata enriches the Codex turn metadata blob, not literal
-            // top-level Responses client_metadata. Reserved Codex-owned keys are filtered when
+            // responsesapi_client_metadata enriches the MidnightCoder turn metadata blob, not literal
+            // top-level Responses client_metadata. Reserved MidnightCoder-owned keys are filtered when
             // these extras enter turn state.
             extra: &self.extra,
         }
@@ -340,7 +342,7 @@ fn non_empty_workspaces(
 }
 
 #[derive(Serialize)]
-struct CodexTurnMetadataPayload<'a> {
+struct MidnightCoderTurnMetadataPayload<'a> {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     installation_id: Option<&'a str>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

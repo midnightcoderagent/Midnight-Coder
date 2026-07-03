@@ -11,11 +11,11 @@ import openai_codex
 import openai_codex.types as public_types
 from openai_codex import (
     ApprovalMode,
-    AsyncCodex,
+    AsyncMidnightCoder,
     AsyncThread,
     AsyncTurnHandle,
-    Codex,
-    CodexConfig,
+    MidnightCoder,
+    MidnightCoderConfig,
     Sandbox,
     Thread,
     TurnHandle,
@@ -26,9 +26,9 @@ from openai_codex.types import InitializeResponse
 
 EXPECTED_ROOT_EXPORTS = [
     "__version__",
-    "CodexConfig",
-    "Codex",
-    "AsyncCodex",
+    "MidnightCoderConfig",
+    "MidnightCoder",
+    "AsyncMidnightCoder",
     "ApprovalMode",
     "Sandbox",
     "ChatgptLoginHandle",
@@ -49,10 +49,10 @@ EXPECTED_ROOT_EXPORTS = [
     "SkillInput",
     "MentionInput",
     "retry_on_overload",
-    "CodexError",
+    "MidnightCoderError",
     "TransportClosedError",
     "JsonRpcError",
-    "CodexRpcError",
+    "MidnightCoderRpcError",
     "ParseError",
     "InvalidRequestError",
     "MethodNotFoundError",
@@ -131,7 +131,7 @@ def _assert_no_any_annotations(fn: object) -> None:
 
 def test_root_exports_codex_config() -> None:
     """The root package should expose the process configuration object."""
-    assert CodexConfig.__name__ == "CodexConfig"
+    assert MidnightCoderConfig.__name__ == "MidnightCoderConfig"
 
 
 def test_root_exports_turn_result() -> None:
@@ -208,24 +208,24 @@ def test_package_and_default_client_versions_follow_project_version() -> None:
     pyproject = tomllib.loads(pyproject_path.read_text())
 
     assert openai_codex.__version__ == pyproject["project"]["version"]
-    assert CodexConfig().client_version == openai_codex.__version__
+    assert MidnightCoderConfig().client_version == openai_codex.__version__
 
 
 def test_curated_public_api_has_builtin_help_documentation() -> None:
     """The package's normal ``help()`` surface should explain common first-use APIs."""
     documented = {
         "module": openai_codex,
-        "Codex": Codex,
-        "AsyncCodex": AsyncCodex,
-        "CodexConfig": CodexConfig,
+        "MidnightCoder": MidnightCoder,
+        "AsyncMidnightCoder": AsyncMidnightCoder,
+        "MidnightCoderConfig": MidnightCoderConfig,
         "Thread": Thread,
         "AsyncThread": AsyncThread,
         "TurnHandle": TurnHandle,
         "AsyncTurnHandle": AsyncTurnHandle,
         "TurnResult": TurnResult,
         "Sandbox": Sandbox,
-        "thread_start": Codex.thread_start,
-        "thread_resume": Codex.thread_resume,
+        "thread_start": MidnightCoder.thread_start,
+        "thread_resume": MidnightCoder.thread_resume,
         "thread_run": Thread.run,
         "thread_turn": Thread.turn,
     }
@@ -248,16 +248,16 @@ def test_package_root_exports_only_public_api() -> None:
         EXPECTED_ROOT_EXPORTS, True
     )
     assert {
-        "CodexClient": hasattr(openai_codex, "CodexClient"),
-        "AsyncCodexClient": hasattr(openai_codex, "AsyncCodexClient"),
+        "MidnightCoderClient": hasattr(openai_codex, "MidnightCoderClient"),
+        "AsyncMidnightCoderClient": hasattr(openai_codex, "AsyncMidnightCoderClient"),
         "InitializeResponse": hasattr(openai_codex, "InitializeResponse"),
         "ThreadStartParams": hasattr(openai_codex, "ThreadStartParams"),
         "TurnStartParams": hasattr(openai_codex, "TurnStartParams"),
         "TurnCompletedNotification": hasattr(openai_codex, "TurnCompletedNotification"),
         "TurnStatus": hasattr(openai_codex, "TurnStatus"),
     } == {
-        "CodexClient": False,
-        "AsyncCodexClient": False,
+        "MidnightCoderClient": False,
+        "AsyncMidnightCoderClient": False,
         "InitializeResponse": False,
         "ThreadStartParams": False,
         "TurnStartParams": False,
@@ -276,7 +276,7 @@ def test_package_star_import_matches_public_api() -> None:
 
 
 def test_types_module_exports_curated_public_types() -> None:
-    """The public type module should expose Codex protocol models."""
+    """The public type module should expose MidnightCoder protocol models."""
     assert public_types.__all__ == EXPECTED_TYPES_EXPORTS
     assert {name: hasattr(public_types, name) for name in EXPECTED_TYPES_EXPORTS} == dict.fromkeys(
         EXPECTED_TYPES_EXPORTS, True
@@ -316,7 +316,7 @@ def test_examples_use_public_import_surfaces() -> None:
 def test_generated_public_signatures_are_snake_case_and_typed() -> None:
     """Generated convenience methods should expose typed Pythonic keyword names."""
     expected = {
-        Codex.thread_start: [
+        MidnightCoder.thread_start: [
             "approval_mode",
             "base_instructions",
             "config",
@@ -332,7 +332,7 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
             "session_start_source",
             "thread_source",
         ],
-        Codex.thread_list: [
+        MidnightCoder.thread_list: [
             "archived",
             "cursor",
             "cwd",
@@ -344,7 +344,7 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
             "source_kinds",
             "use_state_db_only",
         ],
-        Codex.thread_resume: [
+        MidnightCoder.thread_resume: [
             "approval_mode",
             "base_instructions",
             "config",
@@ -356,7 +356,7 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
             "sandbox",
             "service_tier",
         ],
-        Codex.thread_fork: [
+        MidnightCoder.thread_fork: [
             "approval_mode",
             "base_instructions",
             "config",
@@ -391,7 +391,7 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
             "service_tier",
             "summary",
         ],
-        AsyncCodex.thread_start: [
+        AsyncMidnightCoder.thread_start: [
             "approval_mode",
             "base_instructions",
             "config",
@@ -407,7 +407,7 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
             "session_start_source",
             "thread_source",
         ],
-        AsyncCodex.thread_list: [
+        AsyncMidnightCoder.thread_list: [
             "archived",
             "cursor",
             "cwd",
@@ -419,7 +419,7 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
             "source_kinds",
             "use_state_db_only",
         ],
-        AsyncCodex.thread_resume: [
+        AsyncMidnightCoder.thread_resume: [
             "approval_mode",
             "base_instructions",
             "config",
@@ -431,7 +431,7 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
             "sandbox",
             "service_tier",
         ],
-        AsyncCodex.thread_fork: [
+        AsyncMidnightCoder.thread_fork: [
             "approval_mode",
             "base_instructions",
             "config",
@@ -480,8 +480,8 @@ def test_generated_public_signatures_are_snake_case_and_typed() -> None:
 def test_new_thread_methods_default_to_auto_review() -> None:
     """New threads should start with auto-review unless callers opt out."""
     funcs = [
-        Codex.thread_start,
-        AsyncCodex.thread_start,
+        MidnightCoder.thread_start,
+        AsyncMidnightCoder.thread_start,
     ]
 
     assert {fn: _keyword_default(fn, "approval_mode") for fn in funcs} == dict.fromkeys(
@@ -492,12 +492,12 @@ def test_new_thread_methods_default_to_auto_review() -> None:
 def test_existing_thread_methods_default_to_preserving_approval_settings() -> None:
     """Existing thread operations should not serialize approval overrides by default."""
     funcs = [
-        Codex.thread_resume,
-        Codex.thread_fork,
+        MidnightCoder.thread_resume,
+        MidnightCoder.thread_fork,
         Thread.turn,
         Thread.run,
-        AsyncCodex.thread_resume,
-        AsyncCodex.thread_fork,
+        AsyncMidnightCoder.thread_resume,
+        AsyncMidnightCoder.thread_fork,
         AsyncThread.turn,
         AsyncThread.run,
     ]
@@ -507,16 +507,16 @@ def test_existing_thread_methods_default_to_preserving_approval_settings() -> No
 
 def test_lifecycle_methods_are_codex_scoped() -> None:
     """Lifecycle operations should hang off the client rather than thread objects."""
-    assert hasattr(Codex, "thread_resume")
-    assert hasattr(Codex, "thread_fork")
-    assert hasattr(Codex, "thread_archive")
-    assert hasattr(Codex, "thread_unarchive")
-    assert hasattr(AsyncCodex, "thread_resume")
-    assert hasattr(AsyncCodex, "thread_fork")
-    assert hasattr(AsyncCodex, "thread_archive")
-    assert hasattr(AsyncCodex, "thread_unarchive")
-    assert not hasattr(Codex, "thread")
-    assert not hasattr(AsyncCodex, "thread")
+    assert hasattr(MidnightCoder, "thread_resume")
+    assert hasattr(MidnightCoder, "thread_fork")
+    assert hasattr(MidnightCoder, "thread_archive")
+    assert hasattr(MidnightCoder, "thread_unarchive")
+    assert hasattr(AsyncMidnightCoder, "thread_resume")
+    assert hasattr(AsyncMidnightCoder, "thread_fork")
+    assert hasattr(AsyncMidnightCoder, "thread_archive")
+    assert hasattr(AsyncMidnightCoder, "thread_unarchive")
+    assert not hasattr(MidnightCoder, "thread")
+    assert not hasattr(AsyncMidnightCoder, "thread")
 
     assert not hasattr(Thread, "resume")
     assert not hasattr(Thread, "fork")
@@ -528,10 +528,10 @@ def test_lifecycle_methods_are_codex_scoped() -> None:
     assert not hasattr(AsyncThread, "unarchive")
 
     for fn in (
-        Codex.thread_archive,
-        Codex.thread_unarchive,
-        AsyncCodex.thread_archive,
-        AsyncCodex.thread_unarchive,
+        MidnightCoder.thread_archive,
+        MidnightCoder.thread_unarchive,
+        AsyncMidnightCoder.thread_archive,
+        AsyncMidnightCoder.thread_unarchive,
     ):
         _assert_no_any_annotations(fn)
 

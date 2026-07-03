@@ -2,8 +2,8 @@ use codex_experimental_api_macros::ExperimentalApi;
 use codex_protocol::config_types::ApprovalsReviewer as CoreApprovalsReviewer;
 use codex_protocol::config_types::SandboxMode as CoreSandboxMode;
 use codex_protocol::protocol::AskForApproval as CoreAskForApproval;
-use codex_protocol::protocol::CodexErrorInfo as CoreCodexErrorInfo;
 use codex_protocol::protocol::GranularApprovalConfig as CoreGranularApprovalConfig;
+use codex_protocol::protocol::MidnightCoderErrorInfo as CoreMidnightCoderErrorInfo;
 use codex_protocol::protocol::NonSteerableTurnKind as CoreNonSteerableTurnKind;
 use schemars::JsonSchema;
 use schemars::r#gen::SchemaGenerator;
@@ -68,7 +68,7 @@ pub enum NonSteerableTurnKind {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export_to = "v2/")]
-pub enum CodexErrorInfo {
+pub enum MidnightCoderErrorInfo {
     ContextWindowExceeded,
     SessionBudgetExceeded,
     UsageLimitExceeded,
@@ -112,37 +112,49 @@ pub enum CodexErrorInfo {
     Other,
 }
 
-impl From<CoreCodexErrorInfo> for CodexErrorInfo {
-    fn from(value: CoreCodexErrorInfo) -> Self {
+impl From<CoreMidnightCoderErrorInfo> for MidnightCoderErrorInfo {
+    fn from(value: CoreMidnightCoderErrorInfo) -> Self {
         match value {
-            CoreCodexErrorInfo::ContextWindowExceeded => CodexErrorInfo::ContextWindowExceeded,
-            CoreCodexErrorInfo::SessionBudgetExceeded => CodexErrorInfo::SessionBudgetExceeded,
-            CoreCodexErrorInfo::UsageLimitExceeded => CodexErrorInfo::UsageLimitExceeded,
-            CoreCodexErrorInfo::ServerOverloaded => CodexErrorInfo::ServerOverloaded,
-            CoreCodexErrorInfo::CyberPolicy => CodexErrorInfo::CyberPolicy,
-            CoreCodexErrorInfo::HttpConnectionFailed { http_status_code } => {
-                CodexErrorInfo::HttpConnectionFailed { http_status_code }
+            CoreMidnightCoderErrorInfo::ContextWindowExceeded => {
+                MidnightCoderErrorInfo::ContextWindowExceeded
             }
-            CoreCodexErrorInfo::ResponseStreamConnectionFailed { http_status_code } => {
-                CodexErrorInfo::ResponseStreamConnectionFailed { http_status_code }
+            CoreMidnightCoderErrorInfo::SessionBudgetExceeded => {
+                MidnightCoderErrorInfo::SessionBudgetExceeded
             }
-            CoreCodexErrorInfo::InternalServerError => CodexErrorInfo::InternalServerError,
-            CoreCodexErrorInfo::Unauthorized => CodexErrorInfo::Unauthorized,
-            CoreCodexErrorInfo::BadRequest => CodexErrorInfo::BadRequest,
-            CoreCodexErrorInfo::ThreadRollbackFailed => CodexErrorInfo::ThreadRollbackFailed,
-            CoreCodexErrorInfo::SandboxError => CodexErrorInfo::SandboxError,
-            CoreCodexErrorInfo::ResponseStreamDisconnected { http_status_code } => {
-                CodexErrorInfo::ResponseStreamDisconnected { http_status_code }
+            CoreMidnightCoderErrorInfo::UsageLimitExceeded => {
+                MidnightCoderErrorInfo::UsageLimitExceeded
             }
-            CoreCodexErrorInfo::ResponseTooManyFailedAttempts { http_status_code } => {
-                CodexErrorInfo::ResponseTooManyFailedAttempts { http_status_code }
+            CoreMidnightCoderErrorInfo::ServerOverloaded => {
+                MidnightCoderErrorInfo::ServerOverloaded
             }
-            CoreCodexErrorInfo::ActiveTurnNotSteerable { turn_kind } => {
-                CodexErrorInfo::ActiveTurnNotSteerable {
+            CoreMidnightCoderErrorInfo::CyberPolicy => MidnightCoderErrorInfo::CyberPolicy,
+            CoreMidnightCoderErrorInfo::HttpConnectionFailed { http_status_code } => {
+                MidnightCoderErrorInfo::HttpConnectionFailed { http_status_code }
+            }
+            CoreMidnightCoderErrorInfo::ResponseStreamConnectionFailed { http_status_code } => {
+                MidnightCoderErrorInfo::ResponseStreamConnectionFailed { http_status_code }
+            }
+            CoreMidnightCoderErrorInfo::InternalServerError => {
+                MidnightCoderErrorInfo::InternalServerError
+            }
+            CoreMidnightCoderErrorInfo::Unauthorized => MidnightCoderErrorInfo::Unauthorized,
+            CoreMidnightCoderErrorInfo::BadRequest => MidnightCoderErrorInfo::BadRequest,
+            CoreMidnightCoderErrorInfo::ThreadRollbackFailed => {
+                MidnightCoderErrorInfo::ThreadRollbackFailed
+            }
+            CoreMidnightCoderErrorInfo::SandboxError => MidnightCoderErrorInfo::SandboxError,
+            CoreMidnightCoderErrorInfo::ResponseStreamDisconnected { http_status_code } => {
+                MidnightCoderErrorInfo::ResponseStreamDisconnected { http_status_code }
+            }
+            CoreMidnightCoderErrorInfo::ResponseTooManyFailedAttempts { http_status_code } => {
+                MidnightCoderErrorInfo::ResponseTooManyFailedAttempts { http_status_code }
+            }
+            CoreMidnightCoderErrorInfo::ActiveTurnNotSteerable { turn_kind } => {
+                MidnightCoderErrorInfo::ActiveTurnNotSteerable {
                     turn_kind: turn_kind.into(),
                 }
             }
-            CoreCodexErrorInfo::Other => CodexErrorInfo::Other,
+            CoreMidnightCoderErrorInfo::Other => MidnightCoderErrorInfo::Other,
         }
     }
 }

@@ -1,5 +1,5 @@
-use codex_core::CodexThread;
 use codex_core::ModelClient;
+use codex_core::MidnightCoderThread;
 use codex_core::NewThread;
 use codex_core::Prompt;
 use codex_core::ResponseEvent;
@@ -11,7 +11,7 @@ use codex_core::detached_memory_responses_metadata;
 use codex_core::resolve_installation_id;
 use codex_features::Feature;
 use codex_login::AuthManager;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_login::auth::AgentIdentityAuthPolicy;
 use codex_login::auth_env_telemetry::collect_auth_env_telemetry;
 use codex_login::default_client::originator;
@@ -41,7 +41,7 @@ use std::time::Duration;
 
 pub(crate) struct SpawnedConsolidationAgent {
     pub(crate) thread_id: ThreadId,
-    pub(crate) thread: Arc<CodexThread>,
+    pub(crate) thread: Arc<MidnightCoderThread>,
 }
 
 #[derive(Clone, Debug)]
@@ -69,7 +69,7 @@ impl StageOneRequestContext {
 
 pub(crate) struct MemoryStartupContext {
     thread_id: ThreadId,
-    thread: Arc<CodexThread>,
+    thread: Arc<MidnightCoderThread>,
     thread_manager: Arc<ThreadManager>,
     auth_manager: Arc<AuthManager>,
     provider: SharedModelProvider,
@@ -86,9 +86,11 @@ fn build_session_telemetry(
 ) -> SessionTelemetry {
     let auth = auth_manager.auth_cached();
     let auth = auth.as_ref();
-    let auth_mode = auth.map(CodexAuth::auth_mode).map(TelemetryAuthMode::from);
-    let account_id = auth.and_then(CodexAuth::get_account_id);
-    let account_email = auth.and_then(CodexAuth::get_account_email);
+    let auth_mode = auth
+        .map(MidnightCoderAuth::auth_mode)
+        .map(TelemetryAuthMode::from);
+    let account_id = auth.and_then(MidnightCoderAuth::get_account_id);
+    let account_email = auth.and_then(MidnightCoderAuth::get_account_email);
     let auth_env_telemetry = collect_auth_env_telemetry(
         &config.model_provider,
         auth_manager.codex_api_key_env_enabled(),
@@ -113,7 +115,7 @@ impl MemoryStartupContext {
         thread_manager: Arc<ThreadManager>,
         auth_manager: Arc<AuthManager>,
         thread_id: ThreadId,
-        thread: Arc<CodexThread>,
+        thread: Arc<MidnightCoderThread>,
         config: &Config,
         source: SessionSource,
     ) -> Self {
@@ -137,7 +139,7 @@ impl MemoryStartupContext {
         thread_manager: Arc<ThreadManager>,
         auth_manager: Arc<AuthManager>,
         thread_id: ThreadId,
-        thread: Arc<CodexThread>,
+        thread: Arc<MidnightCoderThread>,
         config: &Config,
         source: SessionSource,
         provider: SharedModelProvider,
@@ -157,7 +159,7 @@ impl MemoryStartupContext {
         thread_manager: Arc<ThreadManager>,
         auth_manager: Arc<AuthManager>,
         thread_id: ThreadId,
-        thread: Arc<CodexThread>,
+        thread: Arc<MidnightCoderThread>,
         config: &Config,
         source: SessionSource,
         provider: SharedModelProvider,
@@ -284,6 +286,7 @@ impl MemoryStartupContext {
                 context.reasoning_effort.clone(),
                 context.reasoning_summary,
                 context.service_tier.clone(),
+                /*provider_request_options*/ None,
                 &responses_metadata,
                 &InferenceTraceContext::disabled(),
             )

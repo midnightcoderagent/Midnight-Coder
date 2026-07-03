@@ -1,4 +1,4 @@
-//! Codex Apps support for the host-owned apps MCP server.
+//! MidnightCoder Apps support for the host-owned apps MCP server.
 //!
 //! This module owns the normalization that turns ChatGPT-hosted app
 //! connector/tool metadata into model-visible MCP callable names.

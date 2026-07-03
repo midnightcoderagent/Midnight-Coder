@@ -12,7 +12,7 @@ use codex_extension_api::LoadUserInstructionsFuture;
 use codex_extension_api::LoadedUserInstructions;
 use codex_extension_api::UserInstructionsProvider;
 use codex_login::AuthManager;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_model_provider::create_model_provider;
 use codex_model_provider_info::ModelProviderInfo;
 use codex_models_manager::bundled_models_response;
@@ -29,8 +29,8 @@ use once_cell::sync::Lazy;
 
 use crate::ThreadManager;
 use crate::config::Config;
-use crate::responses_metadata::CodexResponsesMetadata;
-use crate::responses_metadata::CodexResponsesRequestKind;
+use crate::responses_metadata::MidnightCoderResponsesMetadata;
+use crate::responses_metadata::MidnightCoderResponsesRequestKind;
 use crate::responses_metadata::subagent_header_value;
 use crate::responses_metadata::subagent_metadata_kind;
 use crate::thread_manager;
@@ -63,23 +63,26 @@ pub fn set_deterministic_process_ids(enabled: bool) {
     unified_exec::set_deterministic_process_ids_for_tests(enabled);
 }
 
-pub fn auth_manager_from_auth(auth: CodexAuth) -> Arc<AuthManager> {
+pub fn auth_manager_from_auth(auth: MidnightCoderAuth) -> Arc<AuthManager> {
     AuthManager::from_auth_for_testing(auth)
 }
 
-pub fn auth_manager_from_auth_with_home(auth: CodexAuth, codex_home: PathBuf) -> Arc<AuthManager> {
+pub fn auth_manager_from_auth_with_home(
+    auth: MidnightCoderAuth,
+    codex_home: PathBuf,
+) -> Arc<AuthManager> {
     AuthManager::from_auth_for_testing_with_home(auth, codex_home)
 }
 
 pub fn thread_manager_with_models_provider(
-    auth: CodexAuth,
+    auth: MidnightCoderAuth,
     provider: ModelProviderInfo,
 ) -> ThreadManager {
     ThreadManager::with_models_provider_for_tests(auth, provider)
 }
 
 pub fn thread_manager_with_models_provider_and_home(
-    auth: CodexAuth,
+    auth: MidnightCoderAuth,
     provider: ModelProviderInfo,
     codex_home: PathBuf,
     environment_manager: Arc<EnvironmentManager>,
@@ -93,7 +96,7 @@ pub fn thread_manager_with_models_provider_and_home(
 }
 
 pub fn thread_manager_with_models_provider_home_and_state(
-    auth: CodexAuth,
+    auth: MidnightCoderAuth,
     provider: ModelProviderInfo,
     codex_home: PathBuf,
     environment_manager: Arc<EnvironmentManager>,
@@ -160,7 +163,7 @@ pub fn construct_model_info_offline(model: &str, config: &Config) -> ModelInfo {
 }
 
 #[derive(Clone, Copy)]
-pub enum TestCodexResponsesRequestKind {
+pub enum TestMidnightCoderResponsesRequestKind {
     Turn,
     Prewarm,
     WebsocketConnection,
@@ -175,20 +178,24 @@ pub fn responses_metadata(
     window_id: String,
     session_source: &SessionSource,
     parent_thread_id: Option<ThreadId>,
-    request_kind: TestCodexResponsesRequestKind,
-) -> CodexResponsesMetadata {
+    request_kind: TestMidnightCoderResponsesRequestKind,
+) -> MidnightCoderResponsesMetadata {
     let request_kind = match request_kind {
-        TestCodexResponsesRequestKind::Turn => Some(CodexResponsesRequestKind::Turn),
-        TestCodexResponsesRequestKind::Prewarm => Some(CodexResponsesRequestKind::Prewarm),
-        TestCodexResponsesRequestKind::WebsocketConnection => None,
+        TestMidnightCoderResponsesRequestKind::Turn => {
+            Some(MidnightCoderResponsesRequestKind::Turn)
+        }
+        TestMidnightCoderResponsesRequestKind::Prewarm => {
+            Some(MidnightCoderResponsesRequestKind::Prewarm)
+        }
+        TestMidnightCoderResponsesRequestKind::WebsocketConnection => None,
     };
-    CodexResponsesMetadata {
+    MidnightCoderResponsesMetadata {
         turn_id: request_kind.and(turn_id.map(ToString::to_string)),
         request_kind,
         parent_thread_id,
         subagent_header: subagent_header_value(session_source),
         subagent_kind: request_kind.and_then(|_| subagent_metadata_kind(session_source)),
-        ..CodexResponsesMetadata::new(
+        ..MidnightCoderResponsesMetadata::new(
             installation_id.to_string(),
             session_id.to_string(),
             thread_id.to_string(),

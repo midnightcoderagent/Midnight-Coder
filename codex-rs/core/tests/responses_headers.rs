@@ -4,7 +4,7 @@ use std::sync::Arc;
 use codex_core::ModelClient;
 use codex_core::Prompt;
 use codex_core::ResponseEvent;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_login::auth::AgentIdentityAuthPolicy;
 use codex_model_provider_info::ModelProviderInfo;
 use codex_model_provider_info::WireApi;
@@ -16,7 +16,7 @@ use codex_protocol::models::ContentItem;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::protocol::SubAgentSource;
-use core_test_support::TestCodexResponsesRequestKind;
+use core_test_support::TestMidnightCoderResponsesRequestKind;
 use core_test_support::load_default_config_for_test;
 use core_test_support::responses;
 use core_test_support::responses_metadata as test_responses_metadata;
@@ -39,7 +39,7 @@ fn test_turn_responses_metadata(
     _client: &ModelClient,
     thread_id: ThreadId,
     session_source: &SessionSource,
-) -> codex_core::CodexResponsesMetadata {
+) -> codex_core::MidnightCoderResponsesMetadata {
     let thread_id = thread_id.to_string();
     test_responses_metadata(
         TEST_INSTALLATION_ID,
@@ -49,7 +49,7 @@ fn test_turn_responses_metadata(
         format!("{thread_id}:0"),
         session_source,
         /*parent_thread_id*/ None,
-        TestCodexResponsesRequestKind::Turn,
+        TestMidnightCoderResponsesRequestKind::Turn,
     )
 }
 
@@ -155,6 +155,7 @@ async fn responses_stream_includes_subagent_header_on_review() {
             effort,
             summary.unwrap_or(model_info.default_reasoning_summary),
             /*service_tier*/ None,
+            /*provider_request_options*/ None,
             &responses_metadata,
             &codex_rollout_trace::InferenceTraceContext::disabled(),
         )
@@ -289,6 +290,7 @@ async fn responses_stream_includes_subagent_header_on_other() {
             effort,
             summary.unwrap_or(model_info.default_reasoning_summary),
             /*service_tier*/ None,
+            /*provider_request_options*/ None,
             &responses_metadata,
             &codex_rollout_trace::InferenceTraceContext::disabled(),
         )
@@ -352,10 +354,11 @@ async fn responses_respects_model_info_overrides_from_config() {
     let config = Arc::new(config);
 
     let thread_id = ThreadId::new();
-    let auth_mode =
-        codex_core::test_support::auth_manager_from_auth(CodexAuth::from_api_key("Test API Key"))
-            .auth_mode()
-            .map(TelemetryAuthMode::from);
+    let auth_mode = codex_core::test_support::auth_manager_from_auth(
+        MidnightCoderAuth::from_api_key("Test API Key"),
+    )
+    .auth_mode()
+    .map(TelemetryAuthMode::from);
     let session_source =
         SessionSource::SubAgent(SubAgentSource::Other("override-check".to_string()));
     let model_info =
@@ -409,6 +412,7 @@ async fn responses_respects_model_info_overrides_from_config() {
             effort,
             summary.unwrap_or(model_info.default_reasoning_summary),
             /*service_tier*/ None,
+            /*provider_request_options*/ None,
             &responses_metadata,
             &codex_rollout_trace::InferenceTraceContext::disabled(),
         )

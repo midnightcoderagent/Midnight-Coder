@@ -34,7 +34,6 @@ pub(super) use codex_app_server_protocol::AdditionalNetworkPermissions as AppSer
 pub(super) use codex_app_server_protocol::AdditionalPermissionProfile as AppServerAdditionalPermissionProfile;
 pub(super) use codex_app_server_protocol::AppSummary;
 pub(super) use codex_app_server_protocol::AutoReviewDecisionSource as AppServerGuardianApprovalReviewDecisionSource;
-pub(super) use codex_app_server_protocol::CodexErrorInfo;
 pub(super) use codex_app_server_protocol::CollabAgentState as AppServerCollabAgentState;
 pub(super) use codex_app_server_protocol::CollabAgentStatus as AppServerCollabAgentStatus;
 pub(super) use codex_app_server_protocol::CollabAgentTool as AppServerCollabAgentTool;
@@ -80,6 +79,7 @@ pub(super) use codex_app_server_protocol::McpServerStatusUpdatedNotification;
 pub(super) use codex_app_server_protocol::ModelSafetyBufferingUpdatedNotification;
 pub(super) use codex_app_server_protocol::ModelVerification as AppServerModelVerification;
 pub(super) use codex_app_server_protocol::ModelVerificationNotification;
+pub(super) use codex_app_server_protocol::MidnightCoderErrorInfo;
 pub(super) use codex_app_server_protocol::NonSteerableTurnKind;
 pub(super) use codex_app_server_protocol::PatchApplyStatus as AppServerPatchApplyStatus;
 pub(super) use codex_app_server_protocol::PatchChangeKind;

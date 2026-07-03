@@ -14,7 +14,7 @@ use anyhow::Context;
 use anyhow::Result;
 use anyhow::anyhow;
 use codex_config::CloudConfigBundleLoader;
-use codex_core::CodexThread;
+use codex_core::MidnightCoderThread;
 use codex_core::StartThreadOptions;
 use codex_core::ThreadManager;
 use codex_core::TimeProvider;
@@ -31,8 +31,8 @@ use codex_extension_api::LoadUserInstructionsFuture;
 use codex_extension_api::UserInstructionsProvider;
 use codex_extension_api::empty_extension_registry;
 use codex_features::Feature;
-use codex_home::CodexHomeUserInstructionsProvider;
-use codex_login::CodexAuth;
+use codex_home::MidnightCoderHomeUserInstructionsProvider;
+use codex_login::MidnightCoderAuth;
 use codex_model_provider_info::ModelProviderInfo;
 use codex_model_provider_info::built_in_model_providers;
 use codex_models_manager::bundled_models_response;
@@ -277,9 +277,9 @@ pub fn turn_permission_fields(
     (sandbox_policy, Some(permission_profile))
 }
 
-pub struct TestCodexBuilder {
+pub struct TestMidnightCoderBuilder {
     config_mutators: Vec<Box<ConfigMutator>>,
-    auth: CodexAuth,
+    auth: MidnightCoderAuth,
     pre_build_hooks: Vec<Box<PreBuildHook>>,
     workspace_setups: Vec<Box<WorkspaceSetup>>,
     home: Option<Arc<TempDir>>,
@@ -292,7 +292,7 @@ pub struct TestCodexBuilder {
     external_time_provider: Option<Arc<dyn TimeProvider>>,
 }
 
-impl TestCodexBuilder {
+impl TestMidnightCoderBuilder {
     pub fn with_config<T>(mut self, mutator: T) -> Self
     where
         T: FnOnce(&mut Config) + Send + 'static,
@@ -301,7 +301,7 @@ impl TestCodexBuilder {
         self
     }
 
-    pub fn with_auth(mut self, auth: CodexAuth) -> Self {
+    pub fn with_auth(mut self, auth: MidnightCoderAuth) -> Self {
         self.auth = auth;
         self
     }
@@ -404,7 +404,10 @@ impl TestCodexBuilder {
         }
     }
 
-    pub async fn build(&mut self, server: &wiremock::MockServer) -> anyhow::Result<TestCodex> {
+    pub async fn build(
+        &mut self,
+        server: &wiremock::MockServer,
+    ) -> anyhow::Result<TestMidnightCoder> {
         let home = match self.home.clone() {
             Some(home) => home,
             None => Arc::new(TempDir::new()?),
@@ -430,7 +433,7 @@ impl TestCodexBuilder {
     pub async fn build_with_auto_env(
         &mut self,
         server: &wiremock::MockServer,
-    ) -> anyhow::Result<TestCodex> {
+    ) -> anyhow::Result<TestMidnightCoder> {
         let home = match self.home.clone() {
             Some(home) => home,
             None => Arc::new(TempDir::new()?),
@@ -447,7 +450,7 @@ impl TestCodexBuilder {
     pub async fn build_with_remote_and_local_env(
         &mut self,
         server: &wiremock::MockServer,
-    ) -> anyhow::Result<TestCodex> {
+    ) -> anyhow::Result<TestMidnightCoder> {
         let home = match self.home.clone() {
             Some(home) => home,
             None => Arc::new(TempDir::new()?),
@@ -464,7 +467,7 @@ impl TestCodexBuilder {
     pub async fn build_with_streaming_server(
         &mut self,
         server: &StreamingSseServer,
-    ) -> anyhow::Result<TestCodex> {
+    ) -> anyhow::Result<TestMidnightCoder> {
         let base_url = server.uri();
         let home = match self.home.clone() {
             Some(home) => home,
@@ -484,7 +487,7 @@ impl TestCodexBuilder {
     pub async fn build_with_websocket_server(
         &mut self,
         server: &WebSocketTestServer,
-    ) -> anyhow::Result<TestCodex> {
+    ) -> anyhow::Result<TestMidnightCoder> {
         let base_url = format!("{}/v1", server.uri());
         let home = match self.home.clone() {
             Some(home) => home,
@@ -510,7 +513,7 @@ impl TestCodexBuilder {
         server: &wiremock::MockServer,
         home: Arc<TempDir>,
         rollout_path: PathBuf,
-    ) -> anyhow::Result<TestCodex> {
+    ) -> anyhow::Result<TestMidnightCoder> {
         let base_url = format!("{}/v1", server.uri());
         let test_env = TestEnv::local().await?;
         Box::pin(self.build_with_home_and_base_url(
@@ -530,7 +533,7 @@ impl TestCodexBuilder {
         resume_from: Option<PathBuf>,
         test_env: TestEnv,
         include_local_environment: bool,
-    ) -> anyhow::Result<TestCodex> {
+    ) -> anyhow::Result<TestMidnightCoder> {
         let (config, fallback_cwd) = self
             .prepare_config(base_url, &home, test_env.cwd().clone())
             .await?;
@@ -588,14 +591,14 @@ impl TestCodexBuilder {
         resume_from: Option<PathBuf>,
         test_env: TestEnv,
         environment_manager: Arc<codex_exec_server::EnvironmentManager>,
-    ) -> anyhow::Result<TestCodex> {
+    ) -> anyhow::Result<TestMidnightCoder> {
         let auth = self.auth.clone();
         let state_db = codex_core::init_state_db(&config).await;
         let thread_store = thread_store_from_config(&config, state_db.clone());
         let installation_id = resolve_installation_id(&config.codex_home).await?;
         let user_instructions_provider =
             self.user_instructions_provider.clone().unwrap_or_else(|| {
-                Arc::new(CodexHomeUserInstructionsProvider::new(
+                Arc::new(MidnightCoderHomeUserInstructionsProvider::new(
                     config.codex_home.clone(),
                 ))
             });
@@ -675,7 +678,7 @@ impl TestCodexBuilder {
             }
         };
 
-        Ok(TestCodex {
+        Ok(TestMidnightCoder {
             home,
             cwd,
             config,
@@ -762,17 +765,17 @@ fn ensure_test_model_catalog(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-pub struct TestCodex {
+pub struct TestMidnightCoder {
     pub home: Arc<TempDir>,
     pub cwd: Arc<TempDir>,
-    pub codex: Arc<CodexThread>,
+    pub codex: Arc<MidnightCoderThread>,
     pub session_configured: SessionConfiguredEvent,
     pub config: Config,
     pub thread_manager: Arc<ThreadManager>,
     _test_env: TestEnv,
 }
 
-impl TestCodex {
+impl TestMidnightCoder {
     pub fn cwd_path(&self) -> &Path {
         self.cwd.path()
     }
@@ -964,12 +967,12 @@ impl TestCodex {
     }
 }
 
-pub struct TestCodexHarness {
+pub struct TestMidnightCoderHarness {
     server: MockServer,
-    test: TestCodex,
+    test: TestMidnightCoder,
 }
 
-impl TestCodexHarness {
+impl TestMidnightCoderHarness {
     pub async fn new() -> Result<Self> {
         Self::with_builder(test_codex()).await
     }
@@ -978,13 +981,13 @@ impl TestCodexHarness {
         Self::with_builder(test_codex().with_config(mutator)).await
     }
 
-    pub async fn with_builder(mut builder: TestCodexBuilder) -> Result<Self> {
+    pub async fn with_builder(mut builder: TestMidnightCoderBuilder) -> Result<Self> {
         let server = start_mock_server().await;
         let test = builder.build(&server).await?;
         Ok(Self { server, test })
     }
 
-    pub async fn with_auto_env_builder(mut builder: TestCodexBuilder) -> Result<Self> {
+    pub async fn with_auto_env_builder(mut builder: TestMidnightCoderBuilder) -> Result<Self> {
         let server = start_mock_server().await;
         let test = builder.build_with_auto_env(&server).await?;
         Ok(Self { server, test })
@@ -994,7 +997,7 @@ impl TestCodexHarness {
         &self.server
     }
 
-    pub fn test(&self) -> &TestCodex {
+    pub fn test(&self) -> &TestMidnightCoder {
         &self.test
     }
 
@@ -1200,15 +1203,15 @@ fn function_call_output<'a>(bodies: &'a [Value], call_id: &str) -> &'a Value {
         .expect(&missing_output)
 }
 
-pub fn test_codex() -> TestCodexBuilder {
-    TestCodexBuilder {
+pub fn test_codex() -> TestMidnightCoderBuilder {
+    TestMidnightCoderBuilder {
         config_mutators: vec![Box::new(|config| {
             config
                 .features
                 .disable(Feature::Apps)
                 .expect("test config should allow Apps override");
         })],
-        auth: CodexAuth::from_api_key("dummy"),
+        auth: MidnightCoderAuth::from_api_key("dummy"),
         pre_build_hooks: vec![],
         workspace_setups: vec![],
         home: None,

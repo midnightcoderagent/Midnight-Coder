@@ -1430,11 +1430,9 @@ fn configured_marketplace_plugins(
                 plugin.policy.installation != MarketplacePluginInstallPolicy::NotAvailable
             })
             .filter(|plugin| {
-                plugin
-                    .policy
-                    .products
-                    .as_deref()
-                    .is_none_or(|products| Product::Codex.matches_product_restriction(products))
+                plugin.policy.products.as_deref().is_none_or(|products| {
+                    Product::MidnightCoder.matches_product_restriction(products)
+                })
             })
             .map(|plugin| plugin.name)
             .collect::<HashSet<_>>();
@@ -1671,7 +1669,7 @@ fn rewrite_external_agent_terms(content: &str) -> String {
         "claudecode",
         "claude",
     ] {
-        rewritten = replace_case_insensitive_with_boundaries(&rewritten, from, "Codex");
+        rewritten = replace_case_insensitive_with_boundaries(&rewritten, from, "MidnightCoder");
     }
     rewritten
 }

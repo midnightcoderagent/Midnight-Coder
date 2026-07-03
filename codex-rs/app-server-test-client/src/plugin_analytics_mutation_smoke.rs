@@ -1,4 +1,4 @@
-use super::CodexClient;
+use super::MidnightCoderClient;
 use super::plugin_analytics_capture::PluginEventIdentity;
 use super::plugin_analytics_capture::read_events_for_remote_plugin;
 use super::plugin_analytics_capture::validate_mutation_events;
@@ -126,7 +126,7 @@ pub(super) fn run_cleanup(
         "features.plugins=true".to_string(),
         "features.remote_plugin=true".to_string(),
     ]);
-    let mut client = CodexClient::spawn_stdio(codex_bin, &overrides)?;
+    let mut client = MidnightCoderClient::spawn_stdio(codex_bin, &overrides)?;
     client.initialize()?;
 
     match restore_uninstalled_state(&mut client, remote_plugin_id) {
@@ -194,7 +194,7 @@ fn spawn_client(
     codex_bin: &Path,
     config_overrides: &[String],
     capture_path: &Path,
-) -> Result<CodexClient> {
+) -> Result<MidnightCoderClient> {
     let mut overrides = config_overrides.to_vec();
     overrides.extend([
         "analytics.enabled=true".to_string(),
@@ -205,7 +205,7 @@ fn spawn_client(
         OsString::from(ANALYTICS_CAPTURE_ENV_VAR),
         capture_path.as_os_str().to_os_string(),
     )];
-    CodexClient::spawn_stdio_with_env(codex_bin, &overrides, &environment)
+    MidnightCoderClient::spawn_stdio_with_env(codex_bin, &overrides, &environment)
 }
 
 #[derive(Clone, Debug)]
@@ -220,7 +220,7 @@ struct RemotePluginExpectation {
 }
 
 fn read_remote_plugin(
-    client: &mut CodexClient,
+    client: &mut MidnightCoderClient,
     remote_plugin_id: &str,
 ) -> Result<RemotePluginExpectation> {
     let request_id = client.request_id();
@@ -280,7 +280,7 @@ struct MutationSequenceResult {
 }
 
 fn run_mutation_sequence(
-    client: &mut CodexClient,
+    client: &mut MidnightCoderClient,
     capture_path: &Path,
     expected: &RemotePluginExpectation,
 ) -> MutationSequenceResult {
@@ -343,7 +343,10 @@ fn run_mutation_sequence(
     }
 }
 
-fn install_remote_plugin(client: &mut CodexClient, plugin: &RemotePluginExpectation) -> Result<()> {
+fn install_remote_plugin(
+    client: &mut MidnightCoderClient,
+    plugin: &RemotePluginExpectation,
+) -> Result<()> {
     let request_id = client.request_id();
     let _: PluginInstallResponse = client.send_request(
         ClientRequest::PluginInstall {
@@ -360,7 +363,7 @@ fn install_remote_plugin(client: &mut CodexClient, plugin: &RemotePluginExpectat
     Ok(())
 }
 
-fn uninstall_remote_plugin(client: &mut CodexClient, remote_plugin_id: &str) -> Result<()> {
+fn uninstall_remote_plugin(client: &mut MidnightCoderClient, remote_plugin_id: &str) -> Result<()> {
     let request_id = client.request_id();
     let _: PluginUninstallResponse = client.send_request(
         ClientRequest::PluginUninstall {
@@ -376,7 +379,7 @@ fn uninstall_remote_plugin(client: &mut CodexClient, remote_plugin_id: &str) -> 
 }
 
 fn wait_for_installed_state(
-    client: &mut CodexClient,
+    client: &mut MidnightCoderClient,
     remote_plugin_id: &str,
     expected_state: ExpectedInstalledState,
 ) -> Result<RemotePluginExpectation> {
@@ -405,7 +408,7 @@ enum RestorationStatus {
 }
 
 fn restore_uninstalled_state(
-    client: &mut CodexClient,
+    client: &mut MidnightCoderClient,
     remote_plugin_id: &str,
 ) -> RestorationStatus {
     let current = match read_remote_plugin(client, remote_plugin_id) {

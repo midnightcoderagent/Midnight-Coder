@@ -13,8 +13,8 @@ use tracing::warn;
 
 use crate::model::AgentThreadId;
 use crate::model::CodeCellRuntimeStatus;
-use crate::model::CodexTurnId;
 use crate::model::ModelVisibleCallId;
+use crate::model::MidnightCoderTurnId;
 use crate::payload::RawPayloadKind;
 use crate::payload::RawPayloadRef;
 use crate::raw_event::RawTraceEventContext;
@@ -37,7 +37,7 @@ enum CodeCellTraceContextState {
 struct EnabledCodeCellTraceContext {
     writer: Arc<TraceWriter>,
     thread_id: AgentThreadId,
-    codex_turn_id: CodexTurnId,
+    codex_turn_id: MidnightCoderTurnId,
     runtime_cell_id: String,
 }
 
@@ -64,7 +64,7 @@ impl CodeCellTraceContext {
     pub(crate) fn enabled(
         writer: Arc<TraceWriter>,
         thread_id: impl Into<AgentThreadId>,
-        codex_turn_id: impl Into<CodexTurnId>,
+        codex_turn_id: impl Into<MidnightCoderTurnId>,
         runtime_cell_id: impl Into<String>,
     ) -> Self {
         Self {

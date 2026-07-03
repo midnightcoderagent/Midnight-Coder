@@ -1,7 +1,7 @@
 use super::AgentControl;
 use codex_protocol::ThreadId;
-use codex_protocol::error::CodexErr;
-use codex_protocol::error::Result as CodexResult;
+use codex_protocol::error::MidnightCoderErr;
+use codex_protocol::error::Result as MidnightCoderResult;
 use codex_protocol::protocol::MultiAgentVersion;
 use codex_protocol::protocol::Op;
 use codex_protocol::protocol::SessionSource;
@@ -31,7 +31,7 @@ impl AgentControl {
         &self,
         thread_id: ThreadId,
         op: &Op,
-    ) -> CodexResult<()> {
+    ) -> MidnightCoderResult<()> {
         if !op_starts_turn(op) {
             return Ok(());
         }
@@ -51,7 +51,7 @@ impl AgentControl {
         &self,
         multi_agent_version: MultiAgentVersion,
         session_source: &SessionSource,
-    ) -> CodexResult<()> {
+    ) -> MidnightCoderResult<()> {
         if !is_execution_limited(multi_agent_version, session_source) {
             return Ok(());
         }
@@ -59,7 +59,7 @@ impl AgentControl {
         if self.agent_execution_limiter.has_capacity() {
             Ok(())
         } else {
-            Err(CodexErr::AgentLimitReached { max_threads })
+            Err(MidnightCoderErr::AgentLimitReached { max_threads })
         }
     }
 

@@ -34,13 +34,13 @@ build event upload, downloads, and remote execution are opt-in configurations.
 
 ## BuildBuddy
 
-Codex uses BuildBuddy for a shared Bazel cache and remoted builds and tests. To use it
+Midnight Coder uses BuildBuddy for a shared Bazel cache and remoted builds and tests. To use it
 to speed up your builds and tests you'll need to provide an API key and select a
 configuration.
 
 ### BuildBuddy API key
 
-If you're an OpenAI employee, log in to https://openai.buildbuddy.io and use Google sign-in.
+If you're an Midnight Coder employee, log in to https://openai.buildbuddy.io and use Google sign-in.
 
 Create a BuildBuddy API key as described in BuildBuddy's [Authentication Guide][bb-auth-guide],
 then add it to `~/.bazelrc`:
@@ -62,7 +62,7 @@ the credential.
 
 ### Selecting a remote build configuration
 
-OpenAI employees should default to the OpenAI host with remote execution unless
+Midnight Coder employees should default to the Midnight Coder host with remote execution unless
 they have a reason to choose another configuration. Add the following configuration
 to `%workspace%/user.bazelrc`:
 
@@ -70,7 +70,7 @@ to `%workspace%/user.bazelrc`:
 common --config=buildbuddy-openai-rbe
 ```
 
-OpenAI employees who don't want remote execution can use `buildbuddy-openai`. External users
+Midnight Coder employees who don't want remote execution can use `buildbuddy-openai`. External users
 should use `buildbuddy-generic-rbe` or `buildbuddy-generic`. See below for details on these
 configurations.
 
@@ -102,12 +102,12 @@ The `Cache/BES` host is also used for remote downloads.
 Without an API key, the wrapper removes remote CI configurations and runs
 locally. With a key, workflows choose the host as follows:
 
-| Run | Key | Uses OpenAI BuildBuddy Host |
+| Run | Key | Uses Midnight Coder BuildBuddy Host |
 | --- | --- | --- |
-| Push to `main` in `openai/codex` | Yes | Yes |
-| `workflow_dispatch` in `openai/codex` | Yes | Yes |
-| Same-repository pull request in `openai/codex` | Yes | Yes |
-| Fork pull request into `openai/codex` | No | No; local |
+| Push to `main` in `modnight/coder` | Yes | Yes |
+| `workflow_dispatch` in `modnight/coder` | Yes | Yes |
+| Same-repository pull request in `modnight/coder` | Yes | Yes |
+| Fork pull request into `modnight/coder` | No | No; local |
 | Push or `workflow_dispatch` in a fork with a key | Yes | No; generic host |
 | Pull request run in a fork repository with a key | Yes | No; generic host |
 
@@ -130,9 +130,9 @@ BUILDBUDDY_API_KEY=... GITHUB_REPOSITORY=my-fork/codex \
   build --config=ci-linux //codex-rs/cli:codex
 ```
 
-The wrapper selects the OpenAI host only inside GitHub Actions for a trusted
-run in `openai/codex`. A missing or malformed pull request event
-payload fails closed to the generic host. For local OpenAI host access, use
+The wrapper selects the Midnight Coder host only inside GitHub Actions for a trusted
+run in `modnight/coder`. A missing or malformed pull request event
+payload fails closed to the generic host. For local Midnight Coder host access, use
 the `user.bazelrc` configuration above.
 
 ## Evolving the setup

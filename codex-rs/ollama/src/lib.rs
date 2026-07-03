@@ -2,8 +2,10 @@ mod client;
 mod line_buffer;
 mod parser;
 mod pull;
+mod request_options;
 mod url;
 
+use crate::url::is_local_ollama_base_url;
 pub use client::OllamaClient;
 use codex_core::config::Config;
 use codex_model_provider_info::ModelProviderInfo;
@@ -11,6 +13,11 @@ pub use pull::CliProgressReporter;
 pub use pull::PullEvent;
 pub use pull::PullProgressReporter;
 pub use pull::TuiProgressReporter;
+pub use request_options::OllamaRequestOptions;
+pub use request_options::build_chat_request_body;
+pub use request_options::build_generate_request_body;
+pub use request_options::request_options_for_config;
+pub use request_options::request_options_for_provider;
 use semver::Version;
 
 /// Default OSS model to use when `--oss` is passed without an explicit `-m`.
@@ -30,10 +37,22 @@ pub async fn ensure_oss_ready(config: &Config) -> std::io::Result<()> {
     // Verify local Ollama is reachable.
     let ollama_client = crate::OllamaClient::try_from_oss_provider(config).await?;
 
-    // If the model is not present locally, pull it.
+    let allow_pull = config
+        .model_provider
+        .base_url
+        .as_deref()
+        .is_some_and(is_local_ollama_base_url);
+
+    // If the model is not present locally, pull it. For remote Ollama servers,
+    // never initiate a pull; the server owner should decide what is installed.
     match ollama_client.fetch_models().await {
         Ok(models) => {
             if !models.iter().any(|m| m == model) {
+                if !allow_pull {
+                    return Err(std::io::Error::other(format!(
+                        "model `{model}` is not installed on the configured remote Ollama server; refusing to pull it automatically"
+                    )));
+                }
                 let mut reporter = crate::CliProgressReporter::new();
                 ollama_client
                     .pull_with_reporter(model, &mut reporter)
@@ -72,9 +91,13 @@ pub async fn ensure_responses_supported(provider: &ModelProviderInfo) -> std::io
 
     let min = min_responses_version();
     Err(std::io::Error::other(format!(
-        "Ollama {version} is too old. Codex requires Ollama {min} or newer."
+        "Ollama {version} is too old. MidnightCoder requires Ollama {min} or newer."
     )))
 }
+
+#[cfg(test)]
+#[path = "request_options_tests.rs"]
+mod request_options_tests;
 
 #[cfg(test)]
 mod tests {

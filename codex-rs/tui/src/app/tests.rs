@@ -329,7 +329,7 @@ async fn enqueue_primary_thread_session_replays_turns_before_initial_prompt_subm
         has_chatgpt_account: false,
         has_codex_backend_auth: false,
         model_catalog: app.model_catalog.clone(),
-        feedback: codex_feedback::CodexFeedback::new(),
+        feedback: codex_feedback::MidnightCoderFeedback::new(),
         is_first_run: false,
         status_account_display: None,
         runtime_model_provider_base_url: None,
@@ -373,7 +373,7 @@ async fn enqueue_primary_thread_session_replays_turns_before_initial_prompt_subm
                 assert_eq!(op_thread_id, thread_id);
                 submitted_items = Some(items);
             }
-            AppEvent::CodexOp(Op::UserTurn { items, .. }) => {
+            AppEvent::MidnightCoderOp(Op::UserTurn { items, .. }) => {
                 submitted_items = Some(items);
             }
             _ => {}
@@ -1795,8 +1795,8 @@ default_permissions = "locked-down"
         Some(RuntimePermissionProfileOverride::from_config(&app.config))
     );
     let op = match app_event_rx.try_recv() {
-        Ok(AppEvent::CodexOp(op)) => op,
-        other => panic!("expected CodexOp event, got {other:?}"),
+        Ok(AppEvent::MidnightCoderOp(op)) => op,
+        other => panic!("expected MidnightCoderOp event, got {other:?}"),
     };
     assert_eq!(
         op,
@@ -4082,7 +4082,7 @@ async fn make_test_app() -> App {
         skill_load_warnings: SkillLoadWarningState::default(),
         backtrack: BacktrackState::default(),
         backtrack_render_pending: false,
-        feedback: codex_feedback::CodexFeedback::new(),
+        feedback: codex_feedback::MidnightCoderFeedback::new(),
         feedback_audience: FeedbackAudience::External,
         environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
         app_server_target: crate::AppServerTarget::Embedded,
@@ -4147,7 +4147,7 @@ async fn make_test_app_with_channels() -> (
             skill_load_warnings: SkillLoadWarningState::default(),
             backtrack: BacktrackState::default(),
             backtrack_render_pending: false,
-            feedback: codex_feedback::CodexFeedback::new(),
+            feedback: codex_feedback::MidnightCoderFeedback::new(),
             feedback_audience: FeedbackAudience::External,
             environment_manager: Arc::new(EnvironmentManager::default_for_tests()),
             app_server_target: crate::AppServerTarget::Embedded,
@@ -4864,7 +4864,7 @@ fn test_session_telemetry(config: &Config, model: &str) -> SessionTelemetry {
 fn active_turn_not_steerable_turn_error_extracts_structured_server_error() {
     let turn_error = AppServerTurnError {
         message: "cannot steer a review turn".to_string(),
-        codex_error_info: Some(AppServerCodexErrorInfo::ActiveTurnNotSteerable {
+        codex_error_info: Some(AppServerMidnightCoderErrorInfo::ActiveTurnNotSteerable {
             turn_kind: AppServerNonSteerableTurnKind::Review,
         }),
         additional_details: None,

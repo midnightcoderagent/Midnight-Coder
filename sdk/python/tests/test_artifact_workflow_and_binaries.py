@@ -518,10 +518,10 @@ def test_source_sdk_package_declares_beta_documentation() -> None:
         "is_beta": "Development Status :: 4 - Beta" in pyproject["project"]["classifiers"],
         "license": pyproject["project"]["license"],
         "documentation": pyproject["project"]["urls"]["Documentation"],
-        "readme_is_beta": "# OpenAI Codex Python SDK (Beta)" in readme,
+        "readme_is_beta": "# MidnightCoder Python SDK (Beta)" in readme,
         "local_license_file": (ROOT / "LICENSE").exists(),
     } == {
-        "description": "Python SDK for Codex",
+        "description": "Python SDK for MidnightCoder",
         "is_beta": True,
         "license": "Apache-2.0",
         "documentation": "https://github.com/openai/codex/tree/main/sdk/python/docs",
@@ -745,7 +745,7 @@ def test_stage_runtime_release_rejects_incomplete_package_layout(tmp_path: Path)
     package_archive = tmp_path / "codex-package.tar.gz"
     _write_package_archive(package_dir, package_archive)
 
-    with pytest.raises(RuntimeError, match="Missing Codex package layout entries"):
+    with pytest.raises(RuntimeError, match="Missing MidnightCoder package layout entries"):
         script.stage_python_runtime_package(tmp_path / "runtime-stage", "1.2.3", package_archive)
 
 
@@ -940,12 +940,12 @@ def test_default_runtime_is_resolved_from_installed_runtime_package(
 
     fake_binary = tmp_path / ("codex.exe" if client_module.os.name == "nt" else "codex")
     fake_binary.write_text("")
-    ops = client_module.CodexBinResolverOps(
+    ops = client_module.MidnightCoderBinResolverOps(
         installed_codex_path=lambda: fake_binary,
         path_exists=lambda path: path == fake_binary,
     )
 
-    config = client_module.CodexConfig()
+    config = client_module.MidnightCoderConfig()
     assert config.codex_bin is None
     assert client_module.resolve_codex_bin(config, ops) == fake_binary
 
@@ -986,21 +986,21 @@ def test_explicit_codex_bin_override_takes_priority(tmp_path: Path) -> None:
         "custom-codex.exe" if client_module.os.name == "nt" else "custom-codex"
     )
     explicit_binary.write_text("")
-    ops = client_module.CodexBinResolverOps(
+    ops = client_module.MidnightCoderBinResolverOps(
         installed_codex_path=lambda: (_ for _ in ()).throw(
             AssertionError("packaged runtime should not be used")
         ),
         path_exists=lambda path: path == explicit_binary,
     )
 
-    config = client_module.CodexConfig(codex_bin=str(explicit_binary))
+    config = client_module.MidnightCoderConfig(codex_bin=str(explicit_binary))
     assert client_module.resolve_codex_bin(config, ops) == explicit_binary
 
 
 def test_missing_runtime_package_requires_explicit_codex_bin() -> None:
     from openai_codex import client as client_module
 
-    ops = client_module.CodexBinResolverOps(
+    ops = client_module.MidnightCoderBinResolverOps(
         installed_codex_path=lambda: (_ for _ in ()).throw(
             FileNotFoundError("missing packaged runtime")
         ),
@@ -1008,13 +1008,13 @@ def test_missing_runtime_package_requires_explicit_codex_bin() -> None:
     )
 
     with pytest.raises(FileNotFoundError, match="missing packaged runtime"):
-        client_module.resolve_codex_bin(client_module.CodexConfig(), ops)
+        client_module.resolve_codex_bin(client_module.MidnightCoderConfig(), ops)
 
 
 def test_broken_runtime_package_does_not_fall_back() -> None:
     from openai_codex import client as client_module
 
-    ops = client_module.CodexBinResolverOps(
+    ops = client_module.MidnightCoderBinResolverOps(
         installed_codex_path=lambda: (_ for _ in ()).throw(
             FileNotFoundError("missing packaged binary")
         ),
@@ -1022,6 +1022,6 @@ def test_broken_runtime_package_does_not_fall_back() -> None:
     )
 
     with pytest.raises(FileNotFoundError) as exc_info:
-        client_module.resolve_codex_bin(client_module.CodexConfig(), ops)
+        client_module.resolve_codex_bin(client_module.MidnightCoderConfig(), ops)
 
     assert str(exc_info.value) == ("missing packaged binary")

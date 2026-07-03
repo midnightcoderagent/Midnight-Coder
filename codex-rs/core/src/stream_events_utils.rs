@@ -20,7 +20,7 @@ use crate::tools::parallel::ToolCallRuntime;
 use crate::tools::router::ToolRouter;
 use codex_memories_read::citations::parse_memory_citation;
 use codex_memories_read::citations::thread_ids_from_memory_citation;
-use codex_protocol::error::CodexErr;
+use codex_protocol::error::MidnightCoderErr;
 use codex_protocol::error::Result;
 use codex_protocol::memory_citation::MemoryCitation;
 use codex_protocol::models::FunctionCallOutputBody;
@@ -108,6 +108,90 @@ pub(crate) fn raw_assistant_output_text_from_item(item: &ResponseItem) -> Option
     None
 }
 
+pub(crate) fn ollama_text_tool_call_from_item(item: &ResponseItem) -> Option<ResponseItem> {
+    let ResponseItem::Message {
+        id,
+        role,
+        content,
+        internal_chat_message_metadata_passthrough,
+        ..
+    } = item
+    else {
+        return None;
+    };
+    if role != "assistant" {
+        return None;
+    }
+    let text = content
+        .iter()
+        .filter_map(|ci| match ci {
+            codex_protocol::models::ContentItem::OutputText { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<String>();
+    let parsed = parse_ollama_text_tool_call(&text)?;
+    Some(ResponseItem::FunctionCall {
+        id: id.clone(),
+        name: parsed.name.clone(),
+        namespace: None,
+        arguments: serde_json::to_string(&parsed.arguments).ok()?,
+        call_id: id
+            .clone()
+            .unwrap_or_else(|| format!("ollama-text-tool-call-{}", parsed.name)),
+        internal_chat_message_metadata_passthrough: internal_chat_message_metadata_passthrough
+            .clone(),
+    })
+}
+
+struct OllamaTextToolCall {
+    name: String,
+    arguments: serde_json::Map<String, serde_json::Value>,
+}
+
+fn parse_ollama_text_tool_call(text: &str) -> Option<OllamaTextToolCall> {
+    let text = text.trim();
+    let function_name = text.strip_prefix("<function=")?.split_once('>')?.0.trim();
+    if function_name.is_empty()
+        || !function_name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-' || ch == '.')
+    {
+        return None;
+    }
+
+    let mut rest = text.split_once('>')?.1;
+    let mut arguments = serde_json::Map::new();
+    loop {
+        let Some(after_prefix) = rest.trim_start().strip_prefix("<parameter=") else {
+            break;
+        };
+        let (name, after_name) = after_prefix.split_once('>')?;
+        let (value, after_value) = after_name.split_once("</parameter>")?;
+        let name = name.trim();
+        if name.is_empty()
+            || !name
+                .chars()
+                .all(|ch| ch.is_ascii_alphanumeric() || ch == '_' || ch == '-')
+        {
+            return None;
+        }
+        arguments.insert(
+            name.to_string(),
+            serde_json::Value::String(value.trim().to_string()),
+        );
+        rest = after_value;
+    }
+
+    if arguments.is_empty() || !rest.trim_start().starts_with("</function>") {
+        return None;
+    }
+
+    Some(OllamaTextToolCall {
+        name: function_name.to_string(),
+        arguments,
+    })
+}
+
 async fn save_image_generation_result(
     codex_home: &AbsolutePathBuf,
     session_id: &str,
@@ -117,7 +201,7 @@ async fn save_image_generation_result(
     let bytes = BASE64_STANDARD
         .decode(result.trim().as_bytes())
         .map_err(|err| {
-            CodexErr::InvalidRequest(format!("invalid image generation payload: {err}"))
+            MidnightCoderErr::InvalidRequest(format!("invalid image generation payload: {err}"))
         })?;
     let path = image_generation_artifact_path(codex_home, session_id, call_id);
     if let Some(parent) = path.parent() {
@@ -507,7 +591,7 @@ pub(crate) async fn handle_output_item_done(
         }
         // A fatal error occurred; surface it back into history.
         Err(FunctionCallError::Fatal(message)) => {
-            return Err(CodexErr::Fatal(message));
+            return Err(MidnightCoderErr::Fatal(message));
         }
     }
 

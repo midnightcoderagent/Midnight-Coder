@@ -1,10 +1,10 @@
 #!/usr/bin/env -S NODE_NO_WARNINGS=1 pnpm ts-node-esm --files
 
-import { Codex } from "@openai/codex-sdk";
+import { MidnightCoder } from "@openai/codex-sdk";
 
 import { codexPathOverride } from "./helpers.ts";
 
-const codex = new Codex({ codexPathOverride: codexPathOverride() });
+const codex = new MidnightCoder({ codexPathOverride: codexPathOverride() });
 
 const thread = codex.startThread();
 

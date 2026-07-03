@@ -1,5 +1,5 @@
-use crate::events::CodexAcceptedLineFingerprintsEventParams;
-use crate::events::CodexAcceptedLineFingerprintsEventRequest;
+use crate::events::MidnightCoderAcceptedLineFingerprintsEventParams;
+use crate::events::MidnightCoderAcceptedLineFingerprintsEventRequest;
 use crate::events::TrackEventRequest;
 use crate::facts::AcceptedLineFingerprint;
 use codex_git_utils::canonicalize_git_remote_url;
@@ -108,9 +108,9 @@ pub(crate) fn accepted_line_fingerprint_event_requests(
     } = input;
 
     vec![TrackEventRequest::AcceptedLineFingerprints(Box::new(
-        CodexAcceptedLineFingerprintsEventRequest {
+        MidnightCoderAcceptedLineFingerprintsEventRequest {
             event_type: "codex_accepted_line_fingerprints",
-            event_params: CodexAcceptedLineFingerprintsEventParams {
+            event_params: MidnightCoderAcceptedLineFingerprintsEventParams {
                 event_type,
                 turn_id,
                 thread_id,

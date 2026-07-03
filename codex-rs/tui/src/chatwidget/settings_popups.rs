@@ -49,20 +49,22 @@ impl ChatWidget {
                 let name = Self::personality_label(personality).to_string();
                 let description = Some(Self::personality_description(personality).to_string());
                 let actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-                    tx.send(AppEvent::CodexOp(AppCommand::override_turn_context(
-                        /*cwd*/ None,
-                        /*approval_policy*/ None,
-                        /*approvals_reviewer*/ None,
-                        /*permission_profile*/ None,
-                        /*active_permission_profile*/ None,
-                        /*windows_sandbox_level*/ None,
-                        /*model*/ None,
-                        /*effort*/ None,
-                        /*summary*/ None,
-                        /*service_tier*/ None,
-                        /*collaboration_mode*/ None,
-                        Some(personality),
-                    )));
+                    tx.send(AppEvent::MidnightCoderOp(
+                        AppCommand::override_turn_context(
+                            /*cwd*/ None,
+                            /*approval_policy*/ None,
+                            /*approvals_reviewer*/ None,
+                            /*permission_profile*/ None,
+                            /*active_permission_profile*/ None,
+                            /*windows_sandbox_level*/ None,
+                            /*model*/ None,
+                            /*effort*/ None,
+                            /*summary*/ None,
+                            /*service_tier*/ None,
+                            /*collaboration_mode*/ None,
+                            Some(personality),
+                        ),
+                    ));
                     tx.send(AppEvent::UpdatePersonality(personality));
                     tx.send(AppEvent::PersistPersonalitySelection { personality });
                 })];
@@ -80,7 +82,9 @@ impl ChatWidget {
 
         let mut header = ColumnRenderable::new();
         header.push(Line::from("Select Personality".bold()));
-        header.push(Line::from("Choose a communication style for Codex.".dim()));
+        header.push(Line::from(
+            "Choose a communication style for MidnightCoder.".dim(),
+        ));
 
         self.bottom_pane.show_selection_view(SelectionViewParams {
             header: Box::new(header),

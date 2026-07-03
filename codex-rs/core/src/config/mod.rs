@@ -80,6 +80,7 @@ use codex_memories_read::memory_root;
 use codex_model_provider_info::LEGACY_OLLAMA_CHAT_PROVIDER_ID;
 use codex_model_provider_info::ModelProviderInfo;
 use codex_model_provider_info::OLLAMA_CHAT_PROVIDER_REMOVED_ERROR;
+use codex_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
 use codex_model_provider_info::built_in_model_providers;
 use codex_model_provider_info::merge_configured_model_providers;
 use codex_models_manager::ModelsManagerConfig;
@@ -435,7 +436,7 @@ impl Permissions {
     }
 
     /// Workspace roots that came from user-visible configuration or runtime
-    /// selection. Internal Codex-only writable roots are intentionally excluded.
+    /// selection. Internal MidnightCoder-only writable roots are intentionally excluded.
     pub fn user_visible_workspace_roots(&self) -> &[AbsolutePathBuf] {
         &self.workspace_roots
     }
@@ -550,7 +551,7 @@ impl Permissions {
 }
 
 // A profile override only inherits the selected profile's proxy/allowlist config
-// when Codex is still responsible for the network policy. `Disabled` means no
+// when MidnightCoder is still responsible for the network policy. `Disabled` means no
 // outer sandbox, so starting the managed proxy would narrow the override.
 fn profile_allows_configured_network_proxy(permission_profile: &PermissionProfile) -> bool {
     match permission_profile {
@@ -623,6 +624,15 @@ pub struct Config {
 
     /// Model used specifically for review sessions.
     pub review_model: Option<String>,
+
+    /// Model used specifically for context compaction.
+    pub mini_model: Option<String>,
+
+    /// Strategy used when context compaction is triggered.
+    pub resume_type: Option<String>,
+
+    /// Native Ollama context window override for `/api/chat` and `/api/generate`.
+    pub ollama_num_ctx: Option<i64>,
 
     /// Size of the context window for the model, in tokens.
     pub model_context_window: Option<i64>,
@@ -708,23 +718,23 @@ pub struct Config {
     /// Compact prompt override.
     pub compact_prompt: Option<String>,
 
-    /// Optional external notifier command. When set, Codex will spawn this
+    /// Optional external notifier command. When set, MidnightCoder will spawn this
     /// program after each completed *turn* (i.e. when the agent finishes
     /// processing a user submission). The value must be the full command
-    /// broken into argv tokens **without** the trailing JSON argument - Codex
+    /// broken into argv tokens **without** the trailing JSON argument - MidnightCoder
     /// appends one extra argument containing a JSON payload describing the
     /// event.
     ///
     /// Example `~/.codex/config.toml` snippet:
     ///
     /// ```toml
-    /// notify = ["notify-send", "Codex"]
+    /// notify = ["notify-send", "MidnightCoder"]
     /// ```
     ///
     /// which will be invoked as:
     ///
     /// ```shell
-    /// notify-send Codex '{"type":"agent-turn-complete","turn-id":"12345"}'
+    /// notify-send MidnightCoder '{"type":"agent-turn-complete","turn-id":"12345"}'
     /// ```
     ///
     /// If unset the feature is disabled.
@@ -811,26 +821,26 @@ pub struct Config {
     pub workspace_roots_explicit: bool,
 
     /// Preferred store for CLI auth credentials.
-    /// file (default): Use a file in the Codex home directory.
+    /// file (default): Use a file in the MidnightCoder home directory.
     /// keyring: Use an OS-specific keyring service.
     /// auto: Use the OS-specific keyring service if available, otherwise use a file.
     pub cli_auth_credentials_store_mode: AuthCredentialsStoreMode,
 
-    /// Definition for MCP servers that Codex can reach out to for tool calls.
+    /// Definition for MCP servers that MidnightCoder can reach out to for tool calls.
     pub mcp_servers: Constrained<HashMap<String, McpServerConfig>>,
 
     /// Preferred store for MCP OAuth credentials.
     /// keyring: Use an OS-specific keyring service.
-    ///          Credentials stored in the keyring will only be readable by Codex unless the user explicitly grants access via OS-level keyring access.
+    ///          Credentials stored in the keyring will only be readable by MidnightCoder unless the user explicitly grants access via OS-level keyring access.
     ///          https://github.com/openai/codex/blob/main/codex-rs/rmcp-client/src/oauth.rs#L2
     /// file: CODEX_HOME/.credentials.json
-    ///       This file will be readable to Codex and other applications running as the same user.
+    ///       This file will be readable to MidnightCoder and other applications running as the same user.
     /// auto (default): keyring if available, otherwise file.
     pub mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode,
 
     /// Optional fixed port to use for the local HTTP callback server used during MCP OAuth login.
     ///
-    /// When unset, Codex will bind to an ephemeral port chosen by the OS.
+    /// When unset, MidnightCoder will bind to an ephemeral port chosen by the OS.
     pub mcp_oauth_callback_port: Option<u16>,
 
     /// Optional redirect URI to use during MCP OAuth login.
@@ -869,20 +879,20 @@ pub struct Config {
     /// Memories subsystem settings.
     pub memories: MemoriesConfig,
 
-    /// Directory containing all Codex state (defaults to `~/.codex` but can be
+    /// Directory containing all MidnightCoder state (defaults to `~/.codex` but can be
     /// overridden by the `CODEX_HOME` environment variable).
     pub codex_home: AbsolutePathBuf,
 
-    /// Directory where Codex stores the SQLite state DB.
+    /// Directory where MidnightCoder stores the SQLite state DB.
     pub sqlite_home: PathBuf,
 
-    /// Directory where Codex writes log files (defaults to `$CODEX_HOME/log`).
+    /// Directory where MidnightCoder writes log files (defaults to `$CODEX_HOME/log`).
     pub log_dir: PathBuf,
 
-    /// Directory where Codex writes effective session config lock files.
+    /// Directory where MidnightCoder writes effective session config lock files.
     pub config_lock_export_dir: Option<AbsolutePathBuf>,
 
-    /// Whether config lock replay ignores Codex version drift between the
+    /// Whether config lock replay ignores MidnightCoder version drift between the
     /// lock metadata and the regenerated lock.
     pub config_lock_allow_codex_version_mismatch: bool,
 
@@ -911,7 +921,7 @@ pub struct Config {
     /// output will be hyperlinked using the specified URI scheme.
     pub file_opener: UriBasedFileOpener,
 
-    /// Path to the current Codex executable. This cannot be set in the config
+    /// Path to the current MidnightCoder executable. This cannot be set in the config
     /// file: it must be set in code via [`ConfigOverrides`].
     pub codex_self_exe: Option<PathBuf>,
 
@@ -956,10 +966,10 @@ pub struct Config {
     /// Optional verbosity control for GPT-5 models (Responses API `text.verbosity`).
     pub model_verbosity: Option<Verbosity>,
 
-    /// Base URL for requests to ChatGPT (as opposed to the OpenAI API).
+    /// Base URL for requests to ChatGPT (as opposed to the MidnightCoder API).
     pub chatgpt_base_url: String,
 
-    /// Whether Codex-owned clients should respect host system proxy settings.
+    /// Whether MidnightCoder-owned clients should respect host system proxy settings.
     pub respect_system_proxy: bool,
 
     /// Optional product SKU forwarded to the host-owned apps MCP server.
@@ -1052,8 +1062,8 @@ pub struct Config {
     /// Collection of various notices we show the user
     pub notices: Notice,
 
-    /// When `true`, checks for Codex updates on startup and surfaces update prompts.
-    /// Set to `false` only if your Codex updates are centrally managed.
+    /// When `true`, checks for MidnightCoder updates on startup and surfaces update prompts.
+    /// Set to `false` only if your MidnightCoder updates are centrally managed.
     /// Defaults to `true`.
     pub check_for_update_on_startup: bool,
 
@@ -1062,11 +1072,11 @@ pub struct Config {
     /// or placeholder replacement will occur for fast keypress bursts.
     pub disable_paste_burst: bool,
 
-    /// When `false`, disables analytics across Codex product surfaces in this machine.
+    /// When `false`, disables analytics across MidnightCoder product surfaces in this machine.
     /// Voluntarily left as Optional because the default value might depend on the client.
     pub analytics_enabled: Option<bool>,
 
-    /// When `false`, disables feedback collection across Codex product surfaces.
+    /// When `false`, disables feedback collection across MidnightCoder product surfaces.
     /// Defaults to `true`.
     pub feedback_enabled: bool,
 
@@ -1681,7 +1691,7 @@ impl Config {
         .await
     }
 
-    /// Load a default configuration for a specific Codex home without reading
+    /// Load a default configuration for a specific MidnightCoder home without reading
     /// user, project, or system config layers.
     pub async fn load_default_with_cli_overrides_for_codex_home(
         codex_home: PathBuf,
@@ -2407,17 +2417,29 @@ fn dedupe_absolute_paths(paths: &mut Vec<AbsolutePathBuf>) {
     paths.retain(|path| seen.insert(path.clone()));
 }
 
-/// Resolves the OSS provider from CLI override or global config.
-/// Returns `None` if no provider is configured at any level.
+/// Resolves the local OSS provider from CLI override, global config, or the
+/// MidnightCoder default.
 pub fn resolve_oss_provider(
     explicit_provider: Option<&str>,
     config_toml: &ConfigToml,
 ) -> Option<String> {
     if let Some(provider) = explicit_provider {
         // Explicit provider specified (e.g., via --local-provider)
-        Some(provider.to_string())
+        Some(normalize_local_provider_alias(provider))
     } else {
-        config_toml.oss_provider.clone()
+        Some(normalize_local_provider_alias(
+            &config_toml
+                .oss_provider
+                .clone()
+                .unwrap_or_else(|| OLLAMA_OSS_PROVIDER_ID.to_string()),
+        ))
+    }
+}
+
+fn normalize_local_provider_alias(provider: &str) -> String {
+    match provider {
+        "llama" => OLLAMA_OSS_PROVIDER_ID.to_string(),
+        _ => provider.to_string(),
     }
 }
 
@@ -3402,7 +3424,7 @@ impl Config {
 
         let model_provider_id = model_provider
             .or(cfg.model_provider)
-            .unwrap_or_else(|| "openai".to_string());
+            .unwrap_or_else(|| OLLAMA_OSS_PROVIDER_ID.to_string());
         let model_provider = model_providers
             .get(&model_provider_id)
             .ok_or_else(|| {
@@ -3685,7 +3707,7 @@ impl Config {
         {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                "`approval_policy = \"never\"` cannot be used because requirements do not allow `sandbox_mode = \"danger-full-access\"`; Codex would fall back to read-only permissions with approvals disabled. Choose an `approval_policy` based on what you need, such as `on-request`, or choose an allowed sandbox mode.",
+                "`approval_policy = \"never\"` cannot be used because requirements do not allow `sandbox_mode = \"danger-full-access\"`; MidnightCoder would fall back to read-only permissions with approvals disabled. Choose an `approval_policy` based on what you need, such as `on-request`, or choose an allowed sandbox mode.",
             ));
         }
         if permission_profile_was_constrained {
@@ -3757,6 +3779,9 @@ impl Config {
             model,
             service_tier,
             review_model,
+            mini_model: cfg.mini_model,
+            resume_type: cfg.resume_type,
+            ollama_num_ctx: cfg.ollama_num_ctx,
             model_context_window: cfg.model_context_window,
             model_auto_compact_token_limit: cfg.model_auto_compact_token_limit,
             model_auto_compact_token_limit_scope: cfg
@@ -4305,7 +4330,7 @@ fn normalize_guardian_policy_config(value: Option<&str>) -> Option<String> {
     })
 }
 
-/// Returns the path to the Codex configuration directory, which can be
+/// Returns the path to the MidnightCoder configuration directory, which can be
 /// specified by the `CODEX_HOME` environment variable. If not set, defaults to
 /// `~/.codex`.
 ///
@@ -4317,7 +4342,7 @@ pub fn find_codex_home() -> std::io::Result<AbsolutePathBuf> {
     codex_utils_home_dir::find_codex_home()
 }
 
-/// Returns the path to the folder where Codex logs are stored. Does not verify
+/// Returns the path to the folder where MidnightCoder logs are stored. Does not verify
 /// that the directory exists.
 pub fn log_dir(cfg: &Config) -> std::io::Result<PathBuf> {
     Ok(cfg.log_dir.clone())

@@ -21,10 +21,10 @@ pub enum StandalonePlatform {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CodexPackageLayout {
+pub struct MidnightCoderPackageLayout {
     /// The package root that contains the metadata file and layout directories.
     pub package_dir: AbsolutePathBuf,
-    /// Directory containing the Codex entrypoint executable.
+    /// Directory containing the MidnightCoder entrypoint executable.
     pub bin_dir: AbsolutePathBuf,
     /// Directory containing managed helper binaries and data files, when present.
     pub resources_dir: Option<AbsolutePathBuf>,
@@ -35,7 +35,7 @@ pub struct CodexPackageLayout {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InstallContext {
     pub method: InstallMethod,
-    pub package_layout: Option<CodexPackageLayout>,
+    pub package_layout: Option<MidnightCoderPackageLayout>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -52,16 +52,16 @@ pub enum InstallMethod {
         /// The platform of the standalone release, either `Unix` or `Windows`.
         platform: StandalonePlatform,
     },
-    /// A Codex binary launched through the npm-managed `codex.js` shim.
+    /// A MidnightCoder binary launched through the npm-managed `codex.js` shim.
     Npm,
-    /// A Codex binary launched through the bun-managed `codex.js` shim.
+    /// A MidnightCoder binary launched through the bun-managed `codex.js` shim.
     Bun,
-    /// A Codex binary that appears to come from a Homebrew install prefix.
+    /// A MidnightCoder binary that appears to come from a Homebrew install prefix.
     Brew,
     /// Any other execution environment.
     ///
-    /// This commonly covers `cargo run`, app-bundled Codex binaries, custom
-    /// internal launchers, and tests that execute Codex from an arbitrary path.
+    /// This commonly covers `cargo run`, app-bundled MidnightCoder binaries, custom
+    /// internal launchers, and tests that execute MidnightCoder from an arbitrary path.
     Other,
 }
 
@@ -89,7 +89,7 @@ impl InstallContext {
         managed_by_bun: bool,
         codex_home: Option<&Path>,
     ) -> Self {
-        let package_layout = current_exe.and_then(CodexPackageLayout::from_exe);
+        let package_layout = current_exe.and_then(MidnightCoderPackageLayout::from_exe);
         let method = if managed_by_npm {
             InstallMethod::Npm
         } else if managed_by_bun {
@@ -181,7 +181,7 @@ impl InstallContext {
     }
 }
 
-impl CodexPackageLayout {
+impl MidnightCoderPackageLayout {
     fn from_exe(exe_path: &Path) -> Option<Self> {
         let canonical_exe = canonical_absolute_path(exe_path)?;
         let exe_dir = canonical_exe.parent()?;
@@ -209,7 +209,7 @@ impl CodexPackageLayout {
 fn install_method_from_exe(
     exe_path: &Path,
     codex_home: Option<&Path>,
-    package_layout: Option<&CodexPackageLayout>,
+    package_layout: Option<&MidnightCoderPackageLayout>,
     is_macos: bool,
 ) -> InstallMethod {
     if let Some(standalone_method) = standalone_install_method(exe_path, codex_home, package_layout)
@@ -227,7 +227,7 @@ fn install_method_from_exe(
 fn standalone_install_method(
     exe_path: &Path,
     codex_home: Option<&Path>,
-    package_layout: Option<&CodexPackageLayout>,
+    package_layout: Option<&MidnightCoderPackageLayout>,
 ) -> Option<InstallMethod> {
     let canonical_codex_home = canonical_absolute_path(codex_home?)?;
     let release_dir = if let Some(package_layout) = package_layout {
@@ -376,7 +376,7 @@ mod tests {
         let canonical_resources_dir =
             AbsolutePathBuf::from_absolute_path(resources_dir.canonicalize()?)?;
         let canonical_path_dir = AbsolutePathBuf::from_absolute_path(path_dir.canonicalize()?)?;
-        let package_layout = CodexPackageLayout {
+        let package_layout = MidnightCoderPackageLayout {
             package_dir: canonical_package_dir,
             bin_dir: canonical_bin_dir,
             resources_dir: Some(canonical_resources_dir.clone()),
@@ -462,7 +462,7 @@ mod tests {
                     resources_dir: Some(canonical_resources_dir.clone()),
                     platform: standalone_platform(),
                 },
-                package_layout: Some(CodexPackageLayout {
+                package_layout: Some(MidnightCoderPackageLayout {
                     package_dir: canonical_package_dir,
                     bin_dir: canonical_bin_dir,
                     resources_dir: Some(canonical_resources_dir.clone()),

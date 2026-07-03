@@ -42,13 +42,63 @@ async fn token_count_none_resets_context_indicator() {
 }
 
 #[tokio::test]
+async fn set_model_provider_updates_runtime_status_base_url() {
+    let (mut chat, _rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+    chat.runtime_model_provider_base_url = Some("http://localhost:11434/v1".to_string());
+    let provider = codex_model_provider_info::create_oss_provider_with_base_url(
+        "http://192.168.100.33:11434/v1",
+        codex_model_provider_info::WireApi::Responses,
+    );
+
+    chat.set_model_provider("local192-168-100-33-11434".to_string(), provider);
+
+    assert_eq!(
+        chat.runtime_model_provider_base_url(),
+        Some("http://192.168.100.33:11434/v1")
+    );
+}
+
+#[tokio::test]
+async fn set_model_catalog_replaces_gpt_presets_with_provider_models() {
+    let (mut chat, _rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.set_model_catalog(crate::model_catalog::local_provider_model_presets(&[
+        crate::provider_config::DetectedProviderModel {
+            id: "qwen3-coder:30b".to_string(),
+            supports_tools: Some(true),
+            context_window: Some(262_144),
+        },
+        crate::provider_config::DetectedProviderModel {
+            id: "deepseek-coder:latest".to_string(),
+            supports_tools: Some(false),
+            context_window: None,
+        },
+    ]));
+
+    let models: Vec<String> = chat
+        .model_catalog()
+        .try_list_models()
+        .expect("test catalog")
+        .into_iter()
+        .map(|preset| preset.model)
+        .collect();
+    assert_eq!(
+        models,
+        vec![
+            "qwen3-coder:30b".to_string(),
+            "deepseek-coder:latest".to_string()
+        ]
+    );
+}
+
+#[tokio::test]
 async fn app_server_cyber_policy_error_renders_dedicated_notice() {
     let (mut chat, mut rx, _ops) = make_chatwidget_manual(/*model_override*/ None).await;
 
     handle_error(
         &mut chat,
         "server fallback message",
-        Some(CodexErrorInfo::CyberPolicy),
+        Some(MidnightCoderErrorInfo::CyberPolicy),
     );
 
     let cells = drain_insert_history(&mut rx);
@@ -375,14 +425,14 @@ async fn completed_plan_table_tail_skips_provisional_history_insert() {
     );
     controller.push("| Step | Owner |\n");
     controller.push("| --- | --- |\n");
-    controller.push("| Verify | Codex |\n");
+    controller.push("| Verify | MidnightCoder |\n");
     assert!(
         controller.has_live_tail(),
         "expected plan table holdback to leave a live tail",
     );
     chat.plan_stream_controller = Some(controller);
     chat.transcript.plan_delta_buffer =
-        "| Step | Owner |\n| --- | --- |\n| Verify | Codex |\n".to_string();
+        "| Step | Owner |\n| --- | --- |\n| Verify | MidnightCoder |\n".to_string();
 
     while rx.try_recv().is_ok() {}
 
@@ -432,7 +482,7 @@ async fn configured_pet_load_is_deferred_until_after_construction() {
         has_chatgpt_account: false,
         has_codex_backend_auth: false,
         model_catalog: test_model_catalog(&cfg),
-        feedback: codex_feedback::CodexFeedback::new(),
+        feedback: codex_feedback::MidnightCoderFeedback::new(),
         is_first_run: true,
         status_account_display: None,
         runtime_model_provider_base_url: None,
@@ -1310,7 +1360,7 @@ async fn workspace_owner_limit_states_render_state_specific_messages() {
         (
             RateLimitReachedType::WorkspaceOwnerCreditsDepleted,
             RateLimitErrorKind::Generic,
-            "You're out of credits. Your workspace is out of credits. Add credits to continue using Codex.",
+            "You're out of credits. Your workspace is out of credits. Add credits to continue using MidnightCoder.",
         ),
         (
             RateLimitReachedType::WorkspaceOwnerUsageLimitReached,
@@ -1544,7 +1594,10 @@ async fn esc_interrupt_pauses_active_goal_turn() {
 
     chat.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
-    assert_matches!(rx.try_recv(), Ok(AppEvent::CodexOp(Op::Interrupt { .. })));
+    assert_matches!(
+        rx.try_recv(),
+        Ok(AppEvent::MidnightCoderOp(Op::Interrupt { .. }))
+    );
     assert_goal_paused_event(&mut rx, thread_id);
 
     update_thread_goal(&mut chat, thread_id, AppThreadGoalStatus::Paused);
@@ -1581,7 +1634,10 @@ async fn request_user_input_interrupt_pauses_active_goal_turn() {
 
         chat.handle_key_event(key_event);
 
-        assert_matches!(rx.try_recv(), Ok(AppEvent::CodexOp(Op::Interrupt { .. })));
+        assert_matches!(
+            rx.try_recv(),
+            Ok(AppEvent::MidnightCoderOp(Op::Interrupt { .. }))
+        );
         assert_goal_paused_event(&mut rx, thread_id);
     }
 }

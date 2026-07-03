@@ -7,7 +7,7 @@ use codex_core::ThreadManager;
 use codex_core::config::Config;
 use codex_exec_server::EnvironmentManager;
 use codex_extension_api::empty_extension_registry;
-use codex_home::CodexHomeUserInstructionsProvider;
+use codex_home::MidnightCoderHomeUserInstructionsProvider;
 use codex_login::AuthManager;
 use codex_login::default_client::USER_AGENT_SUFFIX;
 use codex_login::default_client::get_codex_user_agent;
@@ -32,8 +32,8 @@ use serde_json::json;
 use tokio::sync::Mutex;
 use tokio::task;
 
-use crate::codex_tool_config::CodexToolCallParam;
-use crate::codex_tool_config::CodexToolCallReplyParam;
+use crate::codex_tool_config::MidnightCoderToolCallParam;
+use crate::codex_tool_config::MidnightCoderToolCallReplyParam;
 use crate::codex_tool_config::create_tool_for_codex_tool_call_param;
 use crate::codex_tool_config::create_tool_for_codex_tool_call_reply_param;
 use crate::outgoing_message::OutgoingMessageSender;
@@ -63,7 +63,7 @@ impl MessageProcessor {
             /*enable_codex_api_key_env*/ false,
         )
         .await;
-        let user_instructions_provider = Arc::new(CodexHomeUserInstructionsProvider::new(
+        let user_instructions_provider = Arc::new(MidnightCoderHomeUserInstructionsProvider::new(
             config.codex_home.clone(),
         ));
         let thread_manager = Arc::new(ThreadManager::new(
@@ -223,10 +223,10 @@ impl MessageProcessor {
             *suffix = Some(user_agent_suffix);
         }
 
-        let server_info =
-            Implementation::new("codex-mcp-server", env!("CARGO_PKG_VERSION")).with_title("Codex");
+        let server_info = Implementation::new("codex-mcp-server", env!("CARGO_PKG_VERSION"))
+            .with_title("MidnightCoder");
 
-        // Preserve Codex's existing non-spec `serverInfo.user_agent` field.
+        // Preserve MidnightCoder's existing non-spec `serverInfo.user_agent` field.
         let mut server_info_value = match serde_json::to_value(&server_info) {
             Ok(value) => value,
             Err(err) => {
@@ -356,25 +356,28 @@ impl MessageProcessor {
     ) {
         let arguments = arguments.map(serde_json::Value::Object);
         let (initial_prompt, config): (String, Config) = match arguments {
-            Some(json_val) => match serde_json::from_value::<CodexToolCallParam>(json_val) {
-                Ok(tool_cfg) => match tool_cfg.into_config(self.arg0_paths.clone()).await {
-                    Ok(cfg) => cfg,
+            Some(json_val) => {
+                match serde_json::from_value::<MidnightCoderToolCallParam>(json_val) {
+                    Ok(tool_cfg) => match tool_cfg.into_config(self.arg0_paths.clone()).await {
+                        Ok(cfg) => cfg,
+                        Err(e) => {
+                            let result =
+                                CallToolResult::error(vec![rmcp::model::Content::text(format!(
+                                    "Failed to load MidnightCoder configuration from overrides: {e}"
+                                ))]);
+                            self.outgoing.send_response(id, result).await;
+                            return;
+                        }
+                    },
                     Err(e) => {
                         let result = CallToolResult::error(vec![rmcp::model::Content::text(
-                            format!("Failed to load Codex configuration from overrides: {e}"),
+                            format!("Failed to parse configuration for MidnightCoder tool: {e}"),
                         )]);
                         self.outgoing.send_response(id, result).await;
                         return;
                     }
-                },
-                Err(e) => {
-                    let result = CallToolResult::error(vec![rmcp::model::Content::text(format!(
-                        "Failed to parse configuration for Codex tool: {e}"
-                    ))]);
-                    self.outgoing.send_response(id, result).await;
-                    return;
                 }
-            },
+            }
             None => {
                 let result = CallToolResult::error(vec![rmcp::model::Content::text(
                     "Missing arguments for codex tool-call; the `prompt` field is required.",
@@ -389,10 +392,10 @@ impl MessageProcessor {
         let thread_manager = self.thread_manager.clone();
         let running_requests_id_to_codex_uuid = self.running_requests_id_to_codex_uuid.clone();
 
-        // Spawn an async task to handle the Codex session so that we do not
+        // Spawn an async task to handle the MidnightCoder session so that we do not
         // block the synchronous message-processing loop.
         task::spawn(async move {
-            // Run the Codex session and stream events back to the client.
+            // Run the MidnightCoder session and stream events back to the client.
             crate::codex_tool_runner::run_codex_tool_session(
                 id,
                 initial_prompt,
@@ -414,18 +417,22 @@ impl MessageProcessor {
         tracing::info!("tools/call -> params: {:?}", arguments);
 
         // parse arguments
-        let codex_tool_call_reply_param: CodexToolCallReplyParam = match arguments {
-            Some(json_val) => match serde_json::from_value::<CodexToolCallReplyParam>(json_val) {
-                Ok(params) => params,
-                Err(e) => {
-                    tracing::error!("Failed to parse Codex tool call reply parameters: {e}");
-                    let result = CallToolResult::error(vec![rmcp::model::Content::text(format!(
-                        "Failed to parse configuration for Codex tool: {e}"
-                    ))]);
-                    self.outgoing.send_response(request_id, result).await;
-                    return;
+        let codex_tool_call_reply_param: MidnightCoderToolCallReplyParam = match arguments {
+            Some(json_val) => {
+                match serde_json::from_value::<MidnightCoderToolCallReplyParam>(json_val) {
+                    Ok(params) => params,
+                    Err(e) => {
+                        tracing::error!(
+                            "Failed to parse MidnightCoder tool call reply parameters: {e}"
+                        );
+                        let result = CallToolResult::error(vec![rmcp::model::Content::text(
+                            format!("Failed to parse configuration for MidnightCoder tool: {e}"),
+                        )]);
+                        self.outgoing.send_response(request_id, result).await;
+                        return;
+                    }
                 }
-            },
+            }
             None => {
                 tracing::error!(
                     "Missing arguments for codex-reply tool-call; the `thread_id` and `prompt` fields are required."
@@ -531,7 +538,7 @@ impl MessageProcessor {
         };
         tracing::info!("thread_id: {thread_id}");
 
-        // Obtain the Codex thread from the server.
+        // Obtain the MidnightCoder thread from the server.
         let codex_arc = match self.thread_manager.get_thread(thread_id).await {
             Ok(c) => c,
             Err(_) => {
@@ -540,7 +547,7 @@ impl MessageProcessor {
             }
         };
 
-        // Submit interrupt to Codex.
+        // Submit interrupt to MidnightCoder.
         if let Err(e) = codex_arc
             .submit_with_id(Submission {
                 id: request_id_string,
@@ -550,7 +557,7 @@ impl MessageProcessor {
             })
             .await
         {
-            tracing::error!("Failed to submit interrupt to Codex: {e}");
+            tracing::error!("Failed to submit interrupt to MidnightCoder: {e}");
             return;
         }
         // unregister the id so we don't keep it in the map

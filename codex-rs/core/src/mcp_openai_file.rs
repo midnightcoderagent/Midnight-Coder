@@ -1,10 +1,10 @@
-//! Bridges Apps SDK-style `openai/fileParams` metadata into Codex's MCP flow.
+//! Bridges Apps SDK-style `openai/fileParams` metadata into MidnightCoder's MCP flow.
 //!
 //! Strategy:
 //! - Inspect `_meta["openai/fileParams"]` to discover which tool arguments are
 //!   file inputs.
 //! - At tool execution time, read those files from the primary environment,
-//!   upload them to OpenAI file storage,
+//!   upload them to MidnightCoder file storage,
 //!   and rewrite only the declared arguments into the provided-file payload
 //!   shape expected by the downstream Apps tool.
 //!
@@ -15,7 +15,7 @@ use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use codex_api::OPENAI_FILE_UPLOAD_LIMIT_BYTES;
 use codex_api::upload_openai_file;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_utils_path_uri::PathUri;
 use serde_json::Value as JsonValue;
 
@@ -60,7 +60,7 @@ pub(crate) async fn rewrite_mcp_tool_arguments_for_openai_files(
 
 async fn rewrite_argument_value_for_openai_files(
     turn_context: &TurnContext,
-    auth: Option<&CodexAuth>,
+    auth: Option<&MidnightCoderAuth>,
     field_name: &str,
     value: &JsonValue,
 ) -> Result<Option<JsonValue>, String> {
@@ -100,7 +100,7 @@ async fn rewrite_argument_value_for_openai_files(
 
 async fn build_uploaded_argument_value(
     turn_context: &TurnContext,
-    auth: Option<&CodexAuth>,
+    auth: Option<&MidnightCoderAuth>,
     field_name: &str,
     index: Option<usize>,
     file_path: &str,
@@ -112,10 +112,14 @@ async fn build_uploaded_argument_value(
         None => format!("failed to upload `{file_path}` for `{field_name}`: {error}"),
     };
     let Some(auth) = auth else {
-        return Err("ChatGPT auth is required to upload files for Codex Apps tools".to_string());
+        return Err(
+            "ChatGPT auth is required to upload files for MidnightCoder Apps tools".to_string(),
+        );
     };
     if !auth.uses_codex_backend() {
-        return Err("ChatGPT auth is required to upload files for Codex Apps tools".to_string());
+        return Err(
+            "ChatGPT auth is required to upload files for MidnightCoder Apps tools".to_string(),
+        );
     }
     let Some(turn_environment) = turn_context.environments.primary() else {
         return Err(contextualize_error(
@@ -271,7 +275,7 @@ mod tests {
             .await;
 
         let (_, mut turn_context) = make_session_and_context().await;
-        let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
+        let auth = MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing();
         let dir = tempdir().expect("temp dir");
         let local_path = dir.path().join("file_report.csv");
         tokio::fs::write(&local_path, b"hello")
@@ -309,7 +313,7 @@ mod tests {
     #[tokio::test]
     async fn build_uploaded_argument_value_rejects_oversized_file_before_reading() {
         let (_, mut turn_context) = make_session_and_context().await;
-        let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
+        let auth = MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing();
         let dir = tempdir().expect("temp dir");
         let file_path = dir.path().join("oversized.bin");
         let file = std::fs::File::create(&file_path).expect("create sparse file");
@@ -377,7 +381,7 @@ mod tests {
             .await;
 
         let (_, mut turn_context) = make_session_and_context().await;
-        let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
+        let auth = MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing();
         let dir = tempdir().expect("temp dir");
         let local_path = dir.path().join("file_report.csv");
         tokio::fs::write(&local_path, b"hello")
@@ -489,7 +493,7 @@ mod tests {
             .await;
 
         let (_, mut turn_context) = make_session_and_context().await;
-        let auth = CodexAuth::create_dummy_chatgpt_auth_for_testing();
+        let auth = MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing();
         let dir = tempdir().expect("temp dir");
         tokio::fs::write(dir.path().join("one.csv"), b"one")
             .await
@@ -538,7 +542,7 @@ mod tests {
     async fn rewrite_mcp_tool_arguments_for_openai_files_surfaces_upload_failures() {
         let (mut session, turn_context) = make_session_and_context().await;
         session.services.auth_manager = crate::test_support::auth_manager_from_auth(
-            CodexAuth::create_dummy_chatgpt_auth_for_testing(),
+            MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing(),
         );
         let error = rewrite_mcp_tool_arguments_for_openai_files(
             &session,

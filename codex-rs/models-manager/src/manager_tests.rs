@@ -4,13 +4,14 @@ use chrono::Utc;
 use codex_login::AuthCredentialsStoreMode;
 use codex_login::AuthKeyringBackendKind;
 use codex_login::AuthManager;
-use codex_login::CodexAuth;
 use codex_login::ExternalAuth;
 use codex_login::ExternalAuthRefreshContext;
 use codex_login::ExternalAuthTokens;
+use codex_login::MidnightCoderAuth;
 use codex_login::TokenData;
 use codex_protocol::auth::AuthMode;
 use codex_protocol::openai_models::ModelsResponse;
+use codex_protocol::openai_models::ToolMode;
 use pretty_assertions::assert_eq;
 use serde_json::json;
 use std::collections::VecDeque;
@@ -75,6 +76,8 @@ fn assert_models_contain(actual: &[ModelInfo], expected: &[ModelInfo]) {
 struct TestModelsEndpoint {
     has_command_auth: bool,
     uses_codex_backend: bool,
+    has_provider_catalog: bool,
+    provider_catalog_is_authoritative: bool,
     responses: Mutex<VecDeque<Vec<ModelInfo>>>,
     fetch_count: AtomicUsize,
 }
@@ -84,6 +87,8 @@ impl TestModelsEndpoint {
         Arc::new(Self {
             has_command_auth: false,
             uses_codex_backend: true,
+            has_provider_catalog: false,
+            provider_catalog_is_authoritative: false,
             responses: Mutex::new(responses.into()),
             fetch_count: AtomicUsize::new(0),
         })
@@ -93,6 +98,19 @@ impl TestModelsEndpoint {
         Arc::new(Self {
             has_command_auth: false,
             uses_codex_backend: false,
+            has_provider_catalog: false,
+            provider_catalog_is_authoritative: false,
+            responses: Mutex::new(responses.into()),
+            fetch_count: AtomicUsize::new(0),
+        })
+    }
+
+    fn authoritative_catalog(responses: Vec<Vec<ModelInfo>>) -> Arc<Self> {
+        Arc::new(Self {
+            has_command_auth: false,
+            uses_codex_backend: false,
+            has_provider_catalog: true,
+            provider_catalog_is_authoritative: true,
             responses: Mutex::new(responses.into()),
             fetch_count: AtomicUsize::new(0),
         })
@@ -163,6 +181,14 @@ impl ModelsEndpointClient for TestModelsEndpoint {
         self.has_command_auth
     }
 
+    fn has_provider_catalog(&self) -> bool {
+        self.has_provider_catalog
+    }
+
+    fn provider_catalog_is_authoritative(&self) -> bool {
+        self.provider_catalog_is_authoritative
+    }
+
     fn uses_codex_backend(&self) -> ModelsEndpointFuture<'_, bool> {
         Box::pin(async { self.uses_codex_backend })
     }
@@ -183,7 +209,7 @@ fn openai_manager_for_tests(
         codex_home,
         endpoint_client,
         Some(AuthManager::from_auth_for_testing(
-            CodexAuth::create_dummy_chatgpt_auth_for_testing(),
+            MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing(),
         )),
     )
 }
@@ -200,7 +226,7 @@ fn static_manager_for_tests(model_catalog: ModelsResponse) -> StaticModelsManage
     StaticModelsManager::new(/*auth_manager*/ None, model_catalog)
 }
 
-async fn chatgpt_auth_tokens_for_tests(codex_home: &Path) -> CodexAuth {
+async fn chatgpt_auth_tokens_for_tests(codex_home: &Path) -> MidnightCoderAuth {
     let auth_dot_json = codex_login::AuthDotJson {
         auth_mode: Some(AuthMode::ChatgptAuthTokens),
         openai_api_key: None,
@@ -227,7 +253,7 @@ c2ln",
     )
     .expect("auth.json should be written");
 
-    CodexAuth::from_auth_storage(
+    MidnightCoderAuth::from_auth_storage(
         codex_home,
         AuthCredentialsStoreMode::File,
         /*chatgpt_base_url*/ None,
@@ -385,6 +411,32 @@ async fn get_model_info_uses_custom_catalog() {
     assert!(model_info.supports_image_detail_original);
     assert!(!model_info.supports_parallel_tool_calls);
     assert!(!model_info.used_fallback_model_metadata);
+}
+
+#[tokio::test]
+async fn get_model_info_refreshes_authoritative_provider_catalog_for_tool_mode() {
+    let codex_home = tempdir().expect("temp dir");
+    let config = ModelsManagerConfig::default();
+    let mut tool_model = remote_model("provider-tool-model", "Provider Tool", /*priority*/ 0);
+    tool_model.tool_mode = Some(ToolMode::CodeMode);
+    let mut text_model = remote_model("provider-text-model", "Provider Text", /*priority*/ 1);
+    text_model.tool_mode = None;
+    let catalog = vec![tool_model.clone(), text_model];
+    let endpoint = TestModelsEndpoint::authoritative_catalog(vec![catalog.clone(), catalog]);
+    let manager =
+        openai_manager_for_tests_with_auth(codex_home.path().to_path_buf(), endpoint.clone(), None);
+
+    let model_info = manager.get_model_info("provider-tool-model", &config).await;
+    let missing_model_info = manager
+        .get_model_info("provider-missing-model", &config)
+        .await;
+
+    assert_eq!(model_info.tool_mode, Some(ToolMode::CodeMode));
+    assert!(!model_info.used_fallback_model_metadata);
+    assert_eq!(missing_model_info.tool_mode, None);
+    assert!(missing_model_info.experimental_supported_tools.is_empty());
+    assert!(missing_model_info.used_fallback_model_metadata);
+    assert_eq!(endpoint.fetch_count(), 2);
 }
 
 #[tokio::test]
@@ -607,15 +659,17 @@ async fn refresh_available_models_keeps_merging_for_api_auth() {
     let endpoint = Arc::new(TestModelsEndpoint {
         has_command_auth: true,
         uses_codex_backend: false,
+        has_provider_catalog: false,
+        provider_catalog_is_authoritative: false,
         responses: Mutex::new(vec![remote_models.clone()].into()),
         fetch_count: AtomicUsize::new(0),
     });
     let manager = openai_manager_for_tests_with_auth(
         codex_home.path().to_path_buf(),
         endpoint.clone(),
-        Some(AuthManager::from_auth_for_testing(CodexAuth::from_api_key(
-            "test-api-key",
-        ))),
+        Some(AuthManager::from_auth_for_testing(
+            MidnightCoderAuth::from_api_key("test-api-key"),
+        )),
     );
     let mut expected = load_remote_models_from_file().expect("bundled models should parse");
     expected.extend(remote_models);
@@ -827,7 +881,7 @@ impl TestAuthAwareModelsEndpoint {
                 .auth()
                 .await
                 .as_ref()
-                .is_some_and(CodexAuth::uses_codex_backend),
+                .is_some_and(MidnightCoderAuth::uses_codex_backend),
             None => false,
         }
     }
@@ -865,8 +919,9 @@ impl ModelsEndpointClient for TestAuthAwareModelsEndpoint {
 async fn refresh_available_models_skips_network_when_external_api_key_overrides_chatgpt_auth() {
     let dynamic_slug = "dynamic-model-only-for-test-external-api-key";
     let codex_home = tempdir().expect("temp dir");
-    let auth_manager =
-        AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     auth_manager.set_external_auth(Arc::new(TestExternalApiKeyAuth));
     let endpoint = TestAuthAwareModelsEndpoint::new(
         Some(Arc::clone(&auth_manager)),
@@ -905,8 +960,9 @@ async fn refresh_available_models_skips_network_when_external_api_key_overrides_
 async fn refresh_available_models_uses_cached_chatgpt_when_external_api_key_is_unresolved() {
     let dynamic_slug = "dynamic-model-only-for-test-unresolved-external-api-key";
     let codex_home = tempdir().expect("temp dir");
-    let auth_manager =
-        AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     auth_manager.set_external_auth(Arc::new(TestUnresolvedExternalApiKeyAuth));
     let endpoint = TestAuthAwareModelsEndpoint::new(
         Some(Arc::clone(&auth_manager)),
@@ -998,8 +1054,9 @@ fn build_available_models_picks_default_after_hiding_hidden_models() {
 
 #[tokio::test]
 async fn static_manager_reads_latest_auth_mode() {
-    let auth_manager =
-        AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     let chatgpt_only_model = {
         let mut model = remote_model("chatgpt-only", "ChatGPT Only", /*priority*/ 0);
         model.supported_in_api = false;

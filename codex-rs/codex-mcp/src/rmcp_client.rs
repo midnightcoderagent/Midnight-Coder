@@ -2,7 +2,7 @@
 //!
 //! This module owns startup of individual RMCP clients: building the transport,
 //! initializing the server, listing raw tools, applying per-server tool filters,
-//! and exposing cached Codex Apps tools while a client is still connecting.
+//! and exposing cached MidnightCoder Apps tools while a client is still connecting.
 //! Higher-level aggregation and resource/tool APIs live in
 //! [`crate::connection_manager`].
 
@@ -21,8 +21,8 @@ use std::time::Instant;
 use crate::codex_apps::normalize_codex_apps_callable_name;
 use crate::codex_apps::normalize_codex_apps_callable_namespace;
 use crate::codex_apps::normalize_codex_apps_tool_title;
-use crate::codex_apps_cache::CodexAppsToolsCacheContext;
-use crate::codex_apps_cache::CodexAppsToolsFetchSource;
+use crate::codex_apps_cache::MidnightCoderAppsToolsCacheContext;
+use crate::codex_apps_cache::MidnightCoderAppsToolsFetchSource;
 use crate::codex_apps_cache::load_startup_cached_codex_apps_server_info;
 use crate::elicitation::ElicitationRequestManager;
 use crate::mcp::CODEX_APPS_MCP_SERVER_NAME;
@@ -74,7 +74,7 @@ use tracing::Instrument;
 use tracing::instrument;
 use tracing::warn;
 
-/// MCP server capability indicating that Codex should include [`SandboxState`]
+/// MCP server capability indicating that MidnightCoder should include [`SandboxState`]
 /// in tool-call request `_meta` under this key.
 pub const MCP_SANDBOX_STATE_META_CAPABILITY: &str = "codex/sandbox-state-meta";
 pub const OPENAI_FORM_CAPABILITY: &str = "openai/form";
@@ -105,7 +105,7 @@ pub(crate) struct ManagedClient {
     pub(crate) tool_timeout: Option<Duration>,
     pub(crate) server_instructions: Option<String>,
     pub(crate) server_supports_sandbox_state_meta_capability: bool,
-    pub(crate) codex_apps_tools_cache_context: Option<CodexAppsToolsCacheContext>,
+    pub(crate) codex_apps_tools_cache_context: Option<MidnightCoderAppsToolsCacheContext>,
 }
 
 impl ManagedClient {
@@ -114,7 +114,7 @@ impl ManagedClient {
         if let Some(tools) = self
             .codex_apps_tools_cache_context
             .as_ref()
-            .and_then(CodexAppsToolsCacheContext::current_tools)
+            .and_then(MidnightCoderAppsToolsCacheContext::current_tools)
         {
             emit_duration(
                 MCP_TOOLS_LIST_DURATION_METRIC,
@@ -140,7 +140,7 @@ pub(crate) type ManagedClientFuture =
     Shared<BoxFuture<'static, Result<ManagedClient, StartupOutcomeError>>>;
 
 #[derive(Default)]
-struct CodexAppsStartupReconnectState {
+struct MidnightCoderAppsStartupReconnectState {
     current_client: Option<ManagedClient>,
     reconnect_in_flight: bool,
     consecutive_failures: u32,
@@ -148,23 +148,23 @@ struct CodexAppsStartupReconnectState {
 }
 
 #[derive(Clone)]
-struct CodexAppsStartupStatusContext {
+struct MidnightCoderAppsStartupStatusContext {
     submit_id: String,
     server_name: String,
     tx_event: Sender<Event>,
 }
 
-pub(crate) struct CodexAppsStartupReconnect {
+pub(crate) struct MidnightCoderAppsStartupReconnect {
     factory: Arc<dyn Fn() -> ManagedClientFuture + Send + Sync>,
-    state: StdMutex<CodexAppsStartupReconnectState>,
-    startup_status_context: Option<CodexAppsStartupStatusContext>,
+    state: StdMutex<MidnightCoderAppsStartupReconnectState>,
+    startup_status_context: Option<MidnightCoderAppsStartupStatusContext>,
 }
 
-impl CodexAppsStartupReconnect {
+impl MidnightCoderAppsStartupReconnect {
     pub(crate) fn new(factory: Arc<dyn Fn() -> ManagedClientFuture + Send + Sync>) -> Self {
         Self {
             factory,
-            state: StdMutex::new(CodexAppsStartupReconnectState::default()),
+            state: StdMutex::new(MidnightCoderAppsStartupReconnectState::default()),
             startup_status_context: None,
         }
     }
@@ -175,7 +175,7 @@ impl CodexAppsStartupReconnect {
         server_name: String,
         tx_event: Sender<Event>,
     ) -> Self {
-        self.startup_status_context = Some(CodexAppsStartupStatusContext {
+        self.startup_status_context = Some(MidnightCoderAppsStartupStatusContext {
             submit_id,
             server_name,
             tx_event,
@@ -271,7 +271,7 @@ struct ManagedClientStartup {
     keyring_backend_kind: AuthKeyringBackendKind,
     tx_event: Sender<Event>,
     elicitation_requests: ElicitationRequestManager,
-    codex_apps_tools_cache_context: Option<CodexAppsToolsCacheContext>,
+    codex_apps_tools_cache_context: Option<MidnightCoderAppsToolsCacheContext>,
     runtime_context: McpRuntimeContext,
     runtime_auth_provider: Option<SharedAuthProvider>,
     client_elicitation_capability: ElicitationCapability,
@@ -364,10 +364,10 @@ pub(crate) struct AsyncManagedClient {
     pub(crate) client: ManagedClientFuture,
     pub(crate) is_codex_apps_mcp_server: bool,
     pub(crate) cached_server_info: Option<McpServerInfo>,
-    pub(crate) codex_apps_tools_cache_context: Option<CodexAppsToolsCacheContext>,
+    pub(crate) codex_apps_tools_cache_context: Option<MidnightCoderAppsToolsCacheContext>,
     pub(crate) tool_filter: ToolFilter,
     pub(crate) startup_complete: Arc<AtomicBool>,
-    pub(crate) startup_reconnect: Option<Arc<CodexAppsStartupReconnect>>,
+    pub(crate) startup_reconnect: Option<Arc<MidnightCoderAppsStartupReconnect>>,
     pub(crate) tool_plugin_provenance: Arc<ToolPluginProvenance>,
     pub(crate) cancel_token: CancellationToken,
 }
@@ -386,7 +386,7 @@ impl AsyncManagedClient {
         cancel_token: CancellationToken,
         tx_event: Sender<Event>,
         elicitation_requests: ElicitationRequestManager,
-        codex_apps_tools_cache_context: Option<CodexAppsToolsCacheContext>,
+        codex_apps_tools_cache_context: Option<MidnightCoderAppsToolsCacheContext>,
         tool_plugin_provenance: Arc<ToolPluginProvenance>,
         runtime_context: McpRuntimeContext,
         runtime_auth_provider: Option<SharedAuthProvider>,
@@ -427,7 +427,7 @@ impl AsyncManagedClient {
         let startup_reconnect = is_codex_apps_mcp_server.then(|| {
             let startup = Arc::clone(&startup);
             Arc::new(
-                CodexAppsStartupReconnect::new(Arc::new(move || startup.start()))
+                MidnightCoderAppsStartupReconnect::new(Arc::new(move || startup.start()))
                     .with_startup_status_context(
                         startup_submit_id,
                         reconnect_server_name,
@@ -437,7 +437,7 @@ impl AsyncManagedClient {
         });
         if codex_apps_tools_cache_context
             .as_ref()
-            .is_some_and(CodexAppsToolsCacheContext::has_current_tools)
+            .is_some_and(MidnightCoderAppsToolsCacheContext::has_current_tools)
         {
             let startup_task = client.clone();
             tokio::spawn(async move {
@@ -495,13 +495,13 @@ impl AsyncManagedClient {
     pub(crate) fn has_cached_tools(&self) -> bool {
         self.codex_apps_tools_cache_context
             .as_ref()
-            .is_some_and(CodexAppsToolsCacheContext::has_current_tools)
+            .is_some_and(MidnightCoderAppsToolsCacheContext::has_current_tools)
     }
 
     fn cached_tools(&self) -> Option<Vec<ToolInfo>> {
         self.codex_apps_tools_cache_context
             .as_ref()
-            .and_then(CodexAppsToolsCacheContext::current_tools)
+            .and_then(MidnightCoderAppsToolsCacheContext::current_tools)
             .map(|tools| filter_tools(tools, &self.tool_filter))
     }
 
@@ -586,7 +586,7 @@ pub(crate) async fn list_tools_for_client_uncached(
     Ok(tools)
 }
 
-/// Presents declared Codex Apps file parameters to the model as local-path inputs and adds plugin
+/// Presents declared MidnightCoder Apps file parameters to the model as local-path inputs and adds plugin
 /// names to each tool. Plugin membership is resolved by connector ID, falling back to the MCP
 /// server when absent.
 fn prepare_codex_apps_tools_for_model(
@@ -668,7 +668,7 @@ fn tool_info_from_listed_tool(
     }
 }
 
-/// Converts a Codex Apps tool by preserving connector fields, removing connector prefixes from
+/// Converts a MidnightCoder Apps tool by preserving connector fields, removing connector prefixes from
 /// model-visible names and titles, and using the connector description for its tool namespace.
 fn codex_apps_tool_info_from_listed_tool(
     server_name: &str,
@@ -823,7 +823,7 @@ async fn start_server_task(
     let fetch_start = Instant::now();
     let fetch_ticket = codex_apps_tools_cache_context
         .as_ref()
-        .map(|cache_context| cache_context.begin_fetch(CodexAppsToolsFetchSource::Startup));
+        .map(|cache_context| cache_context.begin_fetch(MidnightCoderAppsToolsFetchSource::Startup));
     let tools = list_tools_for_client_uncached(
         &server_name,
         is_codex_apps_mcp_server,
@@ -844,7 +844,7 @@ async fn start_server_task(
             cache_context.publish_if_newest_accepted(fetch_ticket, &server_info, tools)
         }
         (None, None) => tools,
-        _ => unreachable!("Codex Apps fetch ticket requires cache context"),
+        _ => unreachable!("MidnightCoder Apps fetch ticket requires cache context"),
     };
     if is_codex_apps_mcp_server {
         emit_duration(
@@ -883,7 +883,8 @@ fn mcp_initialize_request_params(
     }
     InitializeRequestParams::new(
         capabilities,
-        Implementation::new("codex-mcp-client", env!("CARGO_PKG_VERSION")).with_title("Codex"),
+        Implementation::new("codex-mcp-client", env!("CARGO_PKG_VERSION"))
+            .with_title("MidnightCoder"),
     )
     .with_protocol_version(ProtocolVersion::V_2025_06_18)
 }
@@ -911,7 +912,7 @@ struct StartServerTaskParams {
     tool_filter: ToolFilter,
     tx_event: Sender<Event>,
     elicitation_requests: ElicitationRequestManager,
-    codex_apps_tools_cache_context: Option<CodexAppsToolsCacheContext>,
+    codex_apps_tools_cache_context: Option<MidnightCoderAppsToolsCacheContext>,
     client_elicitation_capability: ElicitationCapability,
     supports_openai_form_elicitation: bool,
 }

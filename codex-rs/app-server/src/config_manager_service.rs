@@ -36,7 +36,11 @@ use std::path::PathBuf;
 use thiserror::Error;
 use tokio::task;
 use toml::Value as TomlValue;
+use toml_edit::DocumentMut;
 use toml_edit::Item as TomlItem;
+
+#[cfg(target_os = "windows")]
+use toml_edit::value;
 
 #[derive(Debug, Error)]
 pub(crate) enum ConfigManagerError {
@@ -405,10 +409,28 @@ async fn create_empty_user_layer(
 }
 
 async fn write_empty_user_config(write_path: PathBuf) -> Result<(), ConfigManagerError> {
-    task::spawn_blocking(move || write_atomically(&write_path, ""))
+    let contents = bootstrap_user_config_contents();
+    task::spawn_blocking(move || write_atomically(&write_path, &contents))
         .await
         .map_err(|err| ConfigManagerError::anyhow("config persistence task panicked", err.into()))?
         .map_err(|err| ConfigManagerError::io("failed to create empty user config.toml", err))
+}
+
+fn bootstrap_user_config_contents() -> String {
+    let doc = {
+        #[cfg(target_os = "windows")]
+        {
+            let mut doc = DocumentMut::new();
+            doc["windows"]["sandbox"] = value("unelevated");
+            doc
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            DocumentMut::new()
+        }
+    };
+
+    format!("{doc}")
 }
 
 fn parse_value(value: JsonValue) -> Result<Option<TomlValue>, String> {

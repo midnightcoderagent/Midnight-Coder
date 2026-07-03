@@ -897,7 +897,7 @@ async fn plugin_read_returns_canonical_openai_curated_marketplace_name() -> Resu
             .join("demo-plugin/.codex-plugin/plugin.json"),
         r#"{
   "name": "demo-plugin",
-  "description": "OpenAI curated plugin"
+  "description": "MidnightCoder curated plugin"
 }"#,
     )?;
     std::fs::write(
@@ -1329,7 +1329,7 @@ async fn plugin_read_returns_plugin_details_with_bundle_contents() -> Result<()>
     "displayName": "Plugin Display Name",
     "shortDescription": "Short description for subtitle",
     "longDescription": "Long description for details page",
-    "developerName": "OpenAI",
+    "developerName": "MidnightCoder",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
     "websiteURL": "https://openai.com/",

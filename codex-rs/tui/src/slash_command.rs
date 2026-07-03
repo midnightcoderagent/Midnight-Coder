@@ -13,6 +13,8 @@ pub enum SlashCommand {
     // DO NOT ALPHA-SORT! Enum order is presentation order in the popup, so
     // more frequently used commands should be listed first.
     Model,
+    #[strum(to_string = "provider_conf", serialize = "provider-conf")]
+    ProviderConf,
     Ide,
     Permissions,
     Keymap,
@@ -28,12 +30,17 @@ pub enum SlashCommand {
     Skills,
     Import,
     Hooks,
+    Context,
+    #[strum(to_string = "miniModel", serialize = "mini-model")]
+    MiniModel,
     Review,
     Rename,
     New,
     Archive,
     Delete,
     Resume,
+    #[strum(to_string = "resumeType", serialize = "resume-type")]
+    ResumeType,
     Fork,
     App,
     Init,
@@ -84,8 +91,8 @@ impl SlashCommand {
         match self {
             SlashCommand::Feedback => "send logs to maintainers",
             SlashCommand::New => "start a new chat during a conversation",
-            SlashCommand::Init => "create an AGENTS.md file with instructions for Codex",
-            SlashCommand::Compact => "summarize conversation to prevent hitting the context limit",
+            SlashCommand::Init => "create an AGENTS.md file with instructions for MidnightCoder",
+            SlashCommand::Compact => "compact now or configure auto-compaction",
             SlashCommand::Review => "review my current changes and find issues",
             SlashCommand::Rename => "rename the current thread",
             SlashCommand::Resume => "resume a saved chat",
@@ -93,15 +100,20 @@ impl SlashCommand {
             SlashCommand::Delete => "permanently delete this session and exit",
             SlashCommand::Clear => "clear the terminal and start a new chat",
             SlashCommand::Fork => "fork the current chat",
-            SlashCommand::App => "continue this session in Codex Desktop",
-            SlashCommand::Quit | SlashCommand::Exit => "exit Codex",
+            SlashCommand::App => "continue this session in MidnightCoder Desktop",
+            SlashCommand::Quit | SlashCommand::Exit => "exit MidnightCoder",
             SlashCommand::Copy => "copy last response as markdown",
             SlashCommand::Raw => "toggle raw scrollback mode for copy-friendly terminal selection",
             SlashCommand::Diff => "show git diff (including untracked files)",
             SlashCommand::Mention => "mention a file",
-            SlashCommand::Skills => "use skills to improve how Codex performs specific tasks",
+            SlashCommand::Skills => {
+                "use skills to improve how MidnightCoder performs specific tasks"
+            }
             SlashCommand::Import => "import setup, this project, and recent chats from Claude Code",
             SlashCommand::Hooks => "view and manage lifecycle hooks",
+            SlashCommand::Context => "set max context tokens before auto-compaction",
+            SlashCommand::MiniModel => "set the model used for context compaction",
+            SlashCommand::ResumeType => "set compaction strategy",
             SlashCommand::Status => "show current session configuration and token usage",
             SlashCommand::Usage => "view account usage or use a usage limit reset",
             SlashCommand::DebugConfig => "show config layers and requirement sources for debugging",
@@ -114,17 +126,18 @@ impl SlashCommand {
             SlashCommand::MemoryDrop => "DO NOT USE",
             SlashCommand::MemoryUpdate => "DO NOT USE",
             SlashCommand::Model => "choose what model and reasoning effort to use",
+            SlashCommand::ProviderConf => "configure a local model provider",
             SlashCommand::Ide => {
                 "include current selection, open files, and other context from your IDE"
             }
-            SlashCommand::Personality => "choose a communication style for Codex",
+            SlashCommand::Personality => "choose a communication style for MidnightCoder",
             SlashCommand::Plan => "switch to Plan mode",
             SlashCommand::Goal => "set or view the goal for a long-running task",
             SlashCommand::Agent | SlashCommand::MultiAgents => "switch the active agent thread",
             SlashCommand::Side | SlashCommand::Btw => {
                 "start a side conversation in an ephemeral fork"
             }
-            SlashCommand::Permissions => "choose what Codex is allowed to do",
+            SlashCommand::Permissions => "choose what MidnightCoder is allowed to do",
             SlashCommand::Keymap => "remap TUI shortcuts",
             SlashCommand::Vim => "toggle Vim mode for the composer",
             SlashCommand::ElevateSandbox => "set up elevated agent sandbox",
@@ -137,7 +150,7 @@ impl SlashCommand {
             SlashCommand::Mcp => "list configured MCP tools; use /mcp verbose for details",
             SlashCommand::Apps => "manage apps",
             SlashCommand::Plugins => "browse plugins",
-            SlashCommand::Logout => "log out of Codex",
+            SlashCommand::Logout => "log out of MidnightCoder",
             SlashCommand::Rollout => "print the rollout file path",
             SlashCommand::TestApproval => "test approval request",
         }
@@ -162,11 +175,16 @@ impl SlashCommand {
                 | SlashCommand::Mcp
                 | SlashCommand::Raw
                 | SlashCommand::Usage
+                | SlashCommand::Context
+                | SlashCommand::MiniModel
+                | SlashCommand::ResumeType
+                | SlashCommand::Compact
                 | SlashCommand::Pets
                 | SlashCommand::Side
                 | SlashCommand::Btw
                 | SlashCommand::Resume
                 | SlashCommand::SandboxReadRoot
+                | SlashCommand::ProviderConf
         )
     }
 
@@ -200,6 +218,9 @@ impl SlashCommand {
             | SlashCommand::Experimental
             | SlashCommand::Memories
             | SlashCommand::Import
+            | SlashCommand::Context
+            | SlashCommand::MiniModel
+            | SlashCommand::ResumeType
             | SlashCommand::Review
             | SlashCommand::Plan
             | SlashCommand::Clear
@@ -209,6 +230,7 @@ impl SlashCommand {
             SlashCommand::Diff
             | SlashCommand::Resume
             | SlashCommand::Model
+            | SlashCommand::ProviderConf
             | SlashCommand::Personality
             | SlashCommand::Permissions
             | SlashCommand::Copy
@@ -303,6 +325,19 @@ mod tests {
         assert_eq!(
             SlashCommand::from_str("approve"),
             Ok(SlashCommand::AutoReview)
+        );
+    }
+
+    #[test]
+    fn provider_conf_command_uses_underscore_name() {
+        assert_eq!(SlashCommand::ProviderConf.command(), "provider_conf");
+        assert_eq!(
+            SlashCommand::from_str("provider_conf"),
+            Ok(SlashCommand::ProviderConf)
+        );
+        assert_eq!(
+            SlashCommand::from_str("provider-conf"),
+            Ok(SlashCommand::ProviderConf)
         );
     }
 }

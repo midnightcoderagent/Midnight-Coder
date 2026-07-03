@@ -3,47 +3,47 @@ use crate::accepted_lines::accepted_line_fingerprint_event_requests;
 use crate::accepted_lines::accepted_line_fingerprints_from_unified_diff;
 use crate::accepted_lines::accepted_line_repo_hash_for_cwd;
 use crate::events::AppServerRpcTransport;
-use crate::events::CodexAppMentionedEventRequest;
-use crate::events::CodexAppServerClientMetadata;
-use crate::events::CodexAppUsedEventRequest;
-use crate::events::CodexCollabAgentToolCallEventParams;
-use crate::events::CodexCollabAgentToolCallEventRequest;
-use crate::events::CodexCommandExecutionEventParams;
-use crate::events::CodexCommandExecutionEventRequest;
-use crate::events::CodexCompactionEventRequest;
-use crate::events::CodexDynamicToolCallEventParams;
-use crate::events::CodexDynamicToolCallEventRequest;
-use crate::events::CodexFileChangeEventParams;
-use crate::events::CodexFileChangeEventRequest;
-use crate::events::CodexGoalEventRequest;
-use crate::events::CodexHookRunEventRequest;
-use crate::events::CodexImageGenerationEventParams;
-use crate::events::CodexImageGenerationEventRequest;
-use crate::events::CodexMcpToolCallEventParams;
-use crate::events::CodexMcpToolCallEventRequest;
-use crate::events::CodexOnboardingExternalAgentImportCompleteEventRequest;
-use crate::events::CodexOnboardingExternalAgentImportCompleteMetadata;
-use crate::events::CodexOnboardingExternalAgentImportFailureEventRequest;
-use crate::events::CodexOnboardingExternalAgentImportFailureMetadata;
-use crate::events::CodexPluginEventRequest;
-use crate::events::CodexPluginInstallFailedEventRequest;
-use crate::events::CodexPluginInstallFailedMetadata;
-use crate::events::CodexPluginInstallRequestedEventRequest;
-use crate::events::CodexPluginUsedEventRequest;
-use crate::events::CodexReviewEventParams;
-use crate::events::CodexReviewEventRequest;
-use crate::events::CodexRuntimeMetadata;
-use crate::events::CodexToolItemEventBase;
-use crate::events::CodexTurnEventParams;
-use crate::events::CodexTurnEventRequest;
-use crate::events::CodexTurnSteerEventParams;
-use crate::events::CodexTurnSteerEventRequest;
-use crate::events::CodexWebSearchEventParams;
-use crate::events::CodexWebSearchEventRequest;
 use crate::events::FinalApprovalOutcome;
 use crate::events::GuardianReviewEventParams;
 use crate::events::GuardianReviewEventPayload;
 use crate::events::GuardianReviewEventRequest;
+use crate::events::MidnightCoderAppMentionedEventRequest;
+use crate::events::MidnightCoderAppServerClientMetadata;
+use crate::events::MidnightCoderAppUsedEventRequest;
+use crate::events::MidnightCoderCollabAgentToolCallEventParams;
+use crate::events::MidnightCoderCollabAgentToolCallEventRequest;
+use crate::events::MidnightCoderCommandExecutionEventParams;
+use crate::events::MidnightCoderCommandExecutionEventRequest;
+use crate::events::MidnightCoderCompactionEventRequest;
+use crate::events::MidnightCoderDynamicToolCallEventParams;
+use crate::events::MidnightCoderDynamicToolCallEventRequest;
+use crate::events::MidnightCoderFileChangeEventParams;
+use crate::events::MidnightCoderFileChangeEventRequest;
+use crate::events::MidnightCoderGoalEventRequest;
+use crate::events::MidnightCoderHookRunEventRequest;
+use crate::events::MidnightCoderImageGenerationEventParams;
+use crate::events::MidnightCoderImageGenerationEventRequest;
+use crate::events::MidnightCoderMcpToolCallEventParams;
+use crate::events::MidnightCoderMcpToolCallEventRequest;
+use crate::events::MidnightCoderOnboardingExternalAgentImportCompleteEventRequest;
+use crate::events::MidnightCoderOnboardingExternalAgentImportCompleteMetadata;
+use crate::events::MidnightCoderOnboardingExternalAgentImportFailureEventRequest;
+use crate::events::MidnightCoderOnboardingExternalAgentImportFailureMetadata;
+use crate::events::MidnightCoderPluginEventRequest;
+use crate::events::MidnightCoderPluginInstallFailedEventRequest;
+use crate::events::MidnightCoderPluginInstallFailedMetadata;
+use crate::events::MidnightCoderPluginInstallRequestedEventRequest;
+use crate::events::MidnightCoderPluginUsedEventRequest;
+use crate::events::MidnightCoderReviewEventParams;
+use crate::events::MidnightCoderReviewEventRequest;
+use crate::events::MidnightCoderRuntimeMetadata;
+use crate::events::MidnightCoderToolItemEventBase;
+use crate::events::MidnightCoderTurnEventParams;
+use crate::events::MidnightCoderTurnEventRequest;
+use crate::events::MidnightCoderTurnSteerEventParams;
+use crate::events::MidnightCoderTurnSteerEventRequest;
+use crate::events::MidnightCoderWebSearchEventParams;
+use crate::events::MidnightCoderWebSearchEventRequest;
 use crate::events::ReviewResolution;
 use crate::events::ReviewStatus;
 use crate::events::ReviewSubjectKind;
@@ -71,12 +71,12 @@ use crate::facts::AnalyticsFact;
 use crate::facts::AnalyticsJsonRpcError;
 use crate::facts::AppMentionedInput;
 use crate::facts::AppUsedInput;
-use crate::facts::CodexCompactionEvent;
-use crate::facts::CodexGoalEvent;
 use crate::facts::CustomAnalyticsFact;
 use crate::facts::ExternalAgentConfigImportCompletedInput;
 use crate::facts::ExternalAgentConfigImportFailureInput;
 use crate::facts::HookRunInput;
+use crate::facts::MidnightCoderCompactionEvent;
+use crate::facts::MidnightCoderGoalEvent;
 use crate::facts::PluginInstallFailedInput;
 use crate::facts::PluginInstallRequestedInput;
 use crate::facts::PluginState;
@@ -85,8 +85,8 @@ use crate::facts::PluginUsedInput;
 use crate::facts::SkillInvokedInput;
 use crate::facts::SubAgentThreadStartedInput;
 use crate::facts::ThreadInitializationMode;
-use crate::facts::TurnCodexError;
-use crate::facts::TurnCodexErrorFact;
+use crate::facts::TurnMidnightCoderError;
+use crate::facts::TurnMidnightCoderErrorFact;
 use crate::facts::TurnProfile;
 use crate::facts::TurnProfileFact;
 use crate::facts::TurnResolvedConfigFact;
@@ -100,7 +100,6 @@ use crate::serialize_enum_as_string;
 use crate::usize_to_u64;
 use codex_app_server_protocol::ClientRequest;
 use codex_app_server_protocol::ClientResponse;
-use codex_app_server_protocol::CodexErrorInfo;
 use codex_app_server_protocol::CollabAgentStatus;
 use codex_app_server_protocol::CollabAgentTool;
 use codex_app_server_protocol::CollabAgentToolCallStatus;
@@ -115,6 +114,7 @@ use codex_app_server_protocol::GuardianApprovalReviewAction;
 use codex_app_server_protocol::GuardianApprovalReviewStatus;
 use codex_app_server_protocol::InitializeParams;
 use codex_app_server_protocol::McpToolCallStatus;
+use codex_app_server_protocol::MidnightCoderErrorInfo;
 use codex_app_server_protocol::NetworkPolicyRuleAction;
 use codex_app_server_protocol::PatchApplyStatus;
 use codex_app_server_protocol::PatchChangeKind;
@@ -157,8 +157,8 @@ pub(crate) struct AnalyticsReducer {
 }
 
 struct ConnectionState {
-    app_server_client: CodexAppServerClientMetadata,
-    runtime: CodexRuntimeMetadata,
+    app_server_client: MidnightCoderAppServerClientMetadata,
+    runtime: MidnightCoderRuntimeMetadata,
 }
 
 #[derive(Default)]
@@ -172,7 +172,7 @@ impl ThreadAnalyticsState {
     fn app_server_client(
         &self,
         connection_state: &ConnectionState,
-    ) -> CodexAppServerClientMetadata {
+    ) -> MidnightCoderAppServerClientMetadata {
         let mut app_server_client = connection_state.app_server_client.clone();
         if let Some(originator) = self.originator.as_ref() {
             app_server_client.product_client_id.clone_from(originator);
@@ -211,7 +211,7 @@ impl<'a> AnalyticsDropSite<'a> {
         }
     }
 
-    fn compaction(input: &'a CodexCompactionEvent) -> Self {
+    fn compaction(input: &'a MidnightCoderCompactionEvent) -> Self {
         Self {
             event_name: "compaction",
             thread_id: &input.thread_id,
@@ -221,7 +221,7 @@ impl<'a> AnalyticsDropSite<'a> {
         }
     }
 
-    fn goal(input: &'a CodexGoalEvent) -> Self {
+    fn goal(input: &'a MidnightCoderGoalEvent) -> Self {
         Self {
             event_name: "goal",
             thread_id: &input.thread_id,
@@ -352,7 +352,7 @@ struct PendingTurnSteerState {
 #[derive(Clone)]
 struct CompletedTurnState {
     status: Option<TurnStatus>,
-    turn_error: Option<CodexErrorInfo>,
+    turn_error: Option<MidnightCoderErrorInfo>,
     completed_at: u64,
     duration_ms: Option<u64>,
 }
@@ -367,7 +367,7 @@ struct TurnState {
     token_usage: Option<TokenUsage>,
     profile: Option<TurnProfile>,
     completed: Option<CompletedTurnState>,
-    codex_error: Option<TurnCodexError>,
+    codex_error: Option<TurnMidnightCoderError>,
     latest_diff: Option<String>,
     steer_count: usize,
     tool_counts: TurnToolCounts,
@@ -518,7 +518,7 @@ impl AnalyticsReducer {
                 CustomAnalyticsFact::TurnProfile(input) => {
                     self.ingest_turn_profile(*input, out).await;
                 }
-                CustomAnalyticsFact::TurnCodexError(input) => {
+                CustomAnalyticsFact::TurnMidnightCoderError(input) => {
                     self.ingest_turn_codex_error(*input);
                 }
                 CustomAnalyticsFact::SkillInvoked(input) => {
@@ -560,13 +560,13 @@ impl AnalyticsReducer {
         connection_id: u64,
         params: InitializeParams,
         product_client_id: String,
-        runtime: CodexRuntimeMetadata,
+        runtime: MidnightCoderRuntimeMetadata,
         rpc_transport: AppServerRpcTransport,
     ) {
         self.connections.insert(
             connection_id,
             ConnectionState {
-                app_server_client: CodexAppServerClientMetadata {
+                app_server_client: MidnightCoderAppServerClientMetadata {
                     product_client_id,
                     client_name: Some(params.client_info.name),
                     client_version: Some(params.client_info.version),
@@ -703,8 +703,8 @@ impl AnalyticsReducer {
         self.maybe_emit_turn_event(&turn_id, out).await;
     }
 
-    fn ingest_turn_codex_error(&mut self, input: TurnCodexErrorFact) {
-        let TurnCodexErrorFact {
+    fn ingest_turn_codex_error(&mut self, input: TurnMidnightCoderErrorFact) {
+        let TurnMidnightCoderErrorFact {
             turn_id,
             thread_id,
             error,
@@ -768,7 +768,7 @@ impl AnalyticsReducer {
         let AppMentionedInput { tracking, mentions } = input;
         out.extend(mentions.into_iter().map(|mention| {
             let event_params = codex_app_metadata(&tracking, mention);
-            TrackEventRequest::AppMentioned(CodexAppMentionedEventRequest {
+            TrackEventRequest::AppMentioned(MidnightCoderAppMentionedEventRequest {
                 event_type: "codex_app_mentioned",
                 event_params,
             })
@@ -778,26 +778,32 @@ impl AnalyticsReducer {
     fn ingest_app_used(&mut self, input: AppUsedInput, out: &mut Vec<TrackEventRequest>) {
         let AppUsedInput { tracking, app } = input;
         let event_params = codex_app_metadata(&tracking, app);
-        out.push(TrackEventRequest::AppUsed(CodexAppUsedEventRequest {
-            event_type: "codex_app_used",
-            event_params,
-        }));
+        out.push(TrackEventRequest::AppUsed(
+            MidnightCoderAppUsedEventRequest {
+                event_type: "codex_app_used",
+                event_params,
+            },
+        ));
     }
 
     fn ingest_hook_run(&mut self, input: HookRunInput, out: &mut Vec<TrackEventRequest>) {
         let HookRunInput { tracking, hook } = input;
-        out.push(TrackEventRequest::HookRun(CodexHookRunEventRequest {
-            event_type: "codex_hook_run",
-            event_params: codex_hook_run_metadata(&tracking, hook),
-        }));
+        out.push(TrackEventRequest::HookRun(
+            MidnightCoderHookRunEventRequest {
+                event_type: "codex_hook_run",
+                event_params: codex_hook_run_metadata(&tracking, hook),
+            },
+        ));
     }
 
     fn ingest_plugin_used(&mut self, input: PluginUsedInput, out: &mut Vec<TrackEventRequest>) {
         let PluginUsedInput { tracking, plugin } = input;
-        out.push(TrackEventRequest::PluginUsed(CodexPluginUsedEventRequest {
-            event_type: "codex_plugin_used",
-            event_params: codex_plugin_used_metadata(&tracking, plugin),
-        }));
+        out.push(TrackEventRequest::PluginUsed(
+            MidnightCoderPluginUsedEventRequest {
+                event_type: "codex_plugin_used",
+                event_params: codex_plugin_used_metadata(&tracking, plugin),
+            },
+        ));
     }
 
     fn ingest_plugin_install_requested(
@@ -807,7 +813,7 @@ impl AnalyticsReducer {
     ) {
         let PluginInstallRequestedInput { tracking, request } = input;
         out.push(TrackEventRequest::PluginInstallRequested(
-            CodexPluginInstallRequestedEventRequest {
+            MidnightCoderPluginInstallRequestedEventRequest {
                 event_type: "codex_plugin_install_requested",
                 event_params: codex_plugin_install_requested_metadata(&tracking, request),
             },
@@ -820,7 +826,7 @@ impl AnalyticsReducer {
         out: &mut Vec<TrackEventRequest>,
     ) {
         let PluginStateChangedInput { plugin, state } = input;
-        let event = CodexPluginEventRequest {
+        let event = MidnightCoderPluginEventRequest {
             event_type: plugin_state_event_type(state),
             event_params: codex_plugin_metadata(plugin),
         };
@@ -839,9 +845,9 @@ impl AnalyticsReducer {
     ) {
         let PluginInstallFailedInput { plugin, error_type } = input;
         out.push(TrackEventRequest::PluginInstallFailed(
-            CodexPluginInstallFailedEventRequest {
+            MidnightCoderPluginInstallFailedEventRequest {
                 event_type: "codex_plugin_install_failed",
-                event_params: CodexPluginInstallFailedMetadata {
+                event_params: MidnightCoderPluginInstallFailedMetadata {
                     plugin: codex_plugin_metadata(plugin),
                     error_type,
                 },
@@ -855,9 +861,9 @@ impl AnalyticsReducer {
         out: &mut Vec<TrackEventRequest>,
     ) {
         out.push(TrackEventRequest::ExternalAgentConfigImportCompleted(
-            CodexOnboardingExternalAgentImportCompleteEventRequest {
+            MidnightCoderOnboardingExternalAgentImportCompleteEventRequest {
                 event_type: "codex_onboarding_external_agent_import_complete",
-                event_params: CodexOnboardingExternalAgentImportCompleteMetadata {
+                event_params: MidnightCoderOnboardingExternalAgentImportCompleteMetadata {
                     import_id: input.import_id,
                     source: input.source,
                     item_type: input.item_type,
@@ -875,9 +881,9 @@ impl AnalyticsReducer {
         out: &mut Vec<TrackEventRequest>,
     ) {
         out.push(TrackEventRequest::ExternalAgentConfigImportFailure(
-            CodexOnboardingExternalAgentImportFailureEventRequest {
+            MidnightCoderOnboardingExternalAgentImportFailureEventRequest {
                 event_type: "codex_onboarding_external_agent_import_failure",
-                event_params: CodexOnboardingExternalAgentImportFailureMetadata {
+                event_params: MidnightCoderOnboardingExternalAgentImportFailureMetadata {
                     import_id: input.import_id,
                     source: input.source,
                     item_type: input.item_type,
@@ -1386,14 +1392,18 @@ impl AnalyticsReducer {
         ));
     }
 
-    fn ingest_compaction(&mut self, input: CodexCompactionEvent, out: &mut Vec<TrackEventRequest>) {
+    fn ingest_compaction(
+        &mut self,
+        input: MidnightCoderCompactionEvent,
+        out: &mut Vec<TrackEventRequest>,
+    ) {
         let Some((connection_state, thread_state, thread_metadata)) =
             self.thread_context_or_warn(AnalyticsDropSite::compaction(&input))
         else {
             return;
         };
         out.push(TrackEventRequest::Compaction(Box::new(
-            CodexCompactionEventRequest {
+            MidnightCoderCompactionEventRequest {
                 event_type: "codex_compaction_event",
                 event_params: codex_compaction_event_params(
                     input,
@@ -1408,24 +1418,26 @@ impl AnalyticsReducer {
         )));
     }
 
-    fn ingest_goal(&mut self, input: CodexGoalEvent, out: &mut Vec<TrackEventRequest>) {
+    fn ingest_goal(&mut self, input: MidnightCoderGoalEvent, out: &mut Vec<TrackEventRequest>) {
         let Some((connection_state, thread_state, thread_metadata)) =
             self.thread_context_or_warn(AnalyticsDropSite::goal(&input))
         else {
             return;
         };
-        out.push(TrackEventRequest::Goal(Box::new(CodexGoalEventRequest {
-            event_type: "codex_goal_event",
-            event_params: codex_goal_event_params(
-                input,
-                thread_metadata.session_id.clone(),
-                thread_state.app_server_client(connection_state),
-                connection_state.runtime.clone(),
-                thread_metadata.thread_source.clone(),
-                thread_metadata.subagent_source.clone(),
-                thread_metadata.parent_thread_id.clone(),
-            ),
-        })));
+        out.push(TrackEventRequest::Goal(Box::new(
+            MidnightCoderGoalEventRequest {
+                event_type: "codex_goal_event",
+                event_params: codex_goal_event_params(
+                    input,
+                    thread_metadata.session_id.clone(),
+                    thread_state.app_server_client(connection_state),
+                    connection_state.runtime.clone(),
+                    thread_metadata.thread_source.clone(),
+                    thread_metadata.subagent_source.clone(),
+                    thread_metadata.parent_thread_id.clone(),
+                ),
+            },
+        )));
     }
 
     fn ingest_guardian_review_completed(
@@ -1516,24 +1528,26 @@ impl AnalyticsReducer {
             warn_missing_analytics_context(&drop_site, MissingAnalyticsContext::ThreadMetadata);
             return;
         };
-        out.push(TrackEventRequest::TurnSteer(CodexTurnSteerEventRequest {
-            event_type: "codex_turn_steer_event",
-            event_params: CodexTurnSteerEventParams {
-                thread_id: pending_request.thread_id,
-                session_id: thread_metadata.session_id.clone(),
-                expected_turn_id: Some(pending_request.expected_turn_id),
-                accepted_turn_id,
-                app_server_client: thread_state.app_server_client(connection_state),
-                runtime: connection_state.runtime.clone(),
-                thread_source: thread_metadata.thread_source.clone(),
-                subagent_source: thread_metadata.subagent_source.clone(),
-                parent_thread_id: thread_metadata.parent_thread_id.clone(),
-                num_input_images: pending_request.num_input_images,
-                result,
-                rejection_reason,
-                created_at: pending_request.created_at,
+        out.push(TrackEventRequest::TurnSteer(
+            MidnightCoderTurnSteerEventRequest {
+                event_type: "codex_turn_steer_event",
+                event_params: MidnightCoderTurnSteerEventParams {
+                    thread_id: pending_request.thread_id,
+                    session_id: thread_metadata.session_id.clone(),
+                    expected_turn_id: Some(pending_request.expected_turn_id),
+                    accepted_turn_id,
+                    app_server_client: thread_state.app_server_client(connection_state),
+                    runtime: connection_state.runtime.clone(),
+                    thread_source: thread_metadata.thread_source.clone(),
+                    subagent_source: thread_metadata.subagent_source.clone(),
+                    parent_thread_id: thread_metadata.parent_thread_id.clone(),
+                    num_input_images: pending_request.num_input_images,
+                    result,
+                    rejection_reason,
+                    created_at: pending_request.created_at,
+                },
             },
-        }));
+        ));
     }
 
     fn emit_review_event(
@@ -1559,29 +1573,34 @@ impl AnalyticsReducer {
         else {
             return;
         };
-        out.push(TrackEventRequest::ReviewEvent(CodexReviewEventRequest {
-            event_type: "codex_review_event",
-            event_params: CodexReviewEventParams {
-                thread_id: pending_review.thread_id,
-                turn_id: pending_review.turn_id,
-                item_id: pending_review.item_id,
-                review_id: pending_review.review_id,
-                app_server_client: thread_state.app_server_client(connection_state),
-                runtime: connection_state.runtime.clone(),
-                thread_source: thread_metadata.thread_source.clone(),
-                subagent_source: thread_metadata.subagent_source.clone(),
-                parent_thread_id: thread_metadata.parent_thread_id.clone(),
-                subject_kind: pending_review.subject_kind,
-                subject_name: pending_review.subject_name,
-                reviewer,
-                trigger: pending_review.trigger,
-                status,
-                resolution,
-                started_at_ms: pending_review.started_at_ms,
-                completed_at_ms,
-                duration_ms: observed_duration_ms(pending_review.started_at_ms, completed_at_ms),
+        out.push(TrackEventRequest::ReviewEvent(
+            MidnightCoderReviewEventRequest {
+                event_type: "codex_review_event",
+                event_params: MidnightCoderReviewEventParams {
+                    thread_id: pending_review.thread_id,
+                    turn_id: pending_review.turn_id,
+                    item_id: pending_review.item_id,
+                    review_id: pending_review.review_id,
+                    app_server_client: thread_state.app_server_client(connection_state),
+                    runtime: connection_state.runtime.clone(),
+                    thread_source: thread_metadata.thread_source.clone(),
+                    subagent_source: thread_metadata.subagent_source.clone(),
+                    parent_thread_id: thread_metadata.parent_thread_id.clone(),
+                    subject_kind: pending_review.subject_kind,
+                    subject_name: pending_review.subject_name,
+                    reviewer,
+                    trigger: pending_review.trigger,
+                    status,
+                    resolution,
+                    started_at_ms: pending_review.started_at_ms,
+                    completed_at_ms,
+                    duration_ms: observed_duration_ms(
+                        pending_review.started_at_ms,
+                        completed_at_ms,
+                    ),
+                },
             },
-        }));
+        ));
     }
 
     fn record_item_review_summary(
@@ -1643,7 +1662,7 @@ impl AnalyticsReducer {
             warn_missing_analytics_context(&drop_site, MissingAnalyticsContext::ThreadMetadata);
             return;
         };
-        let turn_event = TrackEventRequest::TurnEvent(Box::new(CodexTurnEventRequest {
+        let turn_event = TrackEventRequest::TurnEvent(Box::new(MidnightCoderTurnEventRequest {
             event_type: "codex_turn_event",
             event_params: codex_turn_event_params(
                 thread_state.app_server_client(connection_state),
@@ -1818,9 +1837,9 @@ fn tool_item_event(input: ToolItemEventInput<'_>) -> Option<TrackEventRequest> {
                 },
             );
             Some(TrackEventRequest::CommandExecution(
-                CodexCommandExecutionEventRequest {
+                MidnightCoderCommandExecutionEventRequest {
                     event_type: "codex_command_execution_event",
-                    event_params: CodexCommandExecutionEventParams {
+                    event_params: MidnightCoderCommandExecutionEventParams {
                         base,
                         command_execution_source: *source,
                         exit_code: *exit_code,
@@ -1859,17 +1878,19 @@ fn tool_item_event(input: ToolItemEventInput<'_>) -> Option<TrackEventRequest> {
                     review_summary,
                 },
             );
-            Some(TrackEventRequest::FileChange(CodexFileChangeEventRequest {
-                event_type: "codex_file_change_event",
-                event_params: CodexFileChangeEventParams {
-                    base,
-                    file_change_count: usize_to_u64(changes.len()),
-                    file_add_count: counts.add,
-                    file_update_count: counts.update,
-                    file_delete_count: counts.delete,
-                    file_move_count: counts.move_,
+            Some(TrackEventRequest::FileChange(
+                MidnightCoderFileChangeEventRequest {
+                    event_type: "codex_file_change_event",
+                    event_params: MidnightCoderFileChangeEventParams {
+                        base,
+                        file_change_count: usize_to_u64(changes.len()),
+                        file_add_count: counts.add,
+                        file_update_count: counts.update,
+                        file_delete_count: counts.delete,
+                        file_move_count: counts.move_,
+                    },
                 },
-            }))
+            ))
         }
         ThreadItem::McpToolCall {
             id,
@@ -1902,9 +1923,9 @@ fn tool_item_event(input: ToolItemEventInput<'_>) -> Option<TrackEventRequest> {
                 },
             );
             Some(TrackEventRequest::McpToolCall(
-                CodexMcpToolCallEventRequest {
+                MidnightCoderMcpToolCallEventRequest {
                     event_type: "codex_mcp_tool_call_event",
-                    event_params: CodexMcpToolCallEventParams {
+                    event_params: MidnightCoderMcpToolCallEventParams {
                         base,
                         mcp_server_name: server.clone(),
                         mcp_tool_name: tool.clone(),
@@ -1947,9 +1968,9 @@ fn tool_item_event(input: ToolItemEventInput<'_>) -> Option<TrackEventRequest> {
                 },
             );
             Some(TrackEventRequest::DynamicToolCall(
-                CodexDynamicToolCallEventRequest {
+                MidnightCoderDynamicToolCallEventRequest {
                     event_type: "codex_dynamic_tool_call_event",
-                    event_params: CodexDynamicToolCallEventParams {
+                    event_params: MidnightCoderDynamicToolCallEventParams {
                         base,
                         dynamic_tool_name: tool.clone(),
                         success: *success,
@@ -1992,9 +2013,9 @@ fn tool_item_event(input: ToolItemEventInput<'_>) -> Option<TrackEventRequest> {
                 },
             );
             Some(TrackEventRequest::CollabAgentToolCall(
-                CodexCollabAgentToolCallEventRequest {
+                MidnightCoderCollabAgentToolCallEventRequest {
                     event_type: "codex_collab_agent_tool_call_event",
-                    event_params: CodexCollabAgentToolCallEventParams {
+                    event_params: MidnightCoderCollabAgentToolCallEventParams {
                         base,
                         sender_thread_id: sender_thread_id.clone(),
                         receiver_thread_count: usize_to_u64(receiver_thread_ids.len()),
@@ -2047,15 +2068,17 @@ fn tool_item_event(input: ToolItemEventInput<'_>) -> Option<TrackEventRequest> {
                     review_summary,
                 },
             );
-            Some(TrackEventRequest::WebSearch(CodexWebSearchEventRequest {
-                event_type: "codex_web_search_event",
-                event_params: CodexWebSearchEventParams {
-                    base,
-                    web_search_action: action.as_ref().map(web_search_action_kind),
-                    query_present: !query.trim().is_empty(),
-                    query_count: web_search_query_count(query, action.as_ref()),
+            Some(TrackEventRequest::WebSearch(
+                MidnightCoderWebSearchEventRequest {
+                    event_type: "codex_web_search_event",
+                    event_params: MidnightCoderWebSearchEventParams {
+                        base,
+                        web_search_action: action.as_ref().map(web_search_action_kind),
+                        query_present: !query.trim().is_empty(),
+                        query_count: web_search_query_count(query, action.as_ref()),
+                    },
                 },
-            }))
+            ))
         }
         ThreadItem::ImageGeneration {
             id,
@@ -2085,9 +2108,9 @@ fn tool_item_event(input: ToolItemEventInput<'_>) -> Option<TrackEventRequest> {
                 },
             );
             Some(TrackEventRequest::ImageGeneration(
-                CodexImageGenerationEventRequest {
+                MidnightCoderImageGenerationEventRequest {
                     event_type: "codex_image_generation_event",
-                    event_params: CodexImageGenerationEventParams {
+                    event_params: MidnightCoderImageGenerationEventParams {
                         base,
                         revised_prompt_present: revised_prompt.is_some(),
                         saved_path_present: saved_path.is_some(),
@@ -2147,10 +2170,10 @@ fn tool_item_base(
     tool_name: String,
     outcome: ToolItemOutcome,
     context: ToolItemContext<'_>,
-) -> CodexToolItemEventBase {
+) -> MidnightCoderToolItemEventBase {
     let thread_metadata = context.thread_metadata;
     let review_summary = context.review_summary.cloned().unwrap_or_default();
-    CodexToolItemEventBase {
+    MidnightCoderToolItemEventBase {
         thread_id: thread_id.to_string(),
         turn_id: turn_id.to_string(),
         item_id,
@@ -2574,12 +2597,12 @@ fn accepted_line_event_input(
 }
 
 fn codex_turn_event_params(
-    app_server_client: CodexAppServerClientMetadata,
-    runtime: CodexRuntimeMetadata,
+    app_server_client: MidnightCoderAppServerClientMetadata,
+    runtime: MidnightCoderRuntimeMetadata,
     turn_id: String,
     turn_state: &TurnState,
     thread_metadata: &ThreadMetadataState,
-) -> CodexTurnEventParams {
+) -> MidnightCoderTurnEventParams {
     let (
         Some(thread_id),
         Some(num_input_images),
@@ -2630,7 +2653,7 @@ fn codex_turn_event_params(
     } = profile;
     let token_usage = turn_state.token_usage.clone();
     let codex_error = turn_state.codex_error.as_ref();
-    CodexTurnEventParams {
+    MidnightCoderTurnEventParams {
         thread_id,
         session_id: thread_metadata.session_id.clone(),
         turn_id,

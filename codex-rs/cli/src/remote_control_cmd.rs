@@ -647,8 +647,8 @@ mod tests {
                 "daemon": {
                     "status": "started",
                     "pid": 42,
-                    "managedCodexPath": "/opt/codex/bin/codex",
-                    "managedCodexVersion": "1.0.0",
+                    "managedMidnightCoderPath": "/opt/codex/bin/codex",
+                    "managedMidnightCoderVersion": "1.0.0",
                     "socketPath": "/tmp/app-server-control.sock",
                     "cliVersion": "1.0.0",
                     "appServerVersion": "2.0.0",

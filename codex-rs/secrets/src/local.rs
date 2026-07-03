@@ -44,8 +44,8 @@ pub enum LocalSecretsNamespace {
     /// General managed secrets stored in `local.age`.
     #[default]
     ManagedSecrets,
-    /// Codex authentication credentials used by the CLI, TUI, app server, and other clients.
-    CodexAuth,
+    /// MidnightCoder authentication credentials used by the CLI, TUI, app server, and other clients.
+    MidnightCoderAuth,
     /// OAuth credentials for external MCP servers.
     McpOAuth,
 }
@@ -142,7 +142,7 @@ impl LocalSecretsBackend {
     fn secrets_path(&self) -> PathBuf {
         let filename = match self.namespace {
             LocalSecretsNamespace::ManagedSecrets => LOCAL_SECRETS_FILENAME,
-            LocalSecretsNamespace::CodexAuth => CODEX_AUTH_SECRETS_FILENAME,
+            LocalSecretsNamespace::MidnightCoderAuth => CODEX_AUTH_SECRETS_FILENAME,
             LocalSecretsNamespace::McpOAuth => MCP_OAUTH_SECRETS_FILENAME,
         };
         self.secrets_dir().join(filename)
@@ -456,7 +456,7 @@ mod tests {
         let codex_auth_backend = LocalSecretsBackend::new_with_namespace(
             codex_home.path().to_path_buf(),
             keyring.clone(),
-            LocalSecretsNamespace::CodexAuth,
+            LocalSecretsNamespace::MidnightCoderAuth,
         );
         let mcp_backend = LocalSecretsBackend::new_with_namespace(
             codex_home.path().to_path_buf(),

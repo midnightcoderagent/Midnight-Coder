@@ -77,6 +77,58 @@ pub(crate) fn build_model_selection_edits(
     ]
 }
 
+pub(crate) fn build_provider_config_edits(
+    provider: &crate::provider_config::DetectedProviderConfig,
+) -> Vec<ConfigEdit> {
+    vec![
+        replace_config_value("model_provider", serde_json::json!(provider.provider_id)),
+        replace_config_value("model", serde_json::json!(provider.model)),
+        replace_config_value(
+            format!("model_providers.\"{}\"", provider.provider_id),
+            serde_json::json!({
+                "name": provider.provider_name,
+                "base_url": provider.base_url,
+                "wire_api": "responses",
+            }),
+        ),
+    ]
+}
+
+pub(crate) fn build_mini_model_selection_edits(model: &str) -> Vec<ConfigEdit> {
+    vec![replace_config_value("mini_model", serde_json::json!(model))]
+}
+
+pub(crate) fn build_resume_type_edits(resume_type: &str) -> Vec<ConfigEdit> {
+    vec![replace_config_value(
+        "resume_type",
+        serde_json::json!(resume_type),
+    )]
+}
+
+pub(crate) fn build_context_window_edits(tokens: i64) -> Vec<ConfigEdit> {
+    vec![
+        replace_config_value("model_context_window", serde_json::json!(tokens)),
+        replace_config_value("model_auto_compact_token_limit", serde_json::json!(tokens)),
+    ]
+}
+
+pub(crate) fn build_auto_compaction_edits(
+    enabled: bool,
+    context_window_tokens: Option<i64>,
+) -> Vec<ConfigEdit> {
+    let edit = if enabled {
+        context_window_tokens.map_or_else(
+            || clear_config_value("model_auto_compact_token_limit"),
+            |tokens| {
+                replace_config_value("model_auto_compact_token_limit", serde_json::json!(tokens))
+            },
+        )
+    } else {
+        replace_config_value("model_auto_compact_token_limit", serde_json::json!(0))
+    };
+    vec![edit]
+}
+
 pub(crate) fn build_service_tier_selection_edits(service_tier: Option<&str>) -> Vec<ConfigEdit> {
     let service_tier_edit = service_tier.map_or_else(
         || clear_config_value("service_tier"),

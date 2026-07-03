@@ -21,7 +21,7 @@ use crate::tools::sandboxing::with_cached_approval;
 use codex_apply_patch::AppliedPatchDelta;
 use codex_apply_patch::ApplyPatchAction;
 use codex_exec_server::FileSystemSandboxContext;
-use codex_protocol::error::CodexErr;
+use codex_protocol::error::MidnightCoderErr;
 use codex_protocol::error::SandboxErr;
 use codex_protocol::exec_output::ExecToolCallOutput;
 use codex_protocol::exec_output::StreamOutput;
@@ -275,10 +275,12 @@ impl ToolRuntime<ApplyPatchRequest, ApplyPatchRuntimeOutput> for ApplyPatchRunti
             timed_out: false,
         };
         if failed && is_likely_sandbox_denied(attempt.sandbox, &output) {
-            return Err(ToolError::Codex(CodexErr::Sandbox(SandboxErr::Denied {
-                output: Box::new(output),
-                network_policy_decision: None,
-            })));
+            return Err(ToolError::MidnightCoder(MidnightCoderErr::Sandbox(
+                SandboxErr::Denied {
+                    output: Box::new(output),
+                    network_policy_decision: None,
+                },
+            )));
         }
         Ok(ApplyPatchRuntimeOutput {
             exec_output: output,

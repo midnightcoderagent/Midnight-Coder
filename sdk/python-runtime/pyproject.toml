@@ -5,11 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "openai-codex-cli-bin"
 version = "0.0.0-dev"
-description = "Pinned Codex CLI runtime for the Python SDK"
+description = "Pinned Midnight Coder runtime for the Python SDK"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
-authors = [{ name = "OpenAI" }]
+authors = [{ name = "Midnight Coder" }]
 classifiers = [
   "Intended Audience :: Developers",
   "License :: OSI Approved :: Apache Software License",
@@ -21,9 +21,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/openai/codex"
-Repository = "https://github.com/openai/codex"
-Issues = "https://github.com/openai/codex/issues"
+Homepage = "https://github.com/modnight/coder"
+Repository = "https://github.com/modnight/coder"
+Issues = "https://github.com/modnight/coder/issues"
 
 [tool.hatch.build]
 exclude = [

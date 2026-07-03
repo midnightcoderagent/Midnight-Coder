@@ -328,10 +328,10 @@ impl ToolRuntime<ShellRequest, ExecToolCallOutput> for ShellRuntime {
                 managed_network,
                 Some(&req.turn_environment.environment_id),
             )
-            .map_err(ToolError::Codex)?;
+            .map_err(ToolError::MidnightCoder)?;
         let out = execute_env(env, Self::stdout_stream(ctx))
             .await
-            .map_err(ToolError::Codex)?;
+            .map_err(ToolError::MidnightCoder)?;
         Ok(out)
     }
 }

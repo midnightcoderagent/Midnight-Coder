@@ -18,11 +18,11 @@ use uuid::Uuid;
 
 use crate::AgentThreadId;
 use crate::CodeCellTraceContext;
-use crate::CodexTurnId;
 use crate::CompactionId;
 use crate::CompactionTraceContext;
 use crate::InferenceTraceContext;
 use crate::McpCallTraceContext;
+use crate::MidnightCoderTurnId;
 use crate::RawPayloadKind;
 use crate::RawPayloadRef;
 use crate::RawTraceEventContext;
@@ -100,7 +100,7 @@ impl ThreadTraceContext {
 
     /// Starts a root thread trace from `CODEX_ROLLOUT_TRACE_ROOT`, or disables tracing.
     ///
-    /// Trace startup is best-effort. A tracing failure must not make the Codex
+    /// Trace startup is best-effort. A tracing failure must not make the MidnightCoder
     /// session unusable, because traces are diagnostic and can be enabled while
     /// debugging unrelated production failures.
     pub fn start_root_or_disabled(metadata: ThreadStartedTraceMetadata) -> Self {
@@ -213,7 +213,7 @@ impl ThreadTraceContext {
         });
     }
 
-    /// Emits typed Codex turn lifecycle events from protocol lifecycle events.
+    /// Emits typed MidnightCoder turn lifecycle events from protocol lifecycle events.
     pub fn record_codex_turn_event(&self, default_turn_id: &str, event: &EventMsg) {
         let ThreadTraceContextState::Enabled(context) = &self.state else {
             return;
@@ -233,8 +233,12 @@ impl ThreadTraceContext {
     ///
     /// These events are runtime observations on an already-dispatched tool. The
     /// dispatch trace records the caller-facing boundary; these payloads explain
-    /// what Codex did while executing that boundary.
-    pub fn record_tool_call_event(&self, codex_turn_id: impl Into<CodexTurnId>, event: &EventMsg) {
+    /// what MidnightCoder did while executing that boundary.
+    pub fn record_tool_call_event(
+        &self,
+        codex_turn_id: impl Into<MidnightCoderTurnId>,
+        event: &EventMsg,
+    ) {
         let ThreadTraceContextState::Enabled(context) = &self.state else {
             return;
         };
@@ -255,7 +259,7 @@ impl ThreadTraceContext {
     /// the edge from a later parent prompt snapshot.
     pub fn record_agent_result_interaction(
         &self,
-        child_codex_turn_id: impl Into<CodexTurnId>,
+        child_codex_turn_id: impl Into<MidnightCoderTurnId>,
         parent_thread_id: impl Into<AgentThreadId>,
         payload: &AgentResultTracePayload<'_>,
     ) {
@@ -287,14 +291,14 @@ impl ThreadTraceContext {
     /// Most production turn lifecycle wiring lives outside this PR layer, but
     /// trace-focused integration tests need a small explicit hook so reducer
     /// inputs remain valid without exercising the full session loop.
-    pub fn record_codex_turn_started(&self, codex_turn_id: impl Into<CodexTurnId>) {
+    pub fn record_codex_turn_started(&self, codex_turn_id: impl Into<MidnightCoderTurnId>) {
         let ThreadTraceContextState::Enabled(context) = &self.state else {
             return;
         };
         let codex_turn_id = codex_turn_id.into();
         context.append_with_context_best_effort(
             codex_turn_id.clone(),
-            RawTraceEventPayload::CodexTurnStarted {
+            RawTraceEventPayload::MidnightCoderTurnStarted {
                 codex_turn_id,
                 thread_id: context.thread_id.clone(),
             },
@@ -304,7 +308,7 @@ impl ThreadTraceContext {
     /// Starts a first-class code-mode cell lifecycle and returns its trace handle.
     pub fn start_code_cell_trace(
         &self,
-        codex_turn_id: impl Into<CodexTurnId>,
+        codex_turn_id: impl Into<MidnightCoderTurnId>,
         runtime_cell_id: impl Into<String>,
         model_visible_call_id: impl Into<String>,
         source_js: impl Into<String>,
@@ -317,7 +321,7 @@ impl ThreadTraceContext {
     /// Builds a trace handle for an already-started code-mode runtime cell.
     pub fn code_cell_trace_context(
         &self,
-        codex_turn_id: impl Into<CodexTurnId>,
+        codex_turn_id: impl Into<MidnightCoderTurnId>,
         runtime_cell_id: impl Into<String>,
     ) -> CodeCellTraceContext {
         let ThreadTraceContextState::Enabled(context) = &self.state else {
@@ -349,14 +353,14 @@ impl ThreadTraceContext {
         ToolDispatchTraceContext::start(Arc::clone(&context.writer), invocation)
     }
 
-    /// Builds reusable inference trace context for one Codex turn.
+    /// Builds reusable inference trace context for one MidnightCoder turn.
     ///
     /// The returned context is intentionally not "an inference call" yet.
     /// Transport code owns retry/fallback attempts and calls `start_attempt`
     /// only after it has built the concrete request payload for that attempt.
     pub fn inference_trace_context(
         &self,
-        codex_turn_id: impl Into<CodexTurnId>,
+        codex_turn_id: impl Into<MidnightCoderTurnId>,
         model: impl Into<String>,
         provider_name: impl Into<String>,
     ) -> InferenceTraceContext {
@@ -380,7 +384,7 @@ impl ThreadTraceContext {
     /// replacement history is installed.
     pub fn compaction_trace_context(
         &self,
-        codex_turn_id: impl Into<CodexTurnId>,
+        codex_turn_id: impl Into<MidnightCoderTurnId>,
         compaction_id: impl Into<CompactionId>,
         model: impl Into<String>,
         provider_name: impl Into<String>,
@@ -511,7 +515,7 @@ impl EnabledThreadTraceContext {
 
     fn append_with_context_best_effort(
         &self,
-        codex_turn_id: CodexTurnId,
+        codex_turn_id: MidnightCoderTurnId,
         payload: RawTraceEventPayload,
     ) {
         let event_context = RawTraceEventContext {

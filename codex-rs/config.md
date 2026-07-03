@@ -1,6 +1,9 @@
-# Configuration docs moved
+# Configuration docs
 
-This file has moved. Please see the latest configuration documentation here:
+The primary configuration guide for Midnight Coder now lives here:
 
-- Full config docs: [docs/config.md](../docs/config.md)
-- MCP servers section: [docs/config.md#connecting-to-mcp-servers](../docs/config.md#connecting-to-mcp-servers)
+- [CONFIGURATION.md](./CONFIGURATION.md)
+
+For protocol-level app-server configuration and examples, see:
+
+- [app-server/README.md](./app-server/README.md)

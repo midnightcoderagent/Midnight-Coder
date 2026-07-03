@@ -35,8 +35,8 @@ use crate::mentions::collect_explicit_app_ids;
 use crate::mentions::collect_explicit_plugin_mentions;
 use crate::mentions::collect_tool_mentions_from_messages;
 use crate::plugins::build_plugin_injections;
-use crate::responses_metadata::CodexResponsesMetadata;
-use crate::responses_metadata::CodexResponsesRequestKind;
+use crate::responses_metadata::MidnightCoderResponsesMetadata;
+use crate::responses_metadata::MidnightCoderResponsesRequestKind;
 use crate::responses_retry::ResponsesStreamRequest;
 use crate::responses_retry::handle_retryable_response_stream_error;
 use crate::session::PreviousTurnSettings;
@@ -51,6 +51,7 @@ use crate::stream_events_utils::handle_non_tool_response_item;
 use crate::stream_events_utils::handle_output_item_done;
 use crate::stream_events_utils::last_assistant_message_from_item;
 use crate::stream_events_utils::mark_thread_memory_mode_polluted_if_external_context;
+use crate::stream_events_utils::ollama_text_tool_call_from_item;
 use crate::stream_events_utils::raw_assistant_output_text_from_item;
 use crate::stream_events_utils::record_completed_response_item_with_finalized_facts;
 use crate::tasks::emit_compact_metric;
@@ -83,8 +84,8 @@ use codex_git_utils::get_git_repo_root_with_fs;
 use codex_protocol::config_types::AutoCompactTokenLimitScope;
 use codex_protocol::config_types::ModeKind;
 use codex_protocol::config_types::ServiceTier;
-use codex_protocol::error::CodexErr;
-use codex_protocol::error::Result as CodexResult;
+use codex_protocol::error::MidnightCoderErr;
+use codex_protocol::error::Result as MidnightCoderResult;
 use codex_protocol::items::PlanItem;
 use codex_protocol::items::TurnItem;
 use codex_protocol::items::build_hook_prompt_message;
@@ -95,9 +96,9 @@ use codex_protocol::models::ResponseInputItem;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::AgentMessageContentDeltaEvent;
 use codex_protocol::protocol::AgentReasoningSectionBreakEvent;
-use codex_protocol::protocol::CodexErrorInfo;
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::MidnightCoderErrorInfo;
 use codex_protocol::protocol::PlanDeltaEvent;
 use codex_protocol::protocol::ReasoningContentDeltaEvent;
 use codex_protocol::protocol::ReasoningRawContentDeltaEvent;
@@ -146,7 +147,7 @@ pub(crate) async fn run_turn(
     input: Vec<TurnInput>,
     prewarmed_client_session: Option<ModelClientSession>,
     cancellation_token: CancellationToken,
-) -> CodexResult<Option<String>> {
+) -> MidnightCoderResult<Option<String>> {
     let mut client_session =
         prewarmed_client_session.unwrap_or_else(|| sess.services.model_client.new_session());
     // TODO(ccunningham): Pre-turn compaction runs before context updates and the
@@ -154,7 +155,7 @@ pub(crate) async fn run_turn(
     // diffs/full reinjection + user input) and trigger compaction preemptively
     // when they would push the thread over the compaction threshold.
     if let Err(err) = run_pre_sampling_compact(&sess, &turn_context, &mut client_session).await {
-        if matches!(err, CodexErr::TurnAborted) {
+        if matches!(err, MidnightCoderErr::TurnAborted) {
             return Err(err);
         }
         let error = err.to_codex_protocol_error();
@@ -249,7 +250,7 @@ pub(crate) async fn run_turn(
             Some(step_context) => step_context,
             None => sess.capture_step_context(Arc::clone(&turn_context)).await,
         };
-        let sampling_request_result: CodexResult<_> = async {
+        let sampling_request_result: MidnightCoderResult<_> = async {
             super::time_reminder::maybe_record_current_time_reminder(
                 sess.as_ref(),
                 turn_context.as_ref(),
@@ -279,7 +280,7 @@ pub(crate) async fn run_turn(
             let responses_metadata = turn_context.turn_metadata_state.to_responses_metadata(
                 sess.installation_id.clone(),
                 window_id,
-                CodexResponsesRequestKind::Turn,
+                MidnightCoderResponsesRequestKind::Turn,
             );
             run_sampling_request(
                 Arc::clone(&sess),
@@ -356,7 +357,7 @@ pub(crate) async fn run_turn(
                     )
                     .await
                     {
-                        if matches!(err, CodexErr::TurnAborted) {
+                        if matches!(err, MidnightCoderErr::TurnAborted) {
                             return Err(err);
                         }
                         let error = err.to_codex_protocol_error();
@@ -415,10 +416,10 @@ pub(crate) async fn run_turn(
                 }
                 continue;
             }
-            Err(err @ CodexErr::TurnAborted) => {
+            Err(err @ MidnightCoderErr::TurnAborted) => {
                 return Err(err);
             }
-            Err(codex_error @ CodexErr::InvalidImageRequest()) => {
+            Err(codex_error @ MidnightCoderErr::InvalidImageRequest()) => {
                 {
                     let mut state = sess.state.lock().await;
                     error_or_panic(
@@ -430,7 +431,7 @@ pub(crate) async fn run_turn(
                 }
 
                 sess.track_turn_codex_error(turn_context.as_ref(), &codex_error);
-                let error = CodexErrorInfo::BadRequest;
+                let error = MidnightCoderErrorInfo::BadRequest;
                 sess.emit_turn_error_lifecycle(turn_context.as_ref(), error.clone())
                     .await;
                 let event = EventMsg::Error(ErrorEvent {
@@ -798,7 +799,7 @@ async fn run_pre_sampling_compact(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,
     client_session: &mut ModelClientSession,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     maybe_run_previous_model_inline_compact(sess, turn_context, client_session).await?;
     let token_status =
         super::context_window::context_window_token_status(sess.as_ref(), turn_context.as_ref())
@@ -836,7 +837,7 @@ async fn maybe_run_previous_model_inline_compact(
     sess: &Arc<Session>,
     turn_context: &Arc<TurnContext>,
     client_session: &mut ModelClientSession,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     let Some(previous_turn_settings) = sess.previous_turn_settings().await else {
         return Ok(());
     };
@@ -879,10 +880,11 @@ async fn maybe_run_previous_model_inline_compact(
         .model_auto_compact_token_limit_scope
     {
         AutoCompactTokenLimitScope::Total => {
-            let new_auto_compact_limit = turn_context
-                .model_info
-                .auto_compact_token_limit()
-                .unwrap_or(i64::MAX);
+            let new_auto_compact_limit = super::context_window::resolved_auto_compact_token_limit(
+                turn_context.config.model_auto_compact_token_limit,
+                turn_context.model_info.auto_compact_token_limit(),
+            )
+            .unwrap_or(i64::MAX);
             active_context_tokens > new_auto_compact_limit
                 || active_context_tokens >= new_context_window
         }
@@ -921,7 +923,7 @@ async fn run_auto_compact(
     initial_context_injection: InitialContextInjection,
     reason: CompactionReason,
     phase: CompactionPhase,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     let turn_context = &step_context.turn;
     if turn_context.config.features.enabled(Feature::TokenBudget) {
         // Compaction is the reset request, so force a new context window
@@ -1047,10 +1049,17 @@ pub(crate) fn build_prompt(
     turn_context: &TurnContext,
     base_instructions: BaseInstructions,
 ) -> Prompt {
+    let model_tools_enabled = turn_context.model_tools_enabled();
+    let tools = if model_tools_enabled {
+        router.model_visible_specs()
+    } else {
+        Vec::new()
+    };
     Prompt {
         input,
-        tools: router.model_visible_specs(),
-        parallel_tool_calls: turn_context.model_info.supports_parallel_tool_calls,
+        tools,
+        parallel_tool_calls: turn_context.model_info.supports_parallel_tool_calls
+            && model_tools_enabled,
         base_instructions,
         output_schema: turn_context.final_output_json_schema.clone(),
         output_schema_strict: !crate::guardian::is_guardian_reviewer_source(
@@ -1075,10 +1084,10 @@ async fn run_sampling_request(
     turn_store: Arc<codex_extension_api::ExtensionData>,
     turn_diff_tracker: SharedTurnDiffTracker,
     client_session: &mut ModelClientSession,
-    responses_metadata: &CodexResponsesMetadata,
+    responses_metadata: &MidnightCoderResponsesMetadata,
     input: Vec<ResponseItem>,
     cancellation_token: CancellationToken,
-) -> CodexResult<(SamplingRequestResult, Vec<ResponseItem>)> {
+) -> MidnightCoderResult<(SamplingRequestResult, Vec<ResponseItem>)> {
     let turn_context = Arc::clone(&step_context.turn);
     let router = built_tools(sess.as_ref(), step_context.as_ref(), &cancellation_token).await?;
 
@@ -1130,16 +1139,16 @@ async fn run_sampling_request(
             Ok(output) => {
                 return Ok((output, original_input.unwrap_or(prompt.input)));
             }
-            Err(CodexErr::ContextWindowExceeded) => {
+            Err(MidnightCoderErr::ContextWindowExceeded) => {
                 sess.set_total_tokens_full(&turn_context).await;
-                return Err(CodexErr::ContextWindowExceeded);
+                return Err(MidnightCoderErr::ContextWindowExceeded);
             }
-            Err(CodexErr::UsageLimitReached(e)) => {
+            Err(MidnightCoderErr::UsageLimitReached(e)) => {
                 let rate_limits = e.rate_limits.clone();
                 if let Some(rate_limits) = rate_limits {
                     sess.update_rate_limits(&turn_context, *rate_limits).await;
                 }
-                return Err(CodexErr::UsageLimitReached(e));
+                return Err(MidnightCoderErr::UsageLimitReached(e));
             }
             Err(err) => err,
         };
@@ -1178,7 +1187,7 @@ pub(crate) async fn built_tools(
     sess: &Session,
     step_context: &StepContext,
     cancellation_token: &CancellationToken,
-) -> CodexResult<Arc<ToolRouter>> {
+) -> MidnightCoderResult<Arc<ToolRouter>> {
     let turn_context = step_context.turn.as_ref();
     let mcp_connection_manager = step_context.mcp.manager();
     let has_mcp_servers = mcp_connection_manager.has_servers();
@@ -1851,10 +1860,10 @@ async fn handle_assistant_item_done_in_plan_mode(
 
 #[instrument(level = "trace", skip_all)]
 async fn drain_in_flight(
-    in_flight: &mut FuturesOrdered<BoxFuture<'static, CodexResult<ResponseInputItem>>>,
+    in_flight: &mut FuturesOrdered<BoxFuture<'static, MidnightCoderResult<ResponseInputItem>>>,
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     while let Some(res) = in_flight.next().await {
         match res {
             Ok(response_input) => {
@@ -1890,11 +1899,11 @@ async fn try_run_sampling_request(
     turn_context: Arc<TurnContext>,
     turn_store: Arc<codex_extension_api::ExtensionData>,
     client_session: &mut ModelClientSession,
-    responses_metadata: &CodexResponsesMetadata,
+    responses_metadata: &MidnightCoderResponsesMetadata,
     turn_diff_tracker: SharedTurnDiffTracker,
     prompt: &Prompt,
     cancellation_token: CancellationToken,
-) -> CodexResult<SamplingRequestResult> {
+) -> MidnightCoderResult<SamplingRequestResult> {
     feedback_tags!(
         model = turn_context.model_info.slug.clone(),
         approval_policy = turn_context.approval_policy.value(),
@@ -1917,13 +1926,14 @@ async fn try_run_sampling_request(
             turn_context.reasoning_effort.clone(),
             turn_context.reasoning_summary,
             turn_context.config.service_tier.clone(),
+            turn_context.provider_request_options(),
             responses_metadata,
             &inference_trace,
         )
         .instrument(trace_span!("stream_request"))
         .or_cancel(&cancellation_token)
         .await??;
-    let mut in_flight: FuturesOrdered<BoxFuture<'static, CodexResult<ResponseInputItem>>> =
+    let mut in_flight: FuturesOrdered<BoxFuture<'static, MidnightCoderResult<ResponseInputItem>>> =
         FuturesOrdered::new();
     let mut needs_follow_up = false;
     let mut last_agent_message: Option<String> = None;
@@ -1942,7 +1952,7 @@ async fn try_run_sampling_request(
         !sess.services.extensions.turn_item_contributors().is_empty();
     let mut active_item_is_streaming_to_client = false;
     let receiving_span = trace_span!("receiving_stream");
-    let outcome: CodexResult<SamplingRequestResult> = loop {
+    let outcome: MidnightCoderResult<SamplingRequestResult> = loop {
         let handle_responses = trace_span!(
             parent: &receiving_span,
             "handle_responses",
@@ -1964,14 +1974,16 @@ async fn try_run_sampling_request(
             .await
         {
             Ok(event) => event,
-            Err(codex_async_utils::CancelErr::Cancelled) => break Err(CodexErr::TurnAborted),
+            Err(codex_async_utils::CancelErr::Cancelled) => {
+                break Err(MidnightCoderErr::TurnAborted);
+            }
         };
 
         let event = match event {
             Some(Ok(event)) => event,
             Some(Err(err)) => break Err(err),
             None => {
-                break Err(CodexErr::Stream(
+                break Err(MidnightCoderErr::Stream(
                     "stream closed before response.completed".into(),
                     None,
                 ));
@@ -1986,6 +1998,11 @@ async fn try_run_sampling_request(
         match event {
             ResponseEvent::Created => {}
             ResponseEvent::OutputItemDone(item) => {
+                let item = if turn_context.model_tools_enabled() {
+                    ollama_text_tool_call_from_item(&item).unwrap_or(item)
+                } else {
+                    item
+                };
                 if let Some((_, mut consumer)) = active_tool_argument_diff_consumer.take()
                     && let Ok(Some(event)) = consumer.finish()
                 {
@@ -2080,6 +2097,11 @@ async fn try_run_sampling_request(
                 }
             }
             ResponseEvent::OutputItemAdded(item) => {
+                let item = if turn_context.model_tools_enabled() {
+                    ollama_text_tool_call_from_item(&item).unwrap_or(item)
+                } else {
+                    item
+                };
                 if let ResponseItem::CustomToolCall { call_id, name, .. } = &item {
                     let tool_name = ToolName::plain(name.as_str());
                     active_tool_argument_diff_consumer = tool_runtime
@@ -2367,7 +2389,7 @@ async fn try_run_sampling_request(
     }
 
     if cancellation_token.is_cancelled() {
-        return Err(CodexErr::TurnAborted);
+        return Err(MidnightCoderErr::TurnAborted);
     }
 
     if should_emit_turn_diff {

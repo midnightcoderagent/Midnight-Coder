@@ -745,7 +745,7 @@ impl ServerHandler for ElicitationAppsMcpServer {
                     }
                     result => {
                         return Err(rmcp::ErrorData::internal_error(
-                            format!("unexpected OpenAI form response: {result:?}"),
+                            format!("unexpected MidnightCoder form response: {result:?}"),
                             None,
                         ));
                     }

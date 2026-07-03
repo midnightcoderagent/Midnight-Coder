@@ -3,10 +3,10 @@ use codex_protocol::models::ContentItem;
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::CodexErrorInfo;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::ModelRerouteReason;
 use codex_protocol::protocol::ModelVerification;
+use codex_protocol::protocol::MidnightCoderErrorInfo;
 use codex_protocol::protocol::Op;
 use codex_protocol::user_input::UserInput;
 use core_test_support::responses::ev_assistant_message;
@@ -20,7 +20,7 @@ use core_test_support::responses::sse_completed;
 use core_test_support::responses::sse_response;
 use core_test_support::responses::start_mock_server;
 use core_test_support::skip_if_no_network;
-use core_test_support::test_codex::TestCodex;
+use core_test_support::test_codex::TestMidnightCoder;
 use core_test_support::test_codex::local_selections;
 use core_test_support::test_codex::test_codex;
 use core_test_support::test_codex::turn_permission_fields;
@@ -35,7 +35,7 @@ const TRUSTED_ACCESS_FOR_CYBER_VERIFICATION: &str = "trusted_access_for_cyber";
 const CYBER_POLICY_MESSAGE: &str =
     "This request has been flagged for potentially high-risk cyber activity.";
 
-fn disabled_text_turn(test: &TestCodex, text: &str) -> Op {
+fn disabled_text_turn(test: &TestMidnightCoder, text: &str) -> Op {
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, test.cwd_path());
     Op::UserInput {
@@ -70,7 +70,7 @@ async fn openai_model_header_mismatch_emits_warning_event() -> Result<()> {
 
     let server = start_mock_server().await;
     let response =
-        sse_response(sse_completed("resp-1")).insert_header("OpenAI-Model", SERVER_MODEL);
+        sse_response(sse_completed("resp-1")).insert_header("MidnightCoder-Model", SERVER_MODEL);
     let _mock = mount_response_once(&server, response).await;
 
     let mut builder = test_codex().with_model(REQUESTED_MODEL);
@@ -133,7 +133,10 @@ async fn cyber_policy_response_emits_typed_error_without_retry() -> Result<()> {
         panic!("expected error event");
     };
     assert_eq!(error.message, CYBER_POLICY_MESSAGE);
-    assert_eq!(error.codex_error_info, Some(CodexErrorInfo::CyberPolicy));
+    assert_eq!(
+        error.codex_error_info,
+        Some(MidnightCoderErrorInfo::CyberPolicy)
+    );
 
     mock.single_request();
 
@@ -151,13 +154,13 @@ async fn response_model_field_mismatch_emits_warning_when_header_matches_request
             "response": {
                 "id": "resp-1",
                 "headers": {
-                    "OpenAI-Model": SERVER_MODEL
+                    "MidnightCoder-Model": SERVER_MODEL
                 }
             }
         }),
         core_test_support::responses::ev_completed("resp-1"),
     ]))
-    .insert_header("OpenAI-Model", REQUESTED_MODEL);
+    .insert_header("MidnightCoder-Model", REQUESTED_MODEL);
     let _mock = mount_response_once(&server, response).await;
 
     let mut builder = test_codex().with_model(REQUESTED_MODEL);
@@ -221,13 +224,13 @@ async fn openai_model_header_mismatch_only_emits_one_warning_per_turn() -> Resul
         ),
         core_test_support::responses::ev_completed("resp-1"),
     ]))
-    .insert_header("OpenAI-Model", SERVER_MODEL);
+    .insert_header("MidnightCoder-Model", SERVER_MODEL);
     let second_response = sse_response(sse(vec![
         ev_response_created("resp-2"),
         ev_assistant_message("msg-1", "done"),
         core_test_support::responses::ev_completed("resp-2"),
     ]))
-    .insert_header("OpenAI-Model", SERVER_MODEL);
+    .insert_header("MidnightCoder-Model", SERVER_MODEL);
     let _mock = mount_response_sequence(&server, vec![first_response, second_response]).await;
 
     let mut builder = test_codex().with_model(REQUESTED_MODEL);
@@ -261,7 +264,7 @@ async fn openai_model_header_casing_only_mismatch_does_not_warn() -> Result<()> 
     let server = start_mock_server().await;
     let requested_header = REQUESTED_MODEL.to_ascii_uppercase();
     let response = sse_response(sse_completed("resp-1"))
-        .insert_header("OpenAI-Model", requested_header.as_str());
+        .insert_header("MidnightCoder-Model", requested_header.as_str());
     let _mock = mount_response_once(&server, response).await;
 
     let mut builder = test_codex().with_model(REQUESTED_MODEL);

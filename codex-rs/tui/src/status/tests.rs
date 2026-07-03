@@ -329,6 +329,7 @@ async fn status_snapshot_shows_chatgpt_plan_without_email() {
     let mut config = test_config(&temp_home).await;
     config.model = Some("gpt-5.1-codex-max".to_string());
     config.model_provider_id = "openai".to_string();
+    config.model_provider = ModelProviderInfo::create_openai_provider(/*base_url*/ None);
     config.cli_auth_credentials_store_mode = AuthCredentialsStoreMode::File;
     set_workspace_cwd(&mut config, test_path_buf("/workspace/tests").abs());
 
@@ -754,7 +755,7 @@ async fn status_model_provider_uses_bedrock_runtime_base_url_and_gates_usage_lin
 
     config.model_provider_id = "openai-proxy".to_string();
     config.model_provider = ModelProviderInfo {
-        name: "OpenAI Proxy".to_string(),
+        name: "MidnightCoder Proxy".to_string(),
         base_url: Some("https://openai-proxy.example/v1".to_string()),
         requires_openai_auth: true,
         ..ModelProviderInfo::default()
@@ -782,7 +783,7 @@ async fn status_model_provider_uses_bedrock_runtime_base_url_and_gates_usage_lin
 
     assert!(
         rendered.contains("https://chatgpt.com/codex/settings/usage"),
-        "expected /status to show ChatGPT usage link for OpenAI-auth proxy, got: {rendered}"
+        "expected /status to show ChatGPT usage link for MidnightCoder-auth proxy, got: {rendered}"
     );
 
     let wide_destinations: Vec<String> = composite

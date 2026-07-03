@@ -1,7 +1,7 @@
 use core_test_support::test_codex::local_selections;
 use std::sync::Arc;
 
-use codex_core::CodexThread;
+use codex_core::MidnightCoderThread;
 use codex_core::config::CurrentTimeReminderConfig;
 use codex_features::Feature;
 use codex_protocol::AgentPath;
@@ -30,7 +30,7 @@ use core_test_support::responses::ev_response_created;
 use core_test_support::streaming_sse::StreamingSseChunk;
 use core_test_support::streaming_sse::StreamingSseServer;
 use core_test_support::streaming_sse::start_streaming_sse_server;
-use core_test_support::test_codex::TestCodex;
+use core_test_support::test_codex::TestMidnightCoder;
 use core_test_support::test_codex::test_codex;
 use core_test_support::test_codex::turn_permission_fields;
 use core_test_support::wait_for_event;
@@ -119,16 +119,16 @@ fn response_completed_chunks(response_id: &str) -> Vec<StreamingSseChunk> {
     ]
 }
 
-async fn build_codex(server: &StreamingSseServer) -> Arc<CodexThread> {
+async fn build_codex(server: &StreamingSseServer) -> Arc<MidnightCoderThread> {
     test_codex()
         .with_model("gpt-5.4")
         .build_with_streaming_server(server)
         .await
-        .expect("build streaming Codex test session")
+        .expect("build streaming MidnightCoder test session")
         .codex
 }
 
-async fn submit_user_input(codex: &CodexThread, text: &str) {
+async fn submit_user_input(codex: &MidnightCoderThread, text: &str) {
     codex
         .submit(Op::UserInput {
             items: vec![UserInput::Text {
@@ -144,7 +144,7 @@ async fn submit_user_input(codex: &CodexThread, text: &str) {
         .expect("submit user input");
 }
 
-async fn submit_danger_full_access_user_turn(test: &TestCodex, text: &str) {
+async fn submit_danger_full_access_user_turn(test: &TestMidnightCoder, text: &str) {
     let (sandbox_policy, permission_profile) =
         turn_permission_fields(PermissionProfile::Disabled, test.config.cwd.as_path());
     test.codex
@@ -176,7 +176,7 @@ async fn submit_danger_full_access_user_turn(test: &TestCodex, text: &str) {
         .expect("submit user turn");
 }
 
-async fn steer_user_input(codex: &CodexThread, text: &str) {
+async fn steer_user_input(codex: &MidnightCoderThread, text: &str) {
     codex
         .steer_input(
             vec![UserInput::Text {
@@ -192,7 +192,7 @@ async fn steer_user_input(codex: &CodexThread, text: &str) {
         .expect("steer user input");
 }
 
-async fn submit_queue_only_agent_mail(codex: &CodexThread, text: &str) {
+async fn submit_queue_only_agent_mail(codex: &MidnightCoderThread, text: &str) {
     codex
         .submit(Op::InterAgentCommunication {
             communication: InterAgentCommunication::new(
@@ -215,7 +215,7 @@ async fn submit_queue_only_agent_mail(codex: &CodexThread, text: &str) {
     .await;
 }
 
-async fn wait_for_reasoning_item_started(codex: &CodexThread) {
+async fn wait_for_reasoning_item_started(codex: &MidnightCoderThread) {
     wait_for_event(codex, |event| {
         matches!(
             event,
@@ -226,7 +226,7 @@ async fn wait_for_reasoning_item_started(codex: &CodexThread) {
     .await;
 }
 
-async fn wait_for_agent_message(codex: &CodexThread, text: &str) {
+async fn wait_for_agent_message(codex: &MidnightCoderThread, text: &str) {
     let final_message = wait_for_event(
         codex,
         |event| matches!(event, EventMsg::AgentMessage(message) if message.message == text),
@@ -235,11 +235,11 @@ async fn wait_for_agent_message(codex: &CodexThread, text: &str) {
     assert!(matches!(final_message, EventMsg::AgentMessage(_)));
 }
 
-async fn wait_for_turn_complete(codex: &CodexThread) {
+async fn wait_for_turn_complete(codex: &MidnightCoderThread) {
     wait_for_event(codex, |event| matches!(event, EventMsg::TurnComplete(_))).await;
 }
 
-async fn wait_for_sleep_item_started(codex: &CodexThread, call_id: &str, duration_ms: u64) {
+async fn wait_for_sleep_item_started(codex: &MidnightCoderThread, call_id: &str, duration_ms: u64) {
     let event = wait_for_event(codex, |event| {
         matches!(
             event,
@@ -263,7 +263,11 @@ async fn wait_for_sleep_item_started(codex: &CodexThread, call_id: &str, duratio
     );
 }
 
-async fn wait_for_sleep_item_completed(codex: &CodexThread, call_id: &str, duration_ms: u64) {
+async fn wait_for_sleep_item_completed(
+    codex: &MidnightCoderThread,
+    call_id: &str,
+    duration_ms: u64,
+) {
     let event = wait_for_event(codex, |event| {
         matches!(
             event,
@@ -316,7 +320,7 @@ async fn steer_interrupts_wait_agent_and_is_sent_in_follow_up_request() {
         })
         .build_with_streaming_server(&server)
         .await
-        .expect("build Codex test session")
+        .expect("build MidnightCoder test session")
         .codex;
 
     submit_user_input(&codex, INITIAL_PROMPT).await;
@@ -400,7 +404,7 @@ async fn any_new_input_interrupts_sleep() {
         })
         .build_with_streaming_server(&server)
         .await
-        .expect("build Codex test session")
+        .expect("build MidnightCoder test session")
         .codex;
 
     submit_user_input(&codex, INITIAL_PROMPT).await;
@@ -808,13 +812,13 @@ async fn steered_user_input_waits_for_model_continuation_after_mid_turn_compact(
     let codex = test_codex()
         .with_model("gpt-5.4")
         .with_config(|config| {
-            config.model_provider.name = "OpenAI (test)".to_string();
+            config.model_provider.name = "MidnightCoder (test)".to_string();
             config.model_provider.supports_websockets = false;
             config.model_auto_compact_token_limit = Some(200);
         })
         .build_with_streaming_server(&server)
         .await
-        .expect("build streaming Codex test session")
+        .expect("build streaming MidnightCoder test session")
         .codex;
 
     submit_user_input(&codex, "first prompt").await;
@@ -893,13 +897,13 @@ async fn steered_user_input_follows_compact_when_only_the_steer_needs_follow_up(
     let codex = test_codex()
         .with_model("gpt-5.4")
         .with_config(|config| {
-            config.model_provider.name = "OpenAI (test)".to_string();
+            config.model_provider.name = "MidnightCoder (test)".to_string();
             config.model_provider.supports_websockets = false;
             config.model_auto_compact_token_limit = Some(200);
         })
         .build_with_streaming_server(&server)
         .await
-        .expect("build streaming Codex test session")
+        .expect("build streaming MidnightCoder test session")
         .codex;
 
     submit_user_input(&codex, "first prompt").await;
@@ -1010,13 +1014,13 @@ async fn steered_user_input_waits_when_tool_output_triggers_compact_before_next_
     let test = test_codex()
         .with_model("gpt-5.4")
         .with_config(|config| {
-            config.model_provider.name = "OpenAI (test)".to_string();
+            config.model_provider.name = "MidnightCoder (test)".to_string();
             config.model_provider.supports_websockets = false;
             config.model_auto_compact_token_limit = Some(200);
         })
         .build_with_streaming_server(&server)
         .await
-        .expect("build streaming Codex test session");
+        .expect("build streaming MidnightCoder test session");
     let codex = test.codex.clone();
 
     submit_danger_full_access_user_turn(&test, "first prompt").await;

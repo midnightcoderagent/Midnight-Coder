@@ -16,13 +16,13 @@ use codex_protocol::permissions::NetworkSandboxPolicy;
 use codex_utils_absolute_path::AbsolutePathBuf;
 
 use crate::common::exec_server::ExecServerHarness;
-use crate::common::exec_server::TestCodexHelperPaths;
+use crate::common::exec_server::TestMidnightCoderHelperPaths;
 use crate::common::exec_server::exec_server;
 use crate::common::exec_server::test_codex_helper_paths;
 
 pub(crate) struct FileSystemContext {
     pub(crate) file_system: Arc<dyn ExecutorFileSystem>,
-    _helper_paths: Option<TestCodexHelperPaths>,
+    _helper_paths: Option<TestMidnightCoderHelperPaths>,
     _server: Option<ExecServerHarness>,
 }
 

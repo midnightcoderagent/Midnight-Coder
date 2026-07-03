@@ -16,10 +16,17 @@ const EXEC_DESCRIPTION_TEMPLATE: &str = r#"Run JavaScript code to orchestrate/co
 - Nested tools return either an object or a string, based on the description.
 - Runs raw JavaScript -- no Node, no file system, no network access, no console.
 - Accepts raw JavaScript source text, not JSON, quoted strings, or markdown code fences.
+- Never emit a JSON tool-call envelope like `{"name":"exec","arguments":...}`; that is not executable `exec` input.
 - You may optionally start the tool input with a first-line pragma like `// @exec: {"yield_time_ms": 10000, "max_output_tokens": 1000}`.
 - `yield_time_ms` asks `exec` to yield early if the script is still running. Defaults to 10000 ms.
 - `max_output_tokens` sets the token budget for direct `exec` results. Defaults to 10000 tokens.
 - When the JS code is fully evaluated, the isolate's lifetime ends and unawaited promises are silently discarded.
+- Example:
+```js
+// @exec:
+const result = await tools.exec_command({ cmd: "node --version" });
+text(result.output);
+```
 
 - Global helpers:
 - `exit()`: Immediately ends the current script successfully (like an early return from the top level).
@@ -884,6 +891,11 @@ bar"
         );
         assert!(description.contains("`setTimeout(callback: () => void, delayMs?: number)`"));
         assert!(description.contains("`clearTimeout(timeoutId?: number)`"));
+        assert!(description.contains("Never emit a JSON tool-call envelope"));
+        assert!(
+            description
+                .contains("const result = await tools.exec_command({ cmd: \"node --version\" });")
+        );
     }
 
     #[test]

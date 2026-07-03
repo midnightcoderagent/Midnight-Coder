@@ -36,7 +36,7 @@ use core_test_support::skip_if_no_network;
 use core_test_support::skip_if_no_remote_env;
 use core_test_support::skip_if_sandbox;
 use core_test_support::skip_if_target_windows;
-use core_test_support::test_codex::TestCodex;
+use core_test_support::test_codex::TestMidnightCoder;
 use core_test_support::test_codex::local;
 use core_test_support::test_codex::test_codex;
 use core_test_support::test_codex::turn_permission_fields;
@@ -148,7 +148,9 @@ async fn approved_network_host_for_one_environment_still_prompts_in_another() ->
     Ok(())
 }
 
-async fn managed_network_unified_exec_test(server: &wiremock::MockServer) -> Result<TestCodex> {
+async fn managed_network_unified_exec_test(
+    server: &wiremock::MockServer,
+) -> Result<TestMidnightCoder> {
     let home = Arc::new(TempDir::new()?);
     fs::write(
         home.path().join("config.toml"),
@@ -235,7 +237,7 @@ fn network_fetch_args(environment_id: &str) -> Value {
 }
 
 async fn submit_managed_network_turn(
-    test: &TestCodex,
+    test: &TestMidnightCoder,
     prompt: &str,
     environments: Vec<TurnEnvironmentSelection>,
 ) -> Result<()> {
@@ -282,7 +284,7 @@ async fn submit_managed_network_turn(
 }
 
 async fn expect_network_approval(
-    test: &TestCodex,
+    test: &TestMidnightCoder,
     expected_environment_id: &str,
 ) -> Result<ExecApprovalRequestEvent> {
     let deadline = std::time::Instant::now() + Duration::from_secs(30);
@@ -329,7 +331,7 @@ async fn expect_network_approval(
     }
 }
 
-async fn wait_for_turn_complete(test: &TestCodex) {
+async fn wait_for_turn_complete(test: &TestMidnightCoder) {
     wait_for_event(&test.codex, |event| {
         matches!(event, EventMsg::TurnComplete(_))
     })

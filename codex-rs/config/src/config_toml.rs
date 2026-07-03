@@ -1,4 +1,4 @@
-//! Schema-heavy configuration TOML types used by Codex.
+//! Schema-heavy configuration TOML types used by MidnightCoder.
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -157,6 +157,15 @@ pub struct ConfigToml {
     /// Review model override used by the `/review` feature.
     pub review_model: Option<String>,
 
+    /// Model used specifically for context compaction.
+    pub mini_model: Option<String>,
+
+    /// Strategy used when context compaction is triggered.
+    pub resume_type: Option<String>,
+
+    /// Native Ollama context window override for `/api/chat` and `/api/generate`.
+    pub ollama_num_ctx: Option<i64>,
+
     /// Provider to use from the model_providers map.
     pub model_provider: Option<String>,
 
@@ -237,7 +246,7 @@ pub struct ConfigToml {
     /// Optional path to a file containing model instructions that will override
     /// the built-in instructions for the selected model. Users are STRONGLY
     /// DISCOURAGED from using this field, as deviating from the instructions
-    /// sanctioned by Codex will likely degrade model performance.
+    /// sanctioned by MidnightCoder will likely degrade model performance.
     pub model_instructions_file: Option<AbsolutePathBuf>,
 
     /// Compact prompt used for history compaction.
@@ -252,13 +261,13 @@ pub struct ConfigToml {
     pub forced_login_method: Option<ForcedLoginMethod>,
 
     /// Preferred backend for storing CLI auth credentials.
-    /// file (default): Use a file in the Codex home directory.
+    /// file (default): Use a file in the MidnightCoder home directory.
     /// keyring: Use an OS-specific keyring service.
     /// auto: Use the keyring if available, otherwise use a file.
     #[serde(default)]
     pub cli_auth_credentials_store: Option<AuthCredentialsStoreMode>,
 
-    /// Definition for MCP servers that Codex can reach out to for tool calls.
+    /// Definition for MCP servers that MidnightCoder can reach out to for tool calls.
     #[serde(default)]
     // Uses the raw MCP input shape (custom deserialization) rather than `McpServerConfig`.
     #[schemars(schema_with = "crate::schema::mcp_servers_schema")]
@@ -267,13 +276,13 @@ pub struct ConfigToml {
     /// Preferred backend for storing MCP OAuth credentials.
     /// keyring: Use an OS-specific keyring service.
     ///          https://github.com/openai/codex/blob/main/codex-rs/rmcp-client/src/oauth.rs#L2
-    /// file: Use a file in the Codex home directory.
+    /// file: Use a file in the MidnightCoder home directory.
     /// auto (default): Use the OS-specific keyring service if available, otherwise use a file.
     #[serde(default)]
     pub mcp_oauth_credentials_store: Option<OAuthCredentialsStoreMode>,
 
     /// Optional fixed port for the local HTTP callback server used during MCP OAuth login.
-    /// When unset, Codex will bind to an ephemeral port chosen by the OS.
+    /// When unset, MidnightCoder will bind to an ephemeral port chosen by the OS.
     pub mcp_oauth_callback_port: Option<u16>,
 
     /// Optional redirect URI to use during MCP OAuth login.
@@ -321,11 +330,11 @@ pub struct ConfigToml {
     #[serde(default = "default_history")]
     pub history: Option<History>,
 
-    /// Directory where Codex stores the SQLite state DB.
+    /// Directory where MidnightCoder stores the SQLite state DB.
     /// Defaults to `$CODEX_SQLITE_HOME` when set. Otherwise uses `$CODEX_HOME`.
     pub sqlite_home: Option<AbsolutePathBuf>,
 
-    /// Directory where Codex writes log files. Setting this value explicitly
+    /// Directory where MidnightCoder writes log files. Setting this value explicitly
     /// also enables the TUI text log in this directory.
     /// Defaults to `$CODEX_HOME/log`.
     pub log_dir: Option<AbsolutePathBuf>,
@@ -369,10 +378,10 @@ pub struct ConfigToml {
     /// `default`, `priority`, or `flex`; legacy `fast` also works).
     pub service_tier: Option<String>,
 
-    /// Base URL for requests to ChatGPT (as opposed to the OpenAI API).
+    /// Base URL for requests to ChatGPT (as opposed to the MidnightCoder API).
     pub chatgpt_base_url: Option<String>,
 
-    /// Optional product SKU forwarded on host-owned Codex Apps MCP requests.
+    /// Optional product SKU forwarded on host-owned MidnightCoder Apps MCP requests.
     pub apps_mcp_product_sku: Option<String>,
 
     /// Orchestrator-owned feature settings.
@@ -475,8 +484,8 @@ pub struct ConfigToml {
     #[serde(default)]
     pub project_root_markers: Option<Vec<String>>,
 
-    /// When `true`, checks for Codex updates on startup and surfaces update prompts.
-    /// Set to `false` only if your Codex updates are centrally managed.
+    /// When `true`, checks for MidnightCoder updates on startup and surfaces update prompts.
+    /// Set to `false` only if your MidnightCoder updates are centrally managed.
     /// Defaults to `true`.
     pub check_for_update_on_startup: Option<bool>,
 
@@ -485,11 +494,11 @@ pub struct ConfigToml {
     /// or placeholder replacement will occur for fast keypress bursts.
     pub disable_paste_burst: Option<bool>,
 
-    /// When `false`, disables analytics across Codex product surfaces in this machine.
+    /// When `false`, disables analytics across MidnightCoder product surfaces in this machine.
     /// Defaults to `true`.
     pub analytics: Option<AnalyticsConfigToml>,
 
-    /// When `false`, disables feedback collection across Codex product surfaces.
+    /// When `false`, disables feedback collection across MidnightCoder product surfaces.
     /// Defaults to `true`.
     pub feedback: Option<FeedbackConfigToml>,
 
@@ -514,7 +523,7 @@ pub struct ConfigToml {
 
     pub experimental_compact_prompt_file: Option<AbsolutePathBuf>,
     pub experimental_use_unified_exec_tool: Option<bool>,
-    /// Preferred OSS provider for local models, e.g. "lmstudio" or "ollama".
+    /// Preferred OSS provider for local models, e.g. "lmstudio", "ollama", or "llama".
     pub oss_provider: Option<String>,
 }
 
@@ -537,13 +546,13 @@ pub struct DebugToml {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
 #[schemars(deny_unknown_fields)]
 pub struct DebugConfigLockToml {
-    /// Directory where Codex writes effective session config lock files.
+    /// Directory where MidnightCoder writes effective session config lock files.
     pub export_dir: Option<AbsolutePathBuf>,
 
     /// Lockfile to replay as the authoritative effective config.
     pub load_path: Option<AbsolutePathBuf>,
 
-    /// Allow replaying a lock generated by a different Codex version.
+    /// Allow replaying a lock generated by a different MidnightCoder version.
     pub allow_codex_version_mismatch: Option<bool>,
 
     /// Save fields resolved from the model catalog/session configuration.
@@ -953,7 +962,7 @@ where
 
 pub fn validate_oss_provider(provider: &str) -> std::io::Result<()> {
     match provider {
-        LMSTUDIO_OSS_PROVIDER_ID | OLLAMA_OSS_PROVIDER_ID => Ok(()),
+        LMSTUDIO_OSS_PROVIDER_ID | OLLAMA_OSS_PROVIDER_ID | "llama" => Ok(()),
         LEGACY_OLLAMA_CHAT_PROVIDER_ID => Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             OLLAMA_CHAT_PROVIDER_REMOVED_ERROR,
@@ -961,7 +970,7 @@ pub fn validate_oss_provider(provider: &str) -> std::io::Result<()> {
         _ => Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
             format!(
-                "Invalid OSS provider '{provider}'. Must be one of: {LMSTUDIO_OSS_PROVIDER_ID}, {OLLAMA_OSS_PROVIDER_ID}"
+                "Invalid OSS provider '{provider}'. Must be one of: {LMSTUDIO_OSS_PROVIDER_ID}, {OLLAMA_OSS_PROVIDER_ID}, llama"
             ),
         )),
     }

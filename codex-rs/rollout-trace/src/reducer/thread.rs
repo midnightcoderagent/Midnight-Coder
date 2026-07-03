@@ -14,10 +14,10 @@ use super::TraceReducer;
 use super::tool::spawn_edge_id;
 use crate::model::AgentOrigin;
 use crate::model::AgentThread;
-use crate::model::CodexTurn;
-use crate::model::CodexTurnId;
 use crate::model::ExecutionStatus;
 use crate::model::ExecutionWindow;
+use crate::model::MidnightCoderTurn;
+use crate::model::MidnightCoderTurnId;
 use crate::model::RolloutStatus;
 use crate::payload::RawPayloadRef;
 use crate::raw_event::RawEventSeq;
@@ -123,12 +123,12 @@ impl TraceReducer {
         Ok(())
     }
 
-    /// Starts a Codex turn inside an existing thread.
+    /// Starts a MidnightCoder turn inside an existing thread.
     pub(super) fn start_codex_turn(
         &mut self,
         seq: RawEventSeq,
         wall_time_unix_ms: i64,
-        codex_turn_id: CodexTurnId,
+        codex_turn_id: MidnightCoderTurnId,
         thread_id: String,
     ) -> Result<()> {
         if self.rollout.codex_turns.contains_key(&codex_turn_id) {
@@ -139,7 +139,7 @@ impl TraceReducer {
 
         self.rollout.codex_turns.insert(
             codex_turn_id.clone(),
-            CodexTurn {
+            MidnightCoderTurn {
                 codex_turn_id,
                 thread_id,
                 execution: ExecutionWindow {
@@ -155,13 +155,13 @@ impl TraceReducer {
         Ok(())
     }
 
-    /// Marks a Codex turn terminal and validates any thread id carried by the raw event.
+    /// Marks a MidnightCoder turn terminal and validates any thread id carried by the raw event.
     pub(super) fn end_codex_turn(
         &mut self,
         seq: RawEventSeq,
         wall_time_unix_ms: i64,
         thread_id: Option<String>,
-        codex_turn_id: CodexTurnId,
+        codex_turn_id: MidnightCoderTurnId,
         status: ExecutionStatus,
     ) -> Result<()> {
         if let Some(event_thread_id) = thread_id.as_deref()

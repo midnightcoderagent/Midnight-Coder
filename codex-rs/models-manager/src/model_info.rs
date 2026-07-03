@@ -1,9 +1,11 @@
 use codex_protocol::config_types::ReasoningSummary;
+use codex_protocol::openai_models::ApplyPatchToolType;
 use codex_protocol::openai_models::ConfigShellToolType;
 use codex_protocol::openai_models::ModelInfo;
 use codex_protocol::openai_models::ModelInstructionsVariables;
 use codex_protocol::openai_models::ModelMessages;
 use codex_protocol::openai_models::ModelVisibility;
+use codex_protocol::openai_models::ToolMode;
 use codex_protocol::openai_models::TruncationMode;
 use codex_protocol::openai_models::TruncationPolicyConfig;
 use codex_protocol::openai_models::WebSearchToolType;
@@ -11,10 +13,9 @@ use codex_protocol::openai_models::default_input_modalities;
 
 use crate::config::ModelsManagerConfig;
 use codex_utils_output_truncation::approx_bytes_for_tokens;
-use tracing::warn;
 
 pub const BASE_INSTRUCTIONS: &str = include_str!("../prompt.md");
-const DEFAULT_PERSONALITY_HEADER: &str = "You are Codex, a coding agent based on GPT-5. You and the user share the same workspace and collaborate to achieve the user's goals.";
+const DEFAULT_PERSONALITY_HEADER: &str = "You are MidnightCoder, a coding agent. You and the user share the same workspace and collaborate to achieve the user's goals.";
 const LOCAL_FRIENDLY_TEMPLATE: &str =
     "You optimize for team morale and being a supportive teammate as much as code quality.";
 const LOCAL_PRAGMATIC_TEMPLATE: &str = "You are a deeply pragmatic, effective software engineer.";
@@ -64,14 +65,13 @@ pub fn with_config_overrides(mut model: ModelInfo, config: &ModelsManagerConfig)
 
 /// Build a minimal fallback model descriptor for missing/unknown slugs.
 pub fn model_info_from_slug(slug: &str) -> ModelInfo {
-    warn!("Unknown model {slug} is used. This will use fallback model metadata.");
     ModelInfo {
         slug: slug.to_string(),
         display_name: slug.to_string(),
         description: None,
         default_reasoning_level: None,
         supported_reasoning_levels: Vec::new(),
-        shell_type: ConfigShellToolType::Default,
+        shell_type: ConfigShellToolType::ShellCommand,
         visibility: ModelVisibility::None,
         supported_in_api: true,
         priority: 99,
@@ -86,7 +86,7 @@ pub fn model_info_from_slug(slug: &str) -> ModelInfo {
         default_reasoning_summary: ReasoningSummary::Auto,
         support_verbosity: false,
         default_verbosity: None,
-        apply_patch_tool_type: None,
+        apply_patch_tool_type: Some(ApplyPatchToolType::Freeform),
         web_search_tool_type: WebSearchToolType::Text,
         truncation_policy: TruncationPolicyConfig::bytes(/*limit*/ 10_000),
         supports_parallel_tool_calls: false,
@@ -96,13 +96,13 @@ pub fn model_info_from_slug(slug: &str) -> ModelInfo {
         auto_compact_token_limit: None,
         comp_hash: None,
         effective_context_window_percent: 95,
-        experimental_supported_tools: Vec::new(),
+        experimental_supported_tools: vec!["shell_command".to_string(), "apply_patch".to_string()],
         input_modalities: default_input_modalities(),
         used_fallback_model_metadata: true, // this is the fallback model metadata
         supports_search_tool: false,
         use_responses_lite: false,
         auto_review_model_override: None,
-        tool_mode: None,
+        tool_mode: Some(ToolMode::CodeMode),
         multi_agent_version: None,
     }
 }

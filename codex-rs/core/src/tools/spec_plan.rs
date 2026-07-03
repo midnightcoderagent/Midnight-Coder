@@ -655,8 +655,9 @@ fn add_shell_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut Planne
         exec_permission_approvals_enabled,
     };
 
-    match shell_type_for_model_and_features(&turn_context.model_info, features) {
-        ConfigShellToolType::UnifiedExec => {
+    let shell_type = shell_type_for_model_and_features(&turn_context.model_info, features);
+    match shell_type {
+        ConfigShellToolType::UnifiedExec if !turn_context.uses_ollama_provider() => {
             planned_tools.add(ExecCommandHandler::new(ExecCommandHandlerOptions {
                 allow_login_shell,
                 exec_permission_approvals_enabled,
@@ -675,6 +676,7 @@ fn add_shell_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut Planne
         ConfigShellToolType::Disabled => {}
         ConfigShellToolType::Default
         | ConfigShellToolType::Local
+        | ConfigShellToolType::UnifiedExec
         | ConfigShellToolType::ShellCommand => {
             planned_tools.add(ShellCommandHandler::new(shell_command_options));
         }
@@ -919,7 +921,7 @@ fn add_dynamic_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut Plan
             DynamicToolSpec::Function(tool) => {
                 let Some(handler) = DynamicToolHandler::new(tool) else {
                     tracing::error!(
-                        "Failed to convert dynamic tool {:?} to OpenAI tool",
+                        "Failed to convert dynamic tool {:?} to MidnightCoder tool",
                         tool.name
                     );
                     continue;
@@ -932,7 +934,7 @@ fn add_dynamic_tools(context: &CoreToolPlanContext<'_>, planned_tools: &mut Plan
                     let Some(handler) = DynamicToolHandler::new_in_namespace(namespace, tool)
                     else {
                         tracing::error!(
-                            "Failed to convert dynamic tool {:?}.{:?} to OpenAI tool",
+                            "Failed to convert dynamic tool {:?}.{:?} to MidnightCoder tool",
                             namespace.name,
                             tool.name
                         );

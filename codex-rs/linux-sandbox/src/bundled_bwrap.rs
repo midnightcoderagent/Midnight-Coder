@@ -189,9 +189,9 @@ fn bytes_to_hex(bytes: &[u8; 32]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use codex_install_context::CodexPackageLayout;
     use codex_install_context::InstallContext;
     use codex_install_context::InstallMethod;
+    use codex_install_context::MidnightCoderPackageLayout;
     use pretty_assertions::assert_eq;
     use std::fs;
     use tempfile::NamedTempFile;
@@ -209,7 +209,7 @@ mod tests {
 
         let context = InstallContext {
             method: InstallMethod::Other,
-            package_layout: Some(CodexPackageLayout {
+            package_layout: Some(MidnightCoderPackageLayout {
                 package_dir: AbsolutePathBuf::from_absolute_path(package_dir).expect("absolute"),
                 bin_dir: AbsolutePathBuf::from_absolute_path(&bin_dir).expect("absolute"),
                 resources_dir: Some(

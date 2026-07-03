@@ -5,7 +5,7 @@ use codex_core::config::Config;
 use codex_protocol::protocol::SessionConfiguredEvent;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CodexStatus {
+pub enum MidnightCoderStatus {
     Running,
     InitiateShutdown,
 }
@@ -20,10 +20,13 @@ pub(crate) trait EventProcessor {
     );
 
     /// Handle a single typed app-server notification emitted by the agent.
-    fn process_server_notification(&mut self, notification: ServerNotification) -> CodexStatus;
+    fn process_server_notification(
+        &mut self,
+        notification: ServerNotification,
+    ) -> MidnightCoderStatus;
 
     /// Handle a local exec warning that is not represented as an app-server notification.
-    fn process_warning(&mut self, message: String) -> CodexStatus;
+    fn process_warning(&mut self, message: String) -> MidnightCoderStatus;
 
     fn print_final_output(&mut self) {}
 }

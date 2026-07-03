@@ -246,20 +246,22 @@ impl ChatWidget {
         approvals_reviewer: ApprovalsReviewer,
     ) -> Vec<SelectionAction> {
         vec![Box::new(move |tx| {
-            tx.send(AppEvent::CodexOp(AppCommand::override_turn_context(
-                /*cwd*/ None,
-                Some(approval),
-                Some(approvals_reviewer),
-                Some(permission_profile.clone()),
-                Some(active_permission_profile.clone()),
-                /*windows_sandbox_level*/ None,
-                /*model*/ None,
-                /*effort*/ None,
-                /*summary*/ None,
-                /*service_tier*/ None,
-                /*collaboration_mode*/ None,
-                /*personality*/ None,
-            )));
+            tx.send(AppEvent::MidnightCoderOp(
+                AppCommand::override_turn_context(
+                    /*cwd*/ None,
+                    Some(approval),
+                    Some(approvals_reviewer),
+                    Some(permission_profile.clone()),
+                    Some(active_permission_profile.clone()),
+                    /*windows_sandbox_level*/ None,
+                    /*model*/ None,
+                    /*effort*/ None,
+                    /*summary*/ None,
+                    /*service_tier*/ None,
+                    /*collaboration_mode*/ None,
+                    /*personality*/ None,
+                ),
+            ));
             tx.send(AppEvent::UpdateAskForApprovalPolicy(approval));
             tx.send(AppEvent::UpdateActivePermissionProfile(
                 active_permission_profile.clone(),
@@ -415,7 +417,7 @@ impl ChatWidget {
         let mut header_children: Vec<Box<dyn Renderable>> = Vec::new();
         let title_line = Line::from("Enable full access?").bold();
         let info_line = Line::from(vec![
-            "When Codex runs with full access, it can edit any file on your computer and run commands with network, without your approval. "
+            "When MidnightCoder runs with full access, it can edit any file on your computer and run commands with network, without your approval. "
                 .into(),
             "Exercise caution when enabling full access. This significantly increases the risk of data loss, leaks, or unexpected behavior."
                 .fg(Color::Red),

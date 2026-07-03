@@ -2,9 +2,6 @@ use std::time::Instant;
 
 use crate::facts::AcceptedLineFingerprint;
 use crate::facts::AppInvocation;
-use crate::facts::CodexCompactionEvent;
-use crate::facts::CodexErrKind;
-use crate::facts::CodexGoalEvent;
 use crate::facts::CompactionImplementation;
 use crate::facts::CompactionPhase;
 use crate::facts::CompactionReason;
@@ -14,6 +11,9 @@ use crate::facts::CompactionTrigger;
 use crate::facts::GoalEventKind;
 use crate::facts::HookRunFact;
 use crate::facts::InvocationType;
+use crate::facts::MidnightCoderCompactionEvent;
+use crate::facts::MidnightCoderErrKind;
+use crate::facts::MidnightCoderGoalEvent;
 use crate::facts::PluginInstallRequested;
 use crate::facts::PluginState;
 use crate::facts::SubAgentThreadStartedInput;
@@ -24,8 +24,8 @@ use crate::facts::TurnSteerRejectionReason;
 use crate::facts::TurnSteerResult;
 use crate::facts::TurnSubmissionType;
 use crate::now_unix_millis;
-use codex_app_server_protocol::CodexErrorInfo;
 use codex_app_server_protocol::CommandExecutionSource;
+use codex_app_server_protocol::MidnightCoderErrorInfo;
 use codex_login::default_client::originator;
 use codex_plugin::PluginId;
 use codex_plugin::PluginTelemetryMetadata;
@@ -63,32 +63,34 @@ pub(crate) enum TrackEventRequest {
     SkillInvocation(SkillInvocationEventRequest),
     ThreadInitialized(ThreadInitializedEvent),
     GuardianReview(Box<GuardianReviewEventRequest>),
-    AppMentioned(CodexAppMentionedEventRequest),
-    AppUsed(CodexAppUsedEventRequest),
-    HookRun(CodexHookRunEventRequest),
-    Compaction(Box<CodexCompactionEventRequest>),
-    Goal(Box<CodexGoalEventRequest>),
-    TurnEvent(Box<CodexTurnEventRequest>),
-    TurnSteer(CodexTurnSteerEventRequest),
-    CommandExecution(CodexCommandExecutionEventRequest),
-    FileChange(CodexFileChangeEventRequest),
-    McpToolCall(CodexMcpToolCallEventRequest),
-    DynamicToolCall(CodexDynamicToolCallEventRequest),
-    CollabAgentToolCall(CodexCollabAgentToolCallEventRequest),
-    WebSearch(CodexWebSearchEventRequest),
-    ImageGeneration(CodexImageGenerationEventRequest),
-    AcceptedLineFingerprints(Box<CodexAcceptedLineFingerprintsEventRequest>),
+    AppMentioned(MidnightCoderAppMentionedEventRequest),
+    AppUsed(MidnightCoderAppUsedEventRequest),
+    HookRun(MidnightCoderHookRunEventRequest),
+    Compaction(Box<MidnightCoderCompactionEventRequest>),
+    Goal(Box<MidnightCoderGoalEventRequest>),
+    TurnEvent(Box<MidnightCoderTurnEventRequest>),
+    TurnSteer(MidnightCoderTurnSteerEventRequest),
+    CommandExecution(MidnightCoderCommandExecutionEventRequest),
+    FileChange(MidnightCoderFileChangeEventRequest),
+    McpToolCall(MidnightCoderMcpToolCallEventRequest),
+    DynamicToolCall(MidnightCoderDynamicToolCallEventRequest),
+    CollabAgentToolCall(MidnightCoderCollabAgentToolCallEventRequest),
+    WebSearch(MidnightCoderWebSearchEventRequest),
+    ImageGeneration(MidnightCoderImageGenerationEventRequest),
+    AcceptedLineFingerprints(Box<MidnightCoderAcceptedLineFingerprintsEventRequest>),
     #[allow(dead_code)]
-    ReviewEvent(CodexReviewEventRequest),
-    PluginUsed(CodexPluginUsedEventRequest),
-    PluginInstallRequested(CodexPluginInstallRequestedEventRequest),
-    PluginInstalled(CodexPluginEventRequest),
-    PluginUninstalled(CodexPluginEventRequest),
-    PluginEnabled(CodexPluginEventRequest),
-    PluginDisabled(CodexPluginEventRequest),
-    PluginInstallFailed(CodexPluginInstallFailedEventRequest),
-    ExternalAgentConfigImportCompleted(CodexOnboardingExternalAgentImportCompleteEventRequest),
-    ExternalAgentConfigImportFailure(CodexOnboardingExternalAgentImportFailureEventRequest),
+    ReviewEvent(MidnightCoderReviewEventRequest),
+    PluginUsed(MidnightCoderPluginUsedEventRequest),
+    PluginInstallRequested(MidnightCoderPluginInstallRequestedEventRequest),
+    PluginInstalled(MidnightCoderPluginEventRequest),
+    PluginUninstalled(MidnightCoderPluginEventRequest),
+    PluginEnabled(MidnightCoderPluginEventRequest),
+    PluginDisabled(MidnightCoderPluginEventRequest),
+    PluginInstallFailed(MidnightCoderPluginInstallFailedEventRequest),
+    ExternalAgentConfigImportCompleted(
+        MidnightCoderOnboardingExternalAgentImportCompleteEventRequest,
+    ),
+    ExternalAgentConfigImportFailure(MidnightCoderOnboardingExternalAgentImportFailureEventRequest),
 }
 
 impl TrackEventRequest {
@@ -98,7 +100,7 @@ impl TrackEventRequest {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexAcceptedLineFingerprintsEventParams {
+pub(crate) struct MidnightCoderAcceptedLineFingerprintsEventParams {
     pub(crate) event_type: &'static str,
     pub(crate) turn_id: String,
     pub(crate) thread_id: String,
@@ -112,9 +114,9 @@ pub(crate) struct CodexAcceptedLineFingerprintsEventParams {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexAcceptedLineFingerprintsEventRequest {
+pub(crate) struct MidnightCoderAcceptedLineFingerprintsEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexAcceptedLineFingerprintsEventParams,
+    pub(crate) event_params: MidnightCoderAcceptedLineFingerprintsEventParams,
 }
 
 #[derive(Serialize)]
@@ -138,7 +140,7 @@ pub(crate) struct SkillInvocationEventParams {
 }
 
 #[derive(Clone, Serialize)]
-pub(crate) struct CodexAppServerClientMetadata {
+pub(crate) struct MidnightCoderAppServerClientMetadata {
     pub(crate) product_client_id: String,
     pub(crate) client_name: Option<String>,
     pub(crate) client_version: Option<String>,
@@ -147,7 +149,7 @@ pub(crate) struct CodexAppServerClientMetadata {
 }
 
 #[derive(Clone, Serialize)]
-pub(crate) struct CodexRuntimeMetadata {
+pub(crate) struct MidnightCoderRuntimeMetadata {
     pub(crate) codex_rs_version: String,
     pub(crate) runtime_os: String,
     pub(crate) runtime_os_version: String,
@@ -158,8 +160,8 @@ pub(crate) struct CodexRuntimeMetadata {
 pub(crate) struct ThreadInitializedEventParams {
     pub(crate) thread_id: String,
     pub(crate) session_id: String,
-    pub(crate) app_server_client: CodexAppServerClientMetadata,
-    pub(crate) runtime: CodexRuntimeMetadata,
+    pub(crate) app_server_client: MidnightCoderAppServerClientMetadata,
+    pub(crate) runtime: MidnightCoderRuntimeMetadata,
     pub(crate) model: String,
     pub(crate) ephemeral: bool,
     pub(crate) thread_source: Option<ThreadSource>,
@@ -221,7 +223,7 @@ pub enum GuardianReviewSessionKind {
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GuardianApprovalRequestSource {
-    /// Approval requested directly by the main Codex turn.
+    /// Approval requested directly by the main MidnightCoder turn.
     MainTurn,
     /// Approval requested by a delegated subagent and routed through the parent
     /// session for guardian review.
@@ -471,8 +473,8 @@ pub struct GuardianReviewSessionAnalyticsParams {
 #[derive(Serialize)]
 pub(crate) struct GuardianReviewEventPayload {
     pub(crate) session_id: String,
-    pub(crate) app_server_client: CodexAppServerClientMetadata,
-    pub(crate) runtime: CodexRuntimeMetadata,
+    pub(crate) app_server_client: MidnightCoderAppServerClientMetadata,
+    pub(crate) runtime: MidnightCoderRuntimeMetadata,
     #[serde(flatten)]
     pub(crate) guardian_review: GuardianReviewEventParams,
 }
@@ -516,14 +518,14 @@ pub(crate) enum ToolItemFailureKind {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexToolItemEventBase {
+pub(crate) struct MidnightCoderToolItemEventBase {
     pub(crate) thread_id: String,
     pub(crate) turn_id: String,
     /// App-server ThreadItem.id. For tool-originated items this generally
     /// corresponds to the originating core call_id.
     pub(crate) item_id: String,
-    pub(crate) app_server_client: CodexAppServerClientMetadata,
-    pub(crate) runtime: CodexRuntimeMetadata,
+    pub(crate) app_server_client: MidnightCoderAppServerClientMetadata,
+    pub(crate) runtime: MidnightCoderRuntimeMetadata,
     pub(crate) thread_source: Option<ThreadSource>,
     pub(crate) subagent_source: Option<String>,
     pub(crate) parent_thread_id: Option<String>,
@@ -594,13 +596,13 @@ pub(crate) enum ReviewResolution {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexReviewEventParams {
+pub(crate) struct MidnightCoderReviewEventParams {
     pub(crate) thread_id: String,
     pub(crate) turn_id: String,
     pub(crate) item_id: Option<String>,
     pub(crate) review_id: String,
-    pub(crate) app_server_client: CodexAppServerClientMetadata,
-    pub(crate) runtime: CodexRuntimeMetadata,
+    pub(crate) app_server_client: MidnightCoderAppServerClientMetadata,
+    pub(crate) runtime: MidnightCoderRuntimeMetadata,
     pub(crate) thread_source: Option<ThreadSource>,
     pub(crate) subagent_source: Option<String>,
     pub(crate) parent_thread_id: Option<String>,
@@ -616,9 +618,9 @@ pub(crate) struct CodexReviewEventParams {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexReviewEventRequest {
+pub(crate) struct MidnightCoderReviewEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexReviewEventParams,
+    pub(crate) event_params: MidnightCoderReviewEventParams,
 }
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -631,9 +633,9 @@ pub(crate) enum WebSearchActionKind {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexCommandExecutionEventParams {
+pub(crate) struct MidnightCoderCommandExecutionEventParams {
     #[serde(flatten)]
-    pub(crate) base: CodexToolItemEventBase,
+    pub(crate) base: MidnightCoderToolItemEventBase,
     pub(crate) command_execution_source: CommandExecutionSource,
     pub(crate) exit_code: Option<i32>,
     pub(crate) command_total_action_count: u64,
@@ -644,15 +646,15 @@ pub(crate) struct CodexCommandExecutionEventParams {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexCommandExecutionEventRequest {
+pub(crate) struct MidnightCoderCommandExecutionEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexCommandExecutionEventParams,
+    pub(crate) event_params: MidnightCoderCommandExecutionEventParams,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexFileChangeEventParams {
+pub(crate) struct MidnightCoderFileChangeEventParams {
     #[serde(flatten)]
-    pub(crate) base: CodexToolItemEventBase,
+    pub(crate) base: MidnightCoderToolItemEventBase,
     pub(crate) file_change_count: u64,
     pub(crate) file_add_count: u64,
     pub(crate) file_update_count: u64,
@@ -661,15 +663,15 @@ pub(crate) struct CodexFileChangeEventParams {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexFileChangeEventRequest {
+pub(crate) struct MidnightCoderFileChangeEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexFileChangeEventParams,
+    pub(crate) event_params: MidnightCoderFileChangeEventParams,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexMcpToolCallEventParams {
+pub(crate) struct MidnightCoderMcpToolCallEventParams {
     #[serde(flatten)]
-    pub(crate) base: CodexToolItemEventBase,
+    pub(crate) base: MidnightCoderToolItemEventBase,
     pub(crate) mcp_server_name: String,
     pub(crate) mcp_tool_name: String,
     pub(crate) mcp_error_present: bool,
@@ -677,15 +679,15 @@ pub(crate) struct CodexMcpToolCallEventParams {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexMcpToolCallEventRequest {
+pub(crate) struct MidnightCoderMcpToolCallEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexMcpToolCallEventParams,
+    pub(crate) event_params: MidnightCoderMcpToolCallEventParams,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexDynamicToolCallEventParams {
+pub(crate) struct MidnightCoderDynamicToolCallEventParams {
     #[serde(flatten)]
-    pub(crate) base: CodexToolItemEventBase,
+    pub(crate) base: MidnightCoderToolItemEventBase,
     pub(crate) dynamic_tool_name: String,
     pub(crate) success: Option<bool>,
     pub(crate) output_content_item_count: Option<u64>,
@@ -694,15 +696,15 @@ pub(crate) struct CodexDynamicToolCallEventParams {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexDynamicToolCallEventRequest {
+pub(crate) struct MidnightCoderDynamicToolCallEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexDynamicToolCallEventParams,
+    pub(crate) event_params: MidnightCoderDynamicToolCallEventParams,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexCollabAgentToolCallEventParams {
+pub(crate) struct MidnightCoderCollabAgentToolCallEventParams {
     #[serde(flatten)]
-    pub(crate) base: CodexToolItemEventBase,
+    pub(crate) base: MidnightCoderToolItemEventBase,
     pub(crate) sender_thread_id: String,
     pub(crate) receiver_thread_count: u64,
     pub(crate) receiver_thread_ids: Option<Vec<String>>,
@@ -714,42 +716,42 @@ pub(crate) struct CodexCollabAgentToolCallEventParams {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexCollabAgentToolCallEventRequest {
+pub(crate) struct MidnightCoderCollabAgentToolCallEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexCollabAgentToolCallEventParams,
+    pub(crate) event_params: MidnightCoderCollabAgentToolCallEventParams,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexWebSearchEventParams {
+pub(crate) struct MidnightCoderWebSearchEventParams {
     #[serde(flatten)]
-    pub(crate) base: CodexToolItemEventBase,
+    pub(crate) base: MidnightCoderToolItemEventBase,
     pub(crate) web_search_action: Option<WebSearchActionKind>,
     pub(crate) query_present: bool,
     pub(crate) query_count: Option<u64>,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexWebSearchEventRequest {
+pub(crate) struct MidnightCoderWebSearchEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexWebSearchEventParams,
+    pub(crate) event_params: MidnightCoderWebSearchEventParams,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexImageGenerationEventParams {
+pub(crate) struct MidnightCoderImageGenerationEventParams {
     #[serde(flatten)]
-    pub(crate) base: CodexToolItemEventBase,
+    pub(crate) base: MidnightCoderToolItemEventBase,
     pub(crate) revised_prompt_present: bool,
     pub(crate) saved_path_present: bool,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexImageGenerationEventRequest {
+pub(crate) struct MidnightCoderImageGenerationEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexImageGenerationEventParams,
+    pub(crate) event_params: MidnightCoderImageGenerationEventParams,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexAppMetadata {
+pub(crate) struct MidnightCoderAppMetadata {
     pub(crate) connector_id: Option<String>,
     pub(crate) thread_id: Option<String>,
     pub(crate) turn_id: Option<String>,
@@ -760,19 +762,19 @@ pub(crate) struct CodexAppMetadata {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexAppMentionedEventRequest {
+pub(crate) struct MidnightCoderAppMentionedEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexAppMetadata,
+    pub(crate) event_params: MidnightCoderAppMetadata,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexAppUsedEventRequest {
+pub(crate) struct MidnightCoderAppUsedEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexAppMetadata,
+    pub(crate) event_params: MidnightCoderAppMetadata,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexHookRunMetadata {
+pub(crate) struct MidnightCoderHookRunMetadata {
     pub(crate) thread_id: Option<String>,
     pub(crate) turn_id: Option<String>,
     pub(crate) product_client_id: Option<String>,
@@ -783,18 +785,18 @@ pub(crate) struct CodexHookRunMetadata {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexHookRunEventRequest {
+pub(crate) struct MidnightCoderHookRunEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexHookRunMetadata,
+    pub(crate) event_params: MidnightCoderHookRunMetadata,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexCompactionEventParams {
+pub(crate) struct MidnightCoderCompactionEventParams {
     pub(crate) thread_id: String,
     pub(crate) session_id: String,
     pub(crate) turn_id: String,
-    pub(crate) app_server_client: CodexAppServerClientMetadata,
-    pub(crate) runtime: CodexRuntimeMetadata,
+    pub(crate) app_server_client: MidnightCoderAppServerClientMetadata,
+    pub(crate) runtime: MidnightCoderRuntimeMetadata,
     pub(crate) thread_source: Option<ThreadSource>,
     pub(crate) subagent_source: Option<String>,
     pub(crate) parent_thread_id: Option<String>,
@@ -804,7 +806,7 @@ pub(crate) struct CodexCompactionEventParams {
     pub(crate) phase: CompactionPhase,
     pub(crate) strategy: CompactionStrategy,
     pub(crate) status: CompactionStatus,
-    pub(crate) codex_error_kind: Option<CodexErrKind>,
+    pub(crate) codex_error_kind: Option<MidnightCoderErrKind>,
     pub(crate) codex_error_http_status_code: Option<u16>,
     pub(crate) active_context_tokens_before: i64,
     pub(crate) active_context_tokens_after: i64,
@@ -817,18 +819,18 @@ pub(crate) struct CodexCompactionEventParams {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexCompactionEventRequest {
+pub(crate) struct MidnightCoderCompactionEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexCompactionEventParams,
+    pub(crate) event_params: MidnightCoderCompactionEventParams,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexGoalEventParams {
+pub(crate) struct MidnightCoderGoalEventParams {
     pub(crate) thread_id: String,
     pub(crate) session_id: String,
     pub(crate) turn_id: Option<String>,
-    pub(crate) app_server_client: CodexAppServerClientMetadata,
-    pub(crate) runtime: CodexRuntimeMetadata,
+    pub(crate) app_server_client: MidnightCoderAppServerClientMetadata,
+    pub(crate) runtime: MidnightCoderRuntimeMetadata,
     pub(crate) thread_source: Option<ThreadSource>,
     pub(crate) subagent_source: Option<String>,
     pub(crate) parent_thread_id: Option<String>,
@@ -841,21 +843,21 @@ pub(crate) struct CodexGoalEventParams {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexGoalEventRequest {
+pub(crate) struct MidnightCoderGoalEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexGoalEventParams,
+    pub(crate) event_params: MidnightCoderGoalEventParams,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexTurnEventParams {
+pub(crate) struct MidnightCoderTurnEventParams {
     pub(crate) thread_id: String,
     pub(crate) session_id: String,
     pub(crate) turn_id: String,
     // TODO(rhan-oai): Populate once queued/default submission type is plumbed from
     // the turn/start callsites instead of always being reported as None.
     pub(crate) submission_type: Option<TurnSubmissionType>,
-    pub(crate) app_server_client: CodexAppServerClientMetadata,
-    pub(crate) runtime: CodexRuntimeMetadata,
+    pub(crate) app_server_client: MidnightCoderAppServerClientMetadata,
+    pub(crate) runtime: MidnightCoderRuntimeMetadata,
     pub(crate) ephemeral: bool,
     pub(crate) thread_source: Option<ThreadSource>,
     pub(crate) initialization_mode: ThreadInitializationMode,
@@ -876,8 +878,8 @@ pub(crate) struct CodexTurnEventParams {
     pub(crate) num_input_images: usize,
     pub(crate) is_first_turn: bool,
     pub(crate) status: Option<TurnStatus>,
-    pub(crate) turn_error: Option<CodexErrorInfo>,
-    pub(crate) codex_error_kind: Option<CodexErrKind>,
+    pub(crate) turn_error: Option<MidnightCoderErrorInfo>,
+    pub(crate) codex_error_kind: Option<MidnightCoderErrKind>,
     pub(crate) codex_error_http_status_code: Option<u16>,
     pub(crate) steer_count: Option<usize>,
     pub(crate) total_tool_call_count: Option<usize>,
@@ -906,19 +908,19 @@ pub(crate) struct CodexTurnEventParams {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexTurnEventRequest {
+pub(crate) struct MidnightCoderTurnEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexTurnEventParams,
+    pub(crate) event_params: MidnightCoderTurnEventParams,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexTurnSteerEventParams {
+pub(crate) struct MidnightCoderTurnSteerEventParams {
     pub(crate) thread_id: String,
     pub(crate) session_id: String,
     pub(crate) expected_turn_id: Option<String>,
     pub(crate) accepted_turn_id: Option<String>,
-    pub(crate) app_server_client: CodexAppServerClientMetadata,
-    pub(crate) runtime: CodexRuntimeMetadata,
+    pub(crate) app_server_client: MidnightCoderAppServerClientMetadata,
+    pub(crate) runtime: MidnightCoderRuntimeMetadata,
     pub(crate) thread_source: Option<ThreadSource>,
     pub(crate) subagent_source: Option<String>,
     pub(crate) parent_thread_id: Option<String>,
@@ -929,13 +931,13 @@ pub(crate) struct CodexTurnSteerEventParams {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexTurnSteerEventRequest {
+pub(crate) struct MidnightCoderTurnSteerEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexTurnSteerEventParams,
+    pub(crate) event_params: MidnightCoderTurnSteerEventParams,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexPluginMetadata {
+pub(crate) struct MidnightCoderPluginMetadata {
     pub(crate) plugin_id: Option<String>,
     pub(crate) remote_plugin_id: Option<String>,
     pub(crate) plugin_name: Option<String>,
@@ -947,9 +949,9 @@ pub(crate) struct CodexPluginMetadata {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexPluginUsedMetadata {
+pub(crate) struct MidnightCoderPluginUsedMetadata {
     #[serde(flatten)]
-    pub(crate) plugin: CodexPluginMetadata,
+    pub(crate) plugin: MidnightCoderPluginMetadata,
     pub(crate) mcp_server_names: Option<Vec<String>>,
     pub(crate) thread_id: Option<String>,
     pub(crate) turn_id: Option<String>,
@@ -957,7 +959,7 @@ pub(crate) struct CodexPluginUsedMetadata {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexPluginInstallRequestedPluginMetadata {
+pub(crate) struct MidnightCoderPluginInstallRequestedPluginMetadata {
     pub(crate) plugin_id: String,
     pub(crate) remote_plugin_id: Option<String>,
     pub(crate) plugin_name: String,
@@ -965,9 +967,9 @@ pub(crate) struct CodexPluginInstallRequestedPluginMetadata {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexPluginInstallRequestedMetadata {
+pub(crate) struct MidnightCoderPluginInstallRequestedMetadata {
     pub(crate) suggestion_id: String,
-    pub(crate) plugins: Vec<CodexPluginInstallRequestedPluginMetadata>,
+    pub(crate) plugins: Vec<MidnightCoderPluginInstallRequestedPluginMetadata>,
     pub(crate) source: crate::facts::PluginInstallRequestSource,
     pub(crate) thread_id: String,
     pub(crate) turn_id: String,
@@ -976,32 +978,32 @@ pub(crate) struct CodexPluginInstallRequestedMetadata {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexPluginInstallRequestedEventRequest {
+pub(crate) struct MidnightCoderPluginInstallRequestedEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexPluginInstallRequestedMetadata,
+    pub(crate) event_params: MidnightCoderPluginInstallRequestedMetadata,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexPluginEventRequest {
+pub(crate) struct MidnightCoderPluginEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexPluginMetadata,
+    pub(crate) event_params: MidnightCoderPluginMetadata,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexPluginInstallFailedMetadata {
+pub(crate) struct MidnightCoderPluginInstallFailedMetadata {
     #[serde(flatten)]
-    pub(crate) plugin: CodexPluginMetadata,
+    pub(crate) plugin: MidnightCoderPluginMetadata,
     pub(crate) error_type: String,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexPluginInstallFailedEventRequest {
+pub(crate) struct MidnightCoderPluginInstallFailedEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexPluginInstallFailedMetadata,
+    pub(crate) event_params: MidnightCoderPluginInstallFailedMetadata,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexOnboardingExternalAgentImportCompleteMetadata {
+pub(crate) struct MidnightCoderOnboardingExternalAgentImportCompleteMetadata {
     pub(crate) import_id: String,
     pub(crate) source: String,
     #[serde(rename = "type")]
@@ -1012,13 +1014,13 @@ pub(crate) struct CodexOnboardingExternalAgentImportCompleteMetadata {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexOnboardingExternalAgentImportCompleteEventRequest {
+pub(crate) struct MidnightCoderOnboardingExternalAgentImportCompleteEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexOnboardingExternalAgentImportCompleteMetadata,
+    pub(crate) event_params: MidnightCoderOnboardingExternalAgentImportCompleteMetadata,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexOnboardingExternalAgentImportFailureMetadata {
+pub(crate) struct MidnightCoderOnboardingExternalAgentImportFailureMetadata {
     pub(crate) import_id: String,
     pub(crate) source: String,
     #[serde(rename = "type")]
@@ -1029,15 +1031,15 @@ pub(crate) struct CodexOnboardingExternalAgentImportFailureMetadata {
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexOnboardingExternalAgentImportFailureEventRequest {
+pub(crate) struct MidnightCoderOnboardingExternalAgentImportFailureEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexOnboardingExternalAgentImportFailureMetadata,
+    pub(crate) event_params: MidnightCoderOnboardingExternalAgentImportFailureMetadata,
 }
 
 #[derive(Serialize)]
-pub(crate) struct CodexPluginUsedEventRequest {
+pub(crate) struct MidnightCoderPluginUsedEventRequest {
     pub(crate) event_type: &'static str,
-    pub(crate) event_params: CodexPluginUsedMetadata,
+    pub(crate) event_params: MidnightCoderPluginUsedMetadata,
 }
 
 pub(crate) fn plugin_state_event_type(state: PluginState) -> &'static str {
@@ -1052,8 +1054,8 @@ pub(crate) fn plugin_state_event_type(state: PluginState) -> &'static str {
 pub(crate) fn codex_app_metadata(
     tracking: &TrackEventsContext,
     app: AppInvocation,
-) -> CodexAppMetadata {
-    CodexAppMetadata {
+) -> MidnightCoderAppMetadata {
+    MidnightCoderAppMetadata {
         connector_id: app.connector_id,
         thread_id: Some(tracking.thread_id.clone()),
         turn_id: Some(tracking.turn_id.clone()),
@@ -1064,20 +1066,22 @@ pub(crate) fn codex_app_metadata(
     }
 }
 
-pub(crate) fn codex_plugin_metadata(plugin: PluginTelemetryMetadata) -> CodexPluginMetadata {
+pub(crate) fn codex_plugin_metadata(
+    plugin: PluginTelemetryMetadata,
+) -> MidnightCoderPluginMetadata {
     codex_plugin_metadata_with_product_client_id(plugin, originator().value)
 }
 
 fn codex_plugin_metadata_with_product_client_id(
     plugin: PluginTelemetryMetadata,
     product_client_id: String,
-) -> CodexPluginMetadata {
+) -> MidnightCoderPluginMetadata {
     let PluginTelemetryMetadata {
         plugin_id,
         remote_plugin_id,
         capability_summary,
     } = plugin;
-    CodexPluginMetadata {
+    MidnightCoderPluginMetadata {
         plugin_id: plugin_id.as_ref().map(PluginId::as_key),
         remote_plugin_id,
         plugin_name: plugin_id
@@ -1104,13 +1108,13 @@ fn codex_plugin_metadata_with_product_client_id(
 pub(crate) fn codex_plugin_install_requested_metadata(
     tracking: &TrackEventsContext,
     request: PluginInstallRequested,
-) -> CodexPluginInstallRequestedMetadata {
-    CodexPluginInstallRequestedMetadata {
+) -> MidnightCoderPluginInstallRequestedMetadata {
+    MidnightCoderPluginInstallRequestedMetadata {
         suggestion_id: request.suggestion_id,
         plugins: request
             .plugins
             .into_iter()
-            .map(|plugin| CodexPluginInstallRequestedPluginMetadata {
+            .map(|plugin| MidnightCoderPluginInstallRequestedPluginMetadata {
                 plugin_id: plugin.plugin_id,
                 remote_plugin_id: plugin.remote_plugin_id,
                 plugin_name: plugin.plugin_name,
@@ -1126,15 +1130,15 @@ pub(crate) fn codex_plugin_install_requested_metadata(
 }
 
 pub(crate) fn codex_compaction_event_params(
-    input: CodexCompactionEvent,
+    input: MidnightCoderCompactionEvent,
     session_id: String,
-    app_server_client: CodexAppServerClientMetadata,
-    runtime: CodexRuntimeMetadata,
+    app_server_client: MidnightCoderAppServerClientMetadata,
+    runtime: MidnightCoderRuntimeMetadata,
     thread_source: Option<ThreadSource>,
     subagent_source: Option<String>,
     parent_thread_id: Option<String>,
-) -> CodexCompactionEventParams {
-    CodexCompactionEventParams {
+) -> MidnightCoderCompactionEventParams {
+    MidnightCoderCompactionEventParams {
         thread_id: input.thread_id,
         session_id,
         turn_id: input.turn_id,
@@ -1163,15 +1167,15 @@ pub(crate) fn codex_compaction_event_params(
 }
 
 pub(crate) fn codex_goal_event_params(
-    input: CodexGoalEvent,
+    input: MidnightCoderGoalEvent,
     session_id: String,
-    app_server_client: CodexAppServerClientMetadata,
-    runtime: CodexRuntimeMetadata,
+    app_server_client: MidnightCoderAppServerClientMetadata,
+    runtime: MidnightCoderRuntimeMetadata,
     thread_source: Option<ThreadSource>,
     subagent_source: Option<String>,
     parent_thread_id: Option<String>,
-) -> CodexGoalEventParams {
-    CodexGoalEventParams {
+) -> MidnightCoderGoalEventParams {
+    MidnightCoderGoalEventParams {
         thread_id: input.thread_id,
         session_id,
         turn_id: input.turn_id,
@@ -1192,12 +1196,12 @@ pub(crate) fn codex_goal_event_params(
 pub(crate) fn codex_plugin_used_metadata(
     tracking: &TrackEventsContext,
     plugin: PluginTelemetryMetadata,
-) -> CodexPluginUsedMetadata {
+) -> MidnightCoderPluginUsedMetadata {
     let mcp_server_names = plugin
         .capability_summary
         .as_ref()
         .map(|summary| summary.mcp_server_names.clone());
-    CodexPluginUsedMetadata {
+    MidnightCoderPluginUsedMetadata {
         plugin: codex_plugin_metadata_with_product_client_id(
             plugin,
             tracking.product_client_id.clone(),
@@ -1212,8 +1216,8 @@ pub(crate) fn codex_plugin_used_metadata(
 pub(crate) fn codex_hook_run_metadata(
     tracking: &TrackEventsContext,
     hook: HookRunFact,
-) -> CodexHookRunMetadata {
-    CodexHookRunMetadata {
+) -> MidnightCoderHookRunMetadata {
+    MidnightCoderHookRunMetadata {
         thread_id: Some(tracking.thread_id.clone()),
         turn_id: Some(tracking.turn_id.clone()),
         product_client_id: Some(tracking.product_client_id.clone()),
@@ -1255,9 +1259,9 @@ fn analytics_hook_source(source: HookSource) -> &'static str {
     }
 }
 
-pub(crate) fn current_runtime_metadata() -> CodexRuntimeMetadata {
+pub(crate) fn current_runtime_metadata() -> MidnightCoderRuntimeMetadata {
     let os_info = os_info::get();
-    CodexRuntimeMetadata {
+    MidnightCoderRuntimeMetadata {
         codex_rs_version: env!("CARGO_PKG_VERSION").to_string(),
         runtime_os: std::env::consts::OS.to_string(),
         runtime_os_version: os_info.version().to_string(),
@@ -1271,7 +1275,7 @@ pub(crate) fn subagent_thread_started_event_request(
     let event_params = ThreadInitializedEventParams {
         thread_id: input.thread_id,
         session_id: input.session_id,
-        app_server_client: CodexAppServerClientMetadata {
+        app_server_client: MidnightCoderAppServerClientMetadata {
             product_client_id: input.product_client_id,
             client_name: Some(input.client_name),
             client_version: Some(input.client_version),

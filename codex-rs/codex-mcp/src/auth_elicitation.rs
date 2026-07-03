@@ -17,7 +17,7 @@ pub const CONNECTOR_AUTH_FAILURE_ERROR_HTTP_STATUS_CODE_KEY: &str = "error_http_
 pub const CONNECTOR_AUTH_FAILURE_ERROR_ACTION_KEY: &str = "error_action";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CodexAppsConnectorAuthFailure {
+pub struct MidnightCoderAppsConnectorAuthFailure {
     pub connector_id: String,
     pub connector_name: String,
     pub install_url: String,
@@ -29,7 +29,7 @@ pub struct CodexAppsConnectorAuthFailure {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CodexAppsAuthElicitation {
+pub struct MidnightCoderAppsAuthElicitation {
     pub meta: serde_json::Value,
     pub message: String,
     pub url: String,
@@ -37,13 +37,13 @@ pub struct CodexAppsAuthElicitation {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CodexAppsAuthElicitationPlan {
-    pub auth_failure: CodexAppsConnectorAuthFailure,
-    pub elicitation: CodexAppsAuthElicitation,
+pub struct MidnightCoderAppsAuthElicitationPlan {
+    pub auth_failure: MidnightCoderAppsConnectorAuthFailure,
+    pub elicitation: MidnightCoderAppsAuthElicitation,
 }
 
 #[derive(Serialize)]
-struct CodexAppsConnectorAuthFailureMeta<'a> {
+struct MidnightCoderAppsConnectorAuthFailureMeta<'a> {
     is_auth_failure: bool,
     connector_id: &'a str,
     connector_name: &'a str,
@@ -65,7 +65,7 @@ pub fn connector_auth_failure_from_tool_result(
     connector_id: Option<&str>,
     connector_name: Option<&str>,
     install_url: Option<String>,
-) -> Option<CodexAppsConnectorAuthFailure> {
+) -> Option<MidnightCoderAppsConnectorAuthFailure> {
     if result.is_error != Some(true) {
         return None;
     }
@@ -101,7 +101,7 @@ pub fn connector_auth_failure_from_tool_result(
         .unwrap_or(connector_id)
         .to_string();
 
-    Some(CodexAppsConnectorAuthFailure {
+    Some(MidnightCoderAppsConnectorAuthFailure {
         connector_id: connector_id.to_string(),
         connector_name,
         install_url: install_url?,
@@ -127,11 +127,11 @@ pub fn build_auth_elicitation_plan(
     connector_id: Option<&str>,
     connector_name: Option<&str>,
     install_url: Option<String>,
-) -> Option<CodexAppsAuthElicitationPlan> {
+) -> Option<MidnightCoderAppsAuthElicitationPlan> {
     let auth_failure =
         connector_auth_failure_from_tool_result(result, connector_id, connector_name, install_url)?;
     let elicitation = build_auth_elicitation(call_id, &auth_failure);
-    Some(CodexAppsAuthElicitationPlan {
+    Some(MidnightCoderAppsAuthElicitationPlan {
         auth_failure,
         elicitation,
     })
@@ -139,12 +139,12 @@ pub fn build_auth_elicitation_plan(
 
 pub fn build_auth_elicitation(
     call_id: &str,
-    auth_failure: &CodexAppsConnectorAuthFailure,
-) -> CodexAppsAuthElicitation {
-    CodexAppsAuthElicitation {
+    auth_failure: &MidnightCoderAppsConnectorAuthFailure,
+) -> MidnightCoderAppsAuthElicitation {
+    MidnightCoderAppsAuthElicitation {
         meta: serde_json::json!({
             MCP_TOOL_CODEX_APPS_META_KEY: {
-                CONNECTOR_AUTH_FAILURE_META_KEY: CodexAppsConnectorAuthFailureMeta {
+                CONNECTOR_AUTH_FAILURE_META_KEY: MidnightCoderAppsConnectorAuthFailureMeta {
                     is_auth_failure: true,
                     connector_id: &auth_failure.connector_id,
                     connector_name: &auth_failure.connector_name,
@@ -164,7 +164,7 @@ pub fn build_auth_elicitation(
 }
 
 pub fn auth_elicitation_completed_result(
-    auth_failure: &CodexAppsConnectorAuthFailure,
+    auth_failure: &MidnightCoderAppsConnectorAuthFailure,
     meta: Option<serde_json::Value>,
 ) -> CallToolResult {
     CallToolResult {
@@ -197,7 +197,7 @@ fn string_auth_failure_field(
         .map(ToString::to_string)
 }
 
-fn auth_elicitation_message(auth_failure: &CodexAppsConnectorAuthFailure) -> String {
+fn auth_elicitation_message(auth_failure: &MidnightCoderAppsConnectorAuthFailure) -> String {
     match auth_failure.auth_reason.as_deref() {
         Some("oauth_upgrade_required") => format!(
             "Reconnect {} on ChatGPT to grant the permissions needed for this request.",
@@ -208,7 +208,7 @@ fn auth_elicitation_message(auth_failure: &CodexAppsConnectorAuthFailure) -> Str
             auth_failure.connector_name
         ),
         Some("missing_link") => format!(
-            "Sign in to {} on ChatGPT to use it in Codex.",
+            "Sign in to {} on ChatGPT to use it in MidnightCoder.",
             auth_failure.connector_name
         ),
         _ => format!(
@@ -257,7 +257,7 @@ mod tests {
                 Some("Google Calendar"),
                 Some("https://chatgpt.com/apps/google-calendar/connector_calendar".to_string()),
             ),
-            Some(CodexAppsConnectorAuthFailure {
+            Some(MidnightCoderAppsConnectorAuthFailure {
                 connector_id: "connector_calendar".to_string(),
                 connector_name: "Google Calendar".to_string(),
                 install_url: "https://chatgpt.com/apps/google-calendar/connector_calendar"
@@ -305,7 +305,7 @@ mod tests {
 
         assert_eq!(
             build_auth_elicitation("call_123", &auth_failure),
-            CodexAppsAuthElicitation {
+            MidnightCoderAppsAuthElicitation {
                 meta: serde_json::json!({
                     MCP_TOOL_CODEX_APPS_META_KEY: {
                         CONNECTOR_AUTH_FAILURE_META_KEY: {

@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from ._goal import _GoalOperationState
 from ._message_router import MessageRouter
 from ._version import __version__ as SDK_VERSION
-from .errors import CodexError, InvalidRequestError, TransportClosedError
+from .errors import InvalidRequestError, MidnightCoderError, TransportClosedError
 from .generated.notification_registry import NOTIFICATION_MODELS
 from .generated.v2_all import (
     AccountLoginCompletedNotification,
@@ -113,8 +113,8 @@ def _installed_codex_path() -> Path:
         from codex_cli_bin import bundled_codex_path
     except ImportError as exc:
         raise FileNotFoundError(
-            "Unable to locate the pinned Codex runtime. Install the published SDK build "
-            f"with its {RUNTIME_PKG_NAME} dependency, or set CodexConfig.codex_bin "
+            "Unable to locate the pinned MidnightCoder runtime. Install the published SDK build "
+            f"with its {RUNTIME_PKG_NAME} dependency, or set MidnightCoderConfig.codex_bin "
             "explicitly."
         ) from exc
 
@@ -161,24 +161,24 @@ def _path_env_key(env: dict[str, str]) -> str:
 
 
 @dataclass(frozen=True)
-class CodexBinResolverOps:
+class MidnightCoderBinResolverOps:
     installed_codex_path: Callable[[], Path]
     path_exists: Callable[[Path], bool]
 
 
-def _default_codex_bin_resolver_ops() -> CodexBinResolverOps:
-    return CodexBinResolverOps(
+def _default_codex_bin_resolver_ops() -> MidnightCoderBinResolverOps:
+    return MidnightCoderBinResolverOps(
         installed_codex_path=_installed_codex_path,
         path_exists=lambda path: path.exists(),
     )
 
 
-def resolve_codex_bin(config: "CodexConfig", ops: CodexBinResolverOps) -> Path:
+def resolve_codex_bin(config: "MidnightCoderConfig", ops: MidnightCoderBinResolverOps) -> Path:
     if config.codex_bin is not None:
         codex_bin = Path(config.codex_bin)
         if not ops.path_exists(codex_bin):
             raise FileNotFoundError(
-                f"Codex binary not found at {codex_bin}. Set CodexConfig.codex_bin "
+                f"MidnightCoder binary not found at {codex_bin}. Set MidnightCoderConfig.codex_bin "
                 "to a valid binary path."
             )
         return codex_bin
@@ -186,16 +186,16 @@ def resolve_codex_bin(config: "CodexConfig", ops: CodexBinResolverOps) -> Path:
     return ops.installed_codex_path()
 
 
-def _resolve_codex_bin(config: "CodexConfig") -> Path:
+def _resolve_codex_bin(config: "MidnightCoderConfig") -> Path:
     return resolve_codex_bin(config, _default_codex_bin_resolver_ops())
 
 
 @dataclass(slots=True)
-class CodexConfig:
-    """Configuration for launching and identifying the local Codex runtime.
+class MidnightCoderConfig:
+    """Configuration for launching and identifying the local MidnightCoder runtime.
 
-    Most callers can use ``Codex()`` without configuration. Set ``codex_bin``
-    only when intentionally using a specific local Codex executable.
+    Most callers can use ``MidnightCoder()`` without configuration. Set ``codex_bin``
+    only when intentionally using a specific local MidnightCoder executable.
     """
 
     codex_bin: str | None = None
@@ -204,20 +204,20 @@ class CodexConfig:
     cwd: str | None = None
     env: dict[str, str] | None = None
     client_name: str = "codex_python_sdk"
-    client_title: str = "Codex Python SDK"
+    client_title: str = "MidnightCoder Python SDK"
     client_version: str = SDK_VERSION
     experimental_api: bool = True
 
 
-class CodexClient:
+class MidnightCoderClient:
     """Synchronous typed JSON-RPC client for `codex app-server` over stdio."""
 
     def __init__(
         self,
-        config: CodexConfig | None = None,
+        config: MidnightCoderConfig | None = None,
         approval_handler: ApprovalHandler | None = None,
     ) -> None:
-        self.config = config or CodexConfig()
+        self.config = config or MidnightCoderConfig()
         self._approval_handler = approval_handler or self._default_approval_handler
         self._proc: subprocess.Popen[str] | None = None
         self._lock = threading.Lock()
@@ -228,7 +228,7 @@ class CodexClient:
         self._stderr_thread: threading.Thread | None = None
         self._reader_thread: threading.Thread | None = None
 
-    def __enter__(self) -> "CodexClient":
+    def __enter__(self) -> "MidnightCoderClient":
         self.start()
         return self
 
@@ -317,7 +317,7 @@ class CodexClient:
     ) -> ModelT:
         result = self._request_raw(method, params)
         if not isinstance(result, dict):
-            raise CodexError(f"{method} response must be a JSON object")
+            raise MidnightCoderError(f"{method} response must be a JSON object")
         return response_model.model_validate(result)
 
     def _request_raw(self, method: str, params: JsonObject | None = None) -> JsonValue:
@@ -587,7 +587,7 @@ class CodexClient:
             activated = True
             turn_id = state.wait_for_start(_GOAL_START_TIMEOUT_S)
             if turn_id is None:
-                raise CodexError(
+                raise MidnightCoderError(
                     "timed out waiting for goal turn to start after "
                     f"{int(_GOAL_START_TIMEOUT_S)} seconds"
                 )
@@ -835,28 +835,28 @@ class CodexClient:
 
     def _write_message(self, payload: JsonObject) -> None:
         if self._proc is None or self._proc.stdin is None:
-            raise TransportClosedError("Codex process is not running")
+            raise TransportClosedError("MidnightCoder process is not running")
         with self._lock:
             self._proc.stdin.write(json.dumps(payload) + "\n")
             self._proc.stdin.flush()
 
     def _read_message(self) -> dict[str, JsonValue]:
         if self._proc is None or self._proc.stdout is None:
-            raise TransportClosedError("Codex process is not running")
+            raise TransportClosedError("MidnightCoder process is not running")
 
         line = self._proc.stdout.readline()
         if not line:
             raise TransportClosedError(
-                f"Codex process closed stdout. stderr_tail={self._stderr_tail()[:2000]}"
+                f"MidnightCoder process closed stdout. stderr_tail={self._stderr_tail()[:2000]}"
             )
 
         try:
             message = json.loads(line)
         except json.JSONDecodeError as exc:
-            raise CodexError(f"Invalid JSON-RPC line: {line!r}") from exc
+            raise MidnightCoderError(f"Invalid JSON-RPC line: {line!r}") from exc
 
         if not isinstance(message, dict):
-            raise CodexError(f"Invalid JSON-RPC payload: {message!r}")
+            raise MidnightCoderError(f"Invalid JSON-RPC payload: {message!r}")
         return message
 
 

@@ -8,12 +8,12 @@ use codex_api::AgentIdentityTelemetry;
 use codex_api::AuthProvider;
 use codex_api::SharedAuthProvider;
 use codex_login::AuthManager;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_login::auth::AgentIdentityAuth;
 use codex_login::auth::AgentIdentityAuthError;
 use codex_login::auth::AgentIdentityAuthPolicy;
 use codex_model_provider_info::ModelProviderInfo;
-use codex_protocol::error::CodexErr;
+use codex_protocol::error::MidnightCoderErr;
 use codex_protocol::protocol::SessionSource;
 use http::HeaderMap;
 use http::HeaderValue;
@@ -136,11 +136,11 @@ pub(crate) fn auth_manager_for_provider(
 }
 
 pub(crate) fn resolve_provider_auth(
-    auth: Option<&CodexAuth>,
+    auth: Option<&MidnightCoderAuth>,
     provider: &ModelProviderInfo,
 ) -> codex_protocol::error::Result<SharedAuthProvider> {
-    if matches!(auth, Some(CodexAuth::BedrockApiKey(_))) {
-        return Err(CodexErr::UnsupportedOperation(
+    if matches!(auth, Some(MidnightCoderAuth::BedrockApiKey(_))) {
+        return Err(MidnightCoderErr::UnsupportedOperation(
             BEDROCK_API_KEY_UNSUPPORTED_MESSAGE.to_string(),
         ));
     }
@@ -157,7 +157,7 @@ pub(crate) fn resolve_provider_auth(
 
 pub(crate) async fn resolve_provider_auth_for_scope(
     auth_manager: Option<Arc<AuthManager>>,
-    auth: Option<&CodexAuth>,
+    auth: Option<&MidnightCoderAuth>,
     provider: &ModelProviderInfo,
     scope: ProviderAuthScope,
 ) -> codex_protocol::error::Result<ResolvedProviderAuth> {
@@ -166,7 +166,7 @@ pub(crate) async fn resolve_provider_auth_for_scope(
         session_source,
         agent_identity_session_fallback,
     } = scope;
-    if let Some(CodexAuth::AgentIdentity(agent_identity_auth)) = auth {
+    if let Some(MidnightCoderAuth::AgentIdentity(agent_identity_auth)) = auth {
         return Ok(ResolvedProviderAuth::for_agent_identity(
             agent_identity_auth.clone(),
         ));
@@ -217,10 +217,10 @@ pub(crate) async fn resolve_provider_auth_for_scope(
 
 fn should_bootstrap_chatgpt_agent_identity(
     agent_identity_policy: AgentIdentityAuthPolicy,
-    auth: Option<&CodexAuth>,
+    auth: Option<&MidnightCoderAuth>,
 ) -> bool {
     agent_identity_policy == AgentIdentityAuthPolicy::ChatGptAuth
-        && matches!(auth, Some(CodexAuth::Chatgpt(_)))
+        && matches!(auth, Some(MidnightCoderAuth::Chatgpt(_)))
 }
 
 fn bearer_auth_for_provider(
@@ -237,17 +237,19 @@ fn bearer_auth_for_provider(
     Ok(None)
 }
 
-/// Builds request-header auth for a first-party Codex auth snapshot.
-pub fn auth_provider_from_auth(auth: &CodexAuth) -> SharedAuthProvider {
+/// Builds request-header auth for a first-party MidnightCoder auth snapshot.
+pub fn auth_provider_from_auth(auth: &MidnightCoderAuth) -> SharedAuthProvider {
     match auth {
-        CodexAuth::AgentIdentity(auth) => {
+        MidnightCoderAuth::AgentIdentity(auth) => {
             Arc::new(AgentIdentityAuthProvider { auth: auth.clone() })
         }
-        CodexAuth::BedrockApiKey(_) => unreachable!("{BEDROCK_API_KEY_UNSUPPORTED_MESSAGE}"),
-        CodexAuth::ApiKey(_)
-        | CodexAuth::Chatgpt(_)
-        | CodexAuth::ChatgptAuthTokens(_)
-        | CodexAuth::PersonalAccessToken(_) => Arc::new(BearerAuthProvider {
+        MidnightCoderAuth::BedrockApiKey(_) => {
+            unreachable!("{BEDROCK_API_KEY_UNSUPPORTED_MESSAGE}")
+        }
+        MidnightCoderAuth::ApiKey(_)
+        | MidnightCoderAuth::Chatgpt(_)
+        | MidnightCoderAuth::ChatgptAuthTokens(_)
+        | MidnightCoderAuth::PersonalAccessToken(_) => Arc::new(BearerAuthProvider {
             token: auth.get_token().ok(),
             account_id: auth.get_account_id(),
             is_fedramp_account: auth.is_fedramp_account(),
@@ -343,7 +345,7 @@ mod tests {
 
     async fn chatgpt_auth_manager(
         agent_identity_authapi_base_url: String,
-    ) -> (PathBuf, Arc<AuthManager>, CodexAuth) {
+    ) -> (PathBuf, Arc<AuthManager>, MidnightCoderAuth) {
         let codex_home = test_codex_home();
         write_chatgpt_auth_json(&codex_home);
         let auth_manager = AuthManager::shared(
@@ -391,13 +393,13 @@ mod tests {
     #[test]
     fn openai_provider_rejects_bedrock_api_key_auth() {
         let provider = ModelProviderInfo::create_openai_provider(/*base_url*/ None);
-        let auth = CodexAuth::BedrockApiKey(BedrockApiKeyAuth {
+        let auth = MidnightCoderAuth::BedrockApiKey(BedrockApiKeyAuth {
             api_key: "bedrock-api-key-test".to_string(),
             region: "us-east-1".to_string(),
         });
 
         match resolve_provider_auth(Some(&auth), &provider) {
-            Err(CodexErr::UnsupportedOperation(message)) => {
+            Err(MidnightCoderErr::UnsupportedOperation(message)) => {
                 assert_eq!(message, BEDROCK_API_KEY_UNSUPPORTED_MESSAGE);
             }
             Err(err) => panic!("unexpected auth error: {err:?}"),
@@ -407,7 +409,7 @@ mod tests {
 
     #[tokio::test]
     async fn first_party_run_scope_uses_agent_assertion_and_exposes_telemetry() {
-        let auth = CodexAuth::AgentIdentity(
+        let auth = MidnightCoderAuth::AgentIdentity(
             agent_identity_auth(/*chatgpt_account_is_fedramp*/ false).await,
         );
         let provider = ModelProviderInfo::create_openai_provider(/*base_url*/ None);
@@ -443,7 +445,7 @@ mod tests {
     #[tokio::test]
     async fn agent_identity_auth_provider_preserves_account_routing_headers() {
         let auth = agent_identity_auth(/*chatgpt_account_is_fedramp*/ true).await;
-        let provider = auth_provider_from_auth(&CodexAuth::AgentIdentity(auth));
+        let provider = auth_provider_from_auth(&MidnightCoderAuth::AgentIdentity(auth));
 
         let headers = provider.to_auth_headers();
 

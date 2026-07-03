@@ -36,7 +36,16 @@ const SIDE_SLASH_COMMAND_UNAVAILABLE_HINT: &str =
     "Press Ctrl+C to return to the main thread first.";
 const GOAL_USAGE_HINT: &str = "Example: /goal improve benchmark coverage";
 const RAW_USAGE: &str = "Usage: /raw [on|off]";
+const COMPACT_USAGE: &str = "Usage: /compact [on|off|0|1]\n0 = summarize, 1 = cut history";
+const CONTEXT_USAGE: &str = "Usage: /context <tokens>";
+const MINI_MODEL_USAGE: &str = "Usage: /miniModel <model>";
+const RESUME_TYPE_USAGE: &str = "Usage: /resumeType [0|1|summarize|drop-history]";
 const USAGE_CHATGPT_LOGIN_REQUIRED: &str = "Sign in with ChatGPT to use /usage.";
+
+enum CompactCommandArg {
+    AutoCompaction(bool),
+    ResumeType(&'static str),
+}
 
 impl ChatWidget {
     /// Dispatch a bare slash command and record its staged local-history entry.
@@ -177,7 +186,7 @@ impl ChatWidget {
                 self.bottom_pane.show_selection_view(SelectionViewParams {
                     title: Some("Archive this session?".to_string()),
                     subtitle: Some(
-                        "Are you sure? This will archive the current session and exit Codex"
+                        "Are you sure? This will archive the current session and exit MidnightCoder"
                             .to_string(),
                     ),
                     footer_hint: Some(standard_popup_hint_line()),
@@ -271,6 +280,9 @@ impl ChatWidget {
             SlashCommand::Model => {
                 self.open_model_popup();
                 self.defer_input_until_settings_applied();
+            }
+            SlashCommand::ProviderConf => {
+                self.show_provider_config_prompt();
             }
             SlashCommand::Personality => {
                 self.open_personality_popup();
@@ -375,6 +387,15 @@ impl ChatWidget {
             }
             SlashCommand::Memories => {
                 self.open_memories_popup();
+            }
+            SlashCommand::Context => {
+                self.add_error_message(CONTEXT_USAGE.to_string());
+            }
+            SlashCommand::MiniModel => {
+                self.add_error_message(MINI_MODEL_USAGE.to_string());
+            }
+            SlashCommand::ResumeType => {
+                self.add_error_message(RESUME_TYPE_USAGE.to_string());
             }
             SlashCommand::Quit | SlashCommand::Exit => {
                 self.request_quit_without_confirmation();
@@ -709,6 +730,45 @@ impl ChatWidget {
                 }
                 _ => self.add_error_message(RAW_USAGE.to_string()),
             },
+            SlashCommand::Compact => match parse_compact_arg(trimmed) {
+                Some(CompactCommandArg::AutoCompaction(enabled)) => {
+                    self.app_event_tx
+                        .send(AppEvent::PersistAutoCompaction { enabled });
+                }
+                Some(CompactCommandArg::ResumeType(resume_type)) => {
+                    self.app_event_tx
+                        .send(AppEvent::PersistResumeTypeSelection {
+                            resume_type: resume_type.to_string(),
+                        });
+                }
+                None => self.add_error_message(COMPACT_USAGE.to_string()),
+            },
+            SlashCommand::Context => match parse_context_tokens(trimmed) {
+                Some(tokens) => {
+                    self.app_event_tx
+                        .send(AppEvent::PersistContextWindow { tokens });
+                }
+                None => self.add_error_message(CONTEXT_USAGE.to_string()),
+            },
+            SlashCommand::MiniModel => {
+                let model = trimmed.trim();
+                if model.is_empty() || model.contains(char::is_whitespace) {
+                    self.add_error_message(MINI_MODEL_USAGE.to_string());
+                } else {
+                    self.app_event_tx.send(AppEvent::PersistMiniModelSelection {
+                        model: model.to_string(),
+                    });
+                }
+            }
+            SlashCommand::ResumeType => match parse_resume_type(trimmed) {
+                Some(resume_type) => {
+                    self.app_event_tx
+                        .send(AppEvent::PersistResumeTypeSelection {
+                            resume_type: resume_type.to_string(),
+                        });
+                }
+                None => self.add_error_message(RESUME_TYPE_USAGE.to_string()),
+            },
             SlashCommand::Rename if !trimmed.is_empty() => {
                 if !self.ensure_thread_rename_allowed() {
                     return;
@@ -874,6 +934,10 @@ impl ChatWidget {
             SlashCommand::Resume if !trimmed.is_empty() => {
                 self.app_event_tx
                     .send(AppEvent::ResumeSessionByIdOrName(args));
+            }
+            SlashCommand::ProviderConf if !trimmed.is_empty() => {
+                self.app_event_tx
+                    .send(AppEvent::ConfigureProvider { address: args });
             }
             SlashCommand::SandboxReadRoot if !trimmed.is_empty() => {
                 self.app_event_tx
@@ -1044,6 +1108,9 @@ impl ChatWidget {
             | SlashCommand::Status
             | SlashCommand::Usage
             | SlashCommand::DebugConfig
+            | SlashCommand::Context
+            | SlashCommand::MiniModel
+            | SlashCommand::ResumeType
             | SlashCommand::Ps
             | SlashCommand::Stop
             | SlashCommand::MemoryDrop
@@ -1070,6 +1137,7 @@ impl ChatWidget {
             | SlashCommand::Compact
             | SlashCommand::Review
             | SlashCommand::Model
+            | SlashCommand::ProviderConf
             | SlashCommand::Personality
             | SlashCommand::Plan
             | SlashCommand::Goal
@@ -1146,5 +1214,37 @@ impl ChatWidget {
         ));
         self.bottom_pane.drain_pending_submission_state();
         false
+    }
+}
+
+fn parse_context_tokens(input: &str) -> Option<i64> {
+    let normalized = input.trim().replace('_', "");
+    let (digits, multiplier) = match normalized.as_bytes().last().copied() {
+        Some(b'k' | b'K') => (&normalized[..normalized.len() - 1], 1_000_i64),
+        Some(b'm' | b'M') => (&normalized[..normalized.len() - 1], 1_000_000_i64),
+        _ => (normalized.as_str(), 1_i64),
+    };
+    let tokens = digits.parse::<i64>().ok()?.checked_mul(multiplier)?;
+    (tokens > 0).then_some(tokens)
+}
+
+fn parse_resume_type(input: &str) -> Option<&'static str> {
+    match input.trim().to_ascii_lowercase().as_str() {
+        "0" | "summarize" | "sumarize" | "summary" | "resume" | "resumir" => Some("summarize"),
+        "1" | "drop-history" | "cut-history" | "cut" | "drop" | "prune-history" | "prune"
+        | "remove-history" | "cortar" => Some("drop-history"),
+        _ => None,
+    }
+}
+
+fn parse_compact_arg(input: &str) -> Option<CompactCommandArg> {
+    match input.trim().to_ascii_lowercase().as_str() {
+        "on" | "enable" | "enabled" | "true" | "ativar" | "ligar" => {
+            Some(CompactCommandArg::AutoCompaction(true))
+        }
+        "off" | "disable" | "disabled" | "false" | "desativar" | "desligar" => {
+            Some(CompactCommandArg::AutoCompaction(false))
+        }
+        _ => parse_resume_type(input).map(CompactCommandArg::ResumeType),
     }
 }

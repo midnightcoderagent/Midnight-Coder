@@ -161,7 +161,7 @@ enabled = true
         HashMap::new(),
         &store,
         /*plugin_skill_snapshots*/ None,
-        Some(Product::Codex),
+        Some(Product::MidnightCoder),
         /*remote_global_catalog_active*/ false,
     )
     .await;

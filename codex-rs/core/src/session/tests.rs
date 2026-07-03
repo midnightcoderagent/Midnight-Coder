@@ -13,6 +13,7 @@ use crate::session::step_context::StepContext;
 use crate::shell::default_user_shell;
 use crate::shell_snapshot::ShellSnapshot;
 use crate::skills::SkillRenderSideEffects;
+use crate::skills::default_skill_metadata_budget;
 use crate::skills::render::SkillMetadataBudget;
 use crate::test_support::models_manager_with_provider;
 use crate::tools::format_exec_output_str;
@@ -33,9 +34,11 @@ use codex_core_skills::HostSkillsSnapshot;
 use core_test_support::test_codex::local_selections;
 
 use codex_features::Feature;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_login::auth::AgentIdentityAuthPolicy;
 use codex_model_provider_info::ModelProviderInfo;
+use codex_model_provider_info::WireApi;
+use codex_model_provider_info::create_oss_provider_with_base_url;
 use codex_models_manager::bundled_models_response;
 use codex_models_manager::model_info;
 use codex_models_manager::test_support::construct_model_info_offline_for_tests;
@@ -115,13 +118,13 @@ use codex_protocol::models::ContentItem;
 use codex_protocol::models::InternalChatMessageMetadataPassthrough;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::CodexErrorInfo;
 use codex_protocol::protocol::CompactedItem;
 use codex_protocol::protocol::ConversationAudioParams;
 use codex_protocol::protocol::CreditsSnapshot;
 use codex_protocol::protocol::GranularApprovalConfig;
 use codex_protocol::protocol::InitialHistory;
 use codex_protocol::protocol::InterAgentCommunication;
+use codex_protocol::protocol::MidnightCoderErrorInfo;
 use codex_protocol::protocol::MultiAgentVersion;
 use codex_protocol::protocol::NetworkApprovalProtocol;
 use codex_protocol::protocol::RateLimitSnapshot;
@@ -1365,8 +1368,8 @@ async fn reload_user_config_layer_refreshes_hooks() -> anyhow::Result<()> {
     let session = make_session_with_config(|config| {
         config
             .features
-            .enable(Feature::CodexHooks)
-            .expect("enable Codex hooks");
+            .enable(Feature::MidnightCoderHooks)
+            .expect("enable MidnightCoder hooks");
     })
     .await?;
     let codex_home = session.codex_home().await;
@@ -1442,8 +1445,8 @@ async fn refresh_runtime_config_refreshes_hooks() -> anyhow::Result<()> {
         let mut config = (*state.session_configuration.original_config_do_not_use).clone();
         config
             .features
-            .enable(Feature::CodexHooks)
-            .expect("enable Codex hooks");
+            .enable(Feature::MidnightCoderHooks)
+            .expect("enable MidnightCoder hooks");
         state.session_configuration.original_config_do_not_use = Arc::new(config);
     }
     let codex_home = session.codex_home().await;
@@ -1810,7 +1813,7 @@ async fn record_inter_agent_communication_sets_turn_id_in_rollout_and_resume() {
 #[tokio::test]
 async fn record_inter_agent_communication_preserves_item_id_in_rollout_and_resume() {
     let (mut session, turn_context, _rx) = make_session_and_context_with_auth_and_config_and_rx(
-        CodexAuth::from_api_key("Test API Key"),
+        MidnightCoderAuth::from_api_key("Test API Key"),
         Vec::new(),
         |config| {
             let _ = config.features.enable(Feature::ItemIds);
@@ -1856,7 +1859,7 @@ async fn record_inter_agent_communication_preserves_item_id_in_rollout_and_resum
 
     let (resumed_session, _resumed_turn_context, _rx) =
         make_session_and_context_with_auth_and_config_and_rx(
-            CodexAuth::from_api_key("Test API Key"),
+            MidnightCoderAuth::from_api_key("Test API Key"),
             Vec::new(),
             |config| {
                 let _ = config.features.enable(Feature::ItemIds);
@@ -1876,7 +1879,7 @@ async fn record_inter_agent_communication_preserves_item_id_in_rollout_and_resum
 #[tokio::test]
 async fn prepares_image_failures_before_history_insertion() {
     let (session, turn_context, _rx) = make_session_and_context_with_auth_and_config_and_rx(
-        CodexAuth::from_api_key("Test API Key"),
+        MidnightCoderAuth::from_api_key("Test API Key"),
         Vec::new(),
         |config| {
             let _ = config.features.enable(Feature::ItemIds);
@@ -2265,6 +2268,48 @@ async fn recompute_token_usage_updates_model_context_window() {
 }
 
 #[tokio::test]
+async fn ollama_turns_bucket_context_for_responses_compat() {
+    let (_session, mut turn_context) = make_session_and_context().await;
+
+    let mut config = (*turn_context.config).clone();
+    config.model_provider_id = "ollama".to_string();
+    config.model_provider =
+        create_oss_provider_with_base_url("http://localhost:11434/v1", WireApi::Responses);
+    turn_context.config = Arc::new(config);
+    turn_context.model_info.context_window = Some(128_000);
+    turn_context.model_info.effective_context_window_percent = 100;
+
+    assert_eq!(
+        turn_context.provider_request_options().unwrap().num_ctx,
+        Some(131_072)
+    );
+    assert_eq!(turn_context.model_context_window(), Some(128_000));
+    assert_eq!(
+        default_skill_metadata_budget(turn_context.model_context_window()),
+        SkillMetadataBudget::Tokens(2_560)
+    );
+}
+
+#[tokio::test]
+async fn ollama_turns_send_default_context_without_model_metadata() {
+    let (_session, mut turn_context) = make_session_and_context().await;
+
+    let mut config = (*turn_context.config).clone();
+    config.model_provider_id = "ollama".to_string();
+    config.model_provider =
+        create_oss_provider_with_base_url("http://localhost:11434/v1", WireApi::Responses);
+    config.ollama_num_ctx = None;
+    turn_context.config = Arc::new(config);
+    turn_context.model_info.context_window = None;
+    turn_context.model_info.max_context_window = None;
+
+    assert_eq!(
+        turn_context.provider_request_options().unwrap().num_ctx,
+        Some(32_768)
+    );
+}
+
+#[tokio::test]
 async fn record_token_usage_info_notifies_extension_contributors() {
     struct SessionTokenUsageMarker;
     struct ThreadTokenUsageMarker;
@@ -2500,7 +2545,7 @@ async fn turn_error_lifecycle_exposes_error_and_stores() {
         thread_level_id: String,
         turn_level_id: String,
         turn_id: String,
-        error: CodexErrorInfo,
+        error: MidnightCoderErrorInfo,
         saw_session_store: bool,
         saw_thread_store: bool,
     }
@@ -2558,13 +2603,13 @@ async fn turn_error_lifecycle_exposes_error_and_stores() {
         thread_level_id: session.thread_id.to_string(),
         turn_level_id: turn_context.sub_id.clone(),
         turn_id: turn_context.sub_id.clone(),
-        error: CodexErrorInfo::UsageLimitExceeded,
+        error: MidnightCoderErrorInfo::UsageLimitExceeded,
         saw_session_store: true,
         saw_thread_store: true,
     };
 
     session
-        .emit_turn_error_lifecycle(&turn_context, CodexErrorInfo::UsageLimitExceeded)
+        .emit_turn_error_lifecycle(&turn_context, MidnightCoderErrorInfo::UsageLimitExceeded)
         .await;
 
     let actual = records
@@ -2718,7 +2763,7 @@ async fn record_initial_history_reconstructs_forked_transcript() {
 #[tokio::test]
 async fn start_new_context_window_assigns_and_persists_item_ids() {
     let (mut session, turn_context, _rx) = make_session_and_context_with_auth_and_config_and_rx(
-        CodexAuth::from_api_key("Test API Key"),
+        MidnightCoderAuth::from_api_key("Test API Key"),
         Vec::new(),
         |config| {
             let _ = config.features.enable(Feature::ItemIds);
@@ -2769,7 +2814,7 @@ async fn start_new_context_window_assigns_and_persists_item_ids() {
 #[tokio::test]
 async fn record_initial_history_assigns_and_persists_id_for_forked_response_item() {
     let (mut session, _turn_context, _rx) = make_session_and_context_with_auth_and_config_and_rx(
-        CodexAuth::from_api_key("Test API Key"),
+        MidnightCoderAuth::from_api_key("Test API Key"),
         Vec::new(),
         |config| {
             let _ = config.features.enable(Feature::ItemIds);
@@ -3209,7 +3254,7 @@ async fn thread_rollback_fails_without_persisted_thread_history() {
     );
     assert_eq!(
         error_event.codex_error_info,
-        Some(CodexErrorInfo::ThreadRollbackFailed)
+        Some(MidnightCoderErrorInfo::ThreadRollbackFailed)
     );
     assert_eq!(sess.clone_history().await.raw_items(), initial_context);
 }
@@ -3616,7 +3661,7 @@ async fn thread_rollback_fails_when_turn_in_progress() {
     let error_event = wait_for_thread_rollback_failed(&rx).await;
     assert_eq!(
         error_event.codex_error_info,
-        Some(CodexErrorInfo::ThreadRollbackFailed)
+        Some(MidnightCoderErrorInfo::ThreadRollbackFailed)
     );
 
     let history = sess.clone_history().await;
@@ -3637,7 +3682,7 @@ async fn thread_rollback_fails_when_num_turns_is_zero() {
     assert_eq!(error_event.message, "num_turns must be >= 1");
     assert_eq!(
         error_event.codex_error_info,
-        Some(CodexErrorInfo::ThreadRollbackFailed)
+        Some(MidnightCoderErrorInfo::ThreadRollbackFailed)
     );
 
     let history = sess.clone_history().await;
@@ -4026,7 +4071,8 @@ async fn wait_for_thread_rollback_failed(rx: &async_channel::Receiver<Event>) ->
             .expect("event");
         match evt.msg {
             EventMsg::Error(payload)
-                if payload.codex_error_info == Some(CodexErrorInfo::ThreadRollbackFailed) =>
+                if payload.codex_error_info
+                    == Some(MidnightCoderErrorInfo::ThreadRollbackFailed) =>
             {
                 return payload;
             }
@@ -4351,8 +4397,9 @@ async fn emit_subagent_session_started_includes_fork_lineage_and_originator() {
         .mount(&server)
         .await;
 
-    let auth_manager =
-        AuthManager::from_auth_for_testing(CodexAuth::create_dummy_chatgpt_auth_for_testing());
+    let auth_manager = AuthManager::from_auth_for_testing(
+        MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing(),
+    );
     let analytics_events_client = AnalyticsEventsClient::new(
         auth_manager,
         server.uri(),
@@ -5155,7 +5202,8 @@ async fn session_new_fails_when_zsh_fork_enabled_without_packaged_zsh() {
     config.zsh_path = None;
     let config = Arc::new(config);
 
-    let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(MidnightCoderAuth::from_api_key("Test API Key"));
     let models_manager = models_manager_with_provider(
         config.codex_home.to_path_buf(),
         auth_manager.clone(),
@@ -5282,7 +5330,8 @@ pub(crate) async fn make_session_and_context() -> (Session, TurnContext) {
     let config = build_test_config(codex_home.path()).await;
     let config = Arc::new(config);
     let thread_id = ThreadId::default();
-    let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(MidnightCoderAuth::from_api_key("Test API Key"));
     let models_manager = models_manager_with_provider(
         config.codex_home.to_path_buf(),
         auth_manager.clone(),
@@ -5535,7 +5584,8 @@ async fn make_session_with_config_and_rx(
     let mut config = build_test_config(codex_home.path()).await;
     mutator(&mut config);
     let config = Arc::new(config);
-    let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(MidnightCoderAuth::from_api_key("Test API Key"));
     let models_manager = models_manager_with_provider(
         config.codex_home.to_path_buf(),
         auth_manager.clone(),
@@ -5643,7 +5693,8 @@ async fn make_session_with_history_source_and_agent_control_and_rx(
     let mut config = build_test_config(codex_home.path()).await;
     config.ephemeral = true;
     let config = Arc::new(config);
-    let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("Test API Key"));
+    let auth_manager =
+        AuthManager::from_auth_for_testing(MidnightCoderAuth::from_api_key("Test API Key"));
     let models_manager = models_manager_with_provider(
         config.codex_home.to_path_buf(),
         auth_manager.clone(),
@@ -6426,7 +6477,7 @@ async fn submit_with_id_captures_current_span_trace_context() {
     let (tx_sub, rx_sub) = async_channel::bounded(1);
     let (_tx_event, rx_event) = async_channel::unbounded();
     let (_agent_status_tx, agent_status) = watch::channel(AgentStatus::PendingInit);
-    let codex = Codex {
+    let codex = MidnightCoder {
         tx_sub,
         rx_event,
         agent_status,
@@ -7158,7 +7209,7 @@ async fn shutdown_and_wait_allows_multiple_waiters() {
         assert_eq!(shutdown.op, Op::Shutdown);
         tokio::time::sleep(StdDuration::from_millis(50)).await;
     });
-    let codex = Arc::new(Codex {
+    let codex = Arc::new(MidnightCoder {
         tx_sub,
         rx_event,
         agent_status,
@@ -7196,7 +7247,7 @@ async fn shutdown_and_wait_waits_when_shutdown_is_already_in_progress() {
     let session_loop_handle = tokio::spawn(async move {
         let _ = shutdown_complete_rx.await;
     });
-    let codex = Arc::new(Codex {
+    let codex = Arc::new(MidnightCoder {
         tx_sub,
         rx_event,
         agent_status,
@@ -7234,7 +7285,7 @@ async fn shutdown_and_wait_shuts_down_cached_guardian_subagent() {
     let parent_session_loop_handle = tokio::spawn(async move {
         submission_loop(parent_session_for_loop, parent_config, parent_rx_sub).await;
     });
-    let parent_codex = Codex {
+    let parent_codex = MidnightCoder {
         tx_sub: parent_tx_sub,
         rx_event: parent_rx_event,
         agent_status: parent_agent_status,
@@ -7257,7 +7308,7 @@ async fn shutdown_and_wait_shuts_down_cached_guardian_subagent() {
             .send(())
             .expect("child shutdown signal should be delivered");
     });
-    let child_codex = Codex {
+    let child_codex = MidnightCoder {
         tx_sub: child_tx_sub,
         rx_event: child_rx_event,
         agent_status: child_agent_status,
@@ -7290,7 +7341,7 @@ async fn cached_guardian_subagent_exposes_its_rollout_path() {
     let (_child_tx_event, child_rx_event) = async_channel::unbounded();
     let (_child_status_tx, child_agent_status) = watch::channel(AgentStatus::PendingInit);
     let child_session_loop_handle = tokio::spawn(async {});
-    let child_codex = Codex {
+    let child_codex = MidnightCoder {
         tx_sub: child_tx_sub,
         rx_event: child_rx_event,
         agent_status: child_agent_status,
@@ -7323,7 +7374,7 @@ async fn shutdown_and_wait_shuts_down_tracked_ephemeral_guardian_review() {
     let parent_session_loop_handle = tokio::spawn(async move {
         submission_loop(parent_session_for_loop, parent_config, parent_rx_sub).await;
     });
-    let parent_codex = Codex {
+    let parent_codex = MidnightCoder {
         tx_sub: parent_tx_sub,
         rx_event: parent_rx_event,
         agent_status: parent_agent_status,
@@ -7346,7 +7397,7 @@ async fn shutdown_and_wait_shuts_down_tracked_ephemeral_guardian_review() {
             .send(())
             .expect("child shutdown signal should be delivered");
     });
-    let child_codex = Codex {
+    let child_codex = MidnightCoder {
         tx_sub: child_tx_sub,
         rx_event: child_rx_event,
         agent_status: child_agent_status,
@@ -7369,7 +7420,7 @@ async fn shutdown_and_wait_shuts_down_tracked_ephemeral_guardian_review() {
 }
 
 async fn make_session_and_context_with_auth_and_config_and_rx<F>(
-    auth: CodexAuth,
+    auth: MidnightCoderAuth,
     dynamic_tools: Vec<DynamicToolSpec>,
     configure_config: F,
 ) -> (
@@ -7391,7 +7442,7 @@ where
 }
 
 async fn make_session_and_context_with_auth_config_home_and_rx<F>(
-    auth: CodexAuth,
+    auth: MidnightCoderAuth,
     dynamic_tools: Vec<DynamicToolSpec>,
     codex_home: &Path,
     configure_config: F,
@@ -7645,7 +7696,7 @@ pub(crate) async fn make_session_and_context_with_dynamic_tools_and_rx(
     async_channel::Receiver<Event>,
 ) {
     make_session_and_context_with_auth_and_config_and_rx(
-        CodexAuth::from_api_key("Test API Key"),
+        MidnightCoderAuth::from_api_key("Test API Key"),
         dynamic_tools,
         |_config| {},
     )
@@ -8107,7 +8158,7 @@ async fn make_multi_agent_v2_usage_hint_test_session(
     enable_multi_agent_v2: bool,
 ) -> (Arc<Session>, Arc<TurnContext>) {
     let (session, turn_context, _rx_event) = make_session_and_context_with_auth_and_config_and_rx(
-        CodexAuth::from_api_key("Test API Key"),
+        MidnightCoderAuth::from_api_key("Test API Key"),
         Vec::new(),
         |config| {
             if enable_multi_agent_v2 {
@@ -8373,7 +8424,7 @@ async fn build_initial_context_omits_multi_agent_v2_usage_hints_when_feature_dis
 #[tokio::test]
 async fn build_initial_context_omits_multi_agent_v2_usage_hints_when_hint_is_empty() {
     let (session, turn_context, _rx_event) = make_session_and_context_with_auth_and_config_and_rx(
-        CodexAuth::from_api_key("Test API Key"),
+        MidnightCoderAuth::from_api_key("Test API Key"),
         Vec::new(),
         |config| {
             let _ = config.features.enable(Feature::MultiAgentV2);

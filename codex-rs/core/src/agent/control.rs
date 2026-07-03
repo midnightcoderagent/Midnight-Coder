@@ -19,8 +19,8 @@ use crate::thread_rollout_truncation::truncate_rollout_to_last_n_fork_turns;
 use codex_protocol::AgentPath;
 use codex_protocol::SessionId;
 use codex_protocol::ThreadId;
-use codex_protocol::error::CodexErr;
-use codex_protocol::error::Result as CodexResult;
+use codex_protocol::error::MidnightCoderErr;
+use codex_protocol::error::Result as MidnightCoderResult;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::MessagePhase;
 use codex_protocol::models::ResponseItem;
@@ -96,7 +96,7 @@ pub(crate) struct AgentControl {
     session_id: SessionId,
     /// Weak handle back to the global thread registry/state.
     /// This is `Weak` to avoid reference cycles and shadow persistence of the form
-    /// `ThreadManagerState -> CodexThread -> Session -> SessionServices -> ThreadManagerState`.
+    /// `ThreadManagerState -> MidnightCoderThread -> Session -> SessionServices -> ThreadManagerState`.
     manager: Weak<ThreadManagerState>,
     state: Arc<AgentRegistry>,
     v2_residency: Arc<V2Residency>,
@@ -140,7 +140,7 @@ impl AgentControl {
         &self,
         agent_id: ThreadId,
         initial_operation: Op,
-    ) -> CodexResult<String> {
+    ) -> MidnightCoderResult<String> {
         let state = self.upgrade()?;
         self.ensure_execution_capacity_for_op(agent_id, &initial_operation)
             .await?;
@@ -153,7 +153,7 @@ impl AgentControl {
         agent_id: ThreadId,
         state: &Arc<ThreadManagerState>,
         initial_operation: Op,
-    ) -> CodexResult<String> {
+    ) -> MidnightCoderResult<String> {
         let last_task_message = match &initial_operation {
             Op::InterAgentCommunication { communication } => {
                 last_task_message_from_communication(communication)
@@ -182,7 +182,7 @@ impl AgentControl {
         &self,
         agent_id: ThreadId,
         communication: InterAgentCommunication,
-    ) -> CodexResult<String> {
+    ) -> MidnightCoderResult<String> {
         let last_task_message = last_task_message_from_communication(&communication);
         let state = self.upgrade()?;
         let op = Op::InterAgentCommunication { communication };
@@ -202,7 +202,7 @@ impl AgentControl {
     }
 
     /// Interrupt the current task for an existing agent thread.
-    pub(crate) async fn interrupt_agent(&self, agent_id: ThreadId) -> CodexResult<String> {
+    pub(crate) async fn interrupt_agent(&self, agent_id: ThreadId) -> MidnightCoderResult<String> {
         let state = self.upgrade()?;
         self.handle_thread_request_result(
             agent_id,
@@ -216,9 +216,9 @@ impl AgentControl {
         &self,
         agent_id: ThreadId,
         state: &Arc<ThreadManagerState>,
-        result: CodexResult<String>,
-    ) -> CodexResult<String> {
-        if matches!(result, Err(CodexErr::InternalAgentDied)) {
+        result: MidnightCoderResult<String>,
+    ) -> MidnightCoderResult<String> {
+        if matches!(result, Err(MidnightCoderErr::InternalAgentDied)) {
             let _ = state.remove_thread(&agent_id).await;
             self.forget_v2_residency(agent_id);
             self.state.release_spawned_thread(agent_id);
@@ -252,16 +252,19 @@ impl AgentControl {
         self.state.agent_metadata_for_thread(agent_id)
     }
 
-    pub(crate) fn ensure_agent_known(&self, agent_id: ThreadId) -> CodexResult<AgentMetadata> {
+    pub(crate) fn ensure_agent_known(
+        &self,
+        agent_id: ThreadId,
+    ) -> MidnightCoderResult<AgentMetadata> {
         self.state
             .agent_metadata_for_thread(agent_id)
-            .ok_or(CodexErr::ThreadNotFound(agent_id))
+            .ok_or(MidnightCoderErr::ThreadNotFound(agent_id))
     }
 
     pub(crate) async fn list_live_agent_subtree_thread_ids(
         &self,
         agent_id: ThreadId,
-    ) -> CodexResult<Vec<ThreadId>> {
+    ) -> MidnightCoderResult<Vec<ThreadId>> {
         let mut thread_ids = vec![agent_id];
         thread_ids.extend(self.live_thread_spawn_descendants(agent_id).await?);
         Ok(thread_ids)
@@ -285,17 +288,17 @@ impl AgentControl {
         _current_thread_id: ThreadId,
         current_session_source: &SessionSource,
         agent_reference: &str,
-    ) -> CodexResult<ThreadId> {
+    ) -> MidnightCoderResult<ThreadId> {
         let current_agent_path = current_session_source
             .get_agent_path()
             .unwrap_or_else(AgentPath::root);
         let agent_path = current_agent_path
             .resolve(agent_reference)
-            .map_err(CodexErr::UnsupportedOperation)?;
+            .map_err(MidnightCoderErr::UnsupportedOperation)?;
         if let Some(thread_id) = self.state.agent_id_for_path(&agent_path) {
             return Ok(thread_id);
         }
-        Err(CodexErr::UnsupportedOperation(format!(
+        Err(MidnightCoderErr::UnsupportedOperation(format!(
             "live agent path `{}` not found",
             agent_path.as_str()
         )))
@@ -305,7 +308,7 @@ impl AgentControl {
     pub(crate) async fn subscribe_status(
         &self,
         agent_id: ThreadId,
-    ) -> CodexResult<watch::Receiver<AgentStatus>> {
+    ) -> MidnightCoderResult<watch::Receiver<AgentStatus>> {
         let state = self.upgrade()?;
         let thread = state.get_thread(agent_id).await?;
         Ok(thread.subscribe_status())
@@ -337,7 +340,7 @@ impl AgentControl {
         &self,
         current_session_source: &SessionSource,
         path_prefix: Option<&str>,
-    ) -> CodexResult<Vec<ListedAgent>> {
+    ) -> MidnightCoderResult<Vec<ListedAgent>> {
         let state = self.upgrade()?;
         let resolved_prefix = path_prefix
             .map(|prefix| {
@@ -345,7 +348,7 @@ impl AgentControl {
                     .get_agent_path()
                     .unwrap_or_else(AgentPath::root)
                     .resolve(prefix)
-                    .map_err(CodexErr::UnsupportedOperation)
+                    .map_err(MidnightCoderErr::UnsupportedOperation)
             })
             .transpose()?;
 
@@ -505,7 +508,7 @@ impl AgentControl {
         agent_path: Option<AgentPath>,
         agent_role: Option<String>,
         preferred_agent_nickname: Option<String>,
-    ) -> CodexResult<(SessionSource, AgentMetadata)> {
+    ) -> MidnightCoderResult<(SessionSource, AgentMetadata)> {
         if depth == 1 {
             self.state.register_root_thread(parent_thread_id);
         }
@@ -535,10 +538,10 @@ impl AgentControl {
         Ok((session_source, agent_metadata))
     }
 
-    fn upgrade(&self) -> CodexResult<Arc<ThreadManagerState>> {
-        self.manager
-            .upgrade()
-            .ok_or_else(|| CodexErr::UnsupportedOperation("thread manager dropped".to_string()))
+    fn upgrade(&self) -> MidnightCoderResult<Arc<ThreadManagerState>> {
+        self.manager.upgrade().ok_or_else(|| {
+            MidnightCoderErr::UnsupportedOperation("thread manager dropped".to_string())
+        })
     }
 
     async fn inherited_environments_for_source(
@@ -592,7 +595,7 @@ impl AgentControl {
     async fn open_thread_spawn_children(
         &self,
         parent_thread_id: ThreadId,
-    ) -> CodexResult<Vec<(ThreadId, AgentMetadata)>> {
+    ) -> MidnightCoderResult<Vec<(ThreadId, AgentMetadata)>> {
         let mut children_by_parent = self.live_thread_spawn_children().await?;
         Ok(children_by_parent
             .remove(&parent_thread_id)
@@ -601,7 +604,7 @@ impl AgentControl {
 
     async fn live_thread_spawn_children(
         &self,
-    ) -> CodexResult<HashMap<ThreadId, Vec<(ThreadId, AgentMetadata)>>> {
+    ) -> MidnightCoderResult<HashMap<ThreadId, Vec<(ThreadId, AgentMetadata)>>> {
         let state = self.upgrade()?;
         let mut children_by_parent = HashMap::<ThreadId, Vec<(ThreadId, AgentMetadata)>>::new();
 
@@ -636,7 +639,7 @@ impl AgentControl {
 
     async fn persist_thread_spawn_edge_for_source(
         &self,
-        child_thread: &crate::CodexThread,
+        child_thread: &crate::MidnightCoderThread,
         child_thread_id: ThreadId,
         session_source: Option<&SessionSource>,
     ) {
@@ -668,7 +671,7 @@ impl AgentControl {
     async fn live_thread_spawn_descendants(
         &self,
         root_thread_id: ThreadId,
-    ) -> CodexResult<Vec<ThreadId>> {
+    ) -> MidnightCoderResult<Vec<ThreadId>> {
         let mut children_by_parent = self.live_thread_spawn_children().await?;
         let mut descendants = Vec::new();
         let mut stack = children_by_parent

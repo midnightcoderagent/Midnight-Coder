@@ -83,7 +83,7 @@ async fn first_layer_config_error_from_entries(layers: &[ConfigLayerEntry]) -> O
 /// hooks, rules, deny-read permissions, and remote sandbox config:
 ///
 /// - system    `/etc/codex/requirements.toml` (Unix) or
-///   `%ProgramData%\OpenAI\Codex\requirements.toml` (Windows)
+///   `%ProgramData%\OpenAI\MidnightCoder\requirements.toml` (Windows)
 /// - cloud:    enterprise-managed cloud config bundle requirements
 /// - legacy:   managed_config.toml reinterpreted as requirements.toml
 /// - admin:    managed preferences (*)
@@ -95,7 +95,7 @@ async fn first_layer_config_error_from_entries(layers: &[ConfigLayerEntry]) -> O
 ///
 /// - admin:    managed preferences (*)
 /// - system    `/etc/codex/config.toml` (Unix) or
-///   `%ProgramData%\OpenAI\Codex\config.toml` (Windows)
+///   `%ProgramData%\OpenAI\MidnightCoder\config.toml` (Windows)
 /// - cloud     enterprise-managed cloud config bundle fragments
 /// - user      `${CODEX_HOME}/config.toml`
 /// - profile   `${CODEX_HOME}/<name>.config.toml`, when selected
@@ -658,7 +658,7 @@ fn windows_codex_system_dir() -> PathBuf {
         );
         PathBuf::from(DEFAULT_PROGRAM_DATA_DIR_WINDOWS)
     });
-    program_data.join("OpenAI").join("Codex")
+    program_data.join("MidnightCoder").join("MidnightCoder")
 }
 
 #[cfg(windows)]
@@ -793,7 +793,7 @@ fn legacy_requirements_to_toml_value(legacy: LegacyManagedConfigToml) -> io::Res
     }
     if let Some(sandbox_mode) = sandbox_mode {
         let required_mode: SandboxModeRequirement = sandbox_mode.into();
-        // Allowing read-only is a requirement for Codex to function correctly.
+        // Allowing read-only is a requirement for MidnightCoder to function correctly.
         // So in this backfill path, we append read-only if it's not already specified.
         let mut allowed_modes = vec![SandboxModeRequirement::ReadOnly];
         if required_mode != SandboxModeRequirement::ReadOnly {
@@ -1517,8 +1517,8 @@ foo = "xyzzy"
     fn windows_system_requirements_toml_file_uses_expected_suffix() {
         let expected = windows_program_data_dir_from_known_folder()
             .unwrap_or_else(|_| PathBuf::from(DEFAULT_PROGRAM_DATA_DIR_WINDOWS))
-            .join("OpenAI")
-            .join("Codex")
+            .join("MidnightCoder")
+            .join("MidnightCoder")
             .join("requirements.toml");
         assert_eq!(
             windows_system_requirements_toml_file()
@@ -1530,7 +1530,11 @@ foo = "xyzzy"
             windows_system_requirements_toml_file()
                 .expect("requirements.toml path")
                 .as_path()
-                .ends_with(Path::new("OpenAI").join("Codex").join("requirements.toml"))
+                .ends_with(
+                    Path::new("MidnightCoder")
+                        .join("MidnightCoder")
+                        .join("requirements.toml")
+                )
         );
     }
 
@@ -1539,8 +1543,8 @@ foo = "xyzzy"
     fn windows_system_config_toml_file_uses_expected_suffix() {
         let expected = windows_program_data_dir_from_known_folder()
             .unwrap_or_else(|_| PathBuf::from(DEFAULT_PROGRAM_DATA_DIR_WINDOWS))
-            .join("OpenAI")
-            .join("Codex")
+            .join("MidnightCoder")
+            .join("MidnightCoder")
             .join("config.toml");
         assert_eq!(
             windows_system_config_toml_file()
@@ -1552,7 +1556,11 @@ foo = "xyzzy"
             windows_system_config_toml_file()
                 .expect("config.toml path")
                 .as_path()
-                .ends_with(Path::new("OpenAI").join("Codex").join("config.toml"))
+                .ends_with(
+                    Path::new("MidnightCoder")
+                        .join("MidnightCoder")
+                        .join("config.toml")
+                )
         );
     }
 }

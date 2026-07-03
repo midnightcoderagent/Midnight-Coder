@@ -11,11 +11,11 @@ ensure_local_sdk_src()
 
 import asyncio
 
-from openai_codex import AsyncCodex
+from openai_codex import AsyncMidnightCoder
 
 
 async def main() -> None:
-    async with AsyncCodex(config=runtime_config()) as codex:
+    async with AsyncMidnightCoder(config=runtime_config()) as codex:
         # Browser login returns a live handle. Open `auth_url` and await `wait()`
         # in a real app; this example cancels immediately so it stays non-blocking.
         login = await codex.login_chatgpt()

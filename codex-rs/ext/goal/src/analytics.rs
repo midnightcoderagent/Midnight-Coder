@@ -1,6 +1,6 @@
 use codex_analytics::AnalyticsEventsClient;
-use codex_analytics::CodexGoalEvent;
 use codex_analytics::GoalEventKind;
+use codex_analytics::MidnightCoderGoalEvent;
 
 #[derive(Clone)]
 pub(crate) struct GoalAnalytics {
@@ -60,7 +60,7 @@ impl GoalAnalytics {
                 (None, None)
             }
         };
-        self.client.track_goal_event(CodexGoalEvent {
+        self.client.track_goal_event(MidnightCoderGoalEvent {
             thread_id: goal.thread_id.to_string(),
             turn_id: match attribution {
                 GoalEventAttribution::Turn(turn_id) => Some(turn_id.to_string()),

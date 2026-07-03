@@ -1,6 +1,6 @@
-//! Shared raw tool cache for the host-owned Codex Apps MCP server.
+//! Shared raw tool cache for the host-owned MidnightCoder Apps MCP server.
 //!
-//! Cache entries are process-local live state scoped by the active Codex auth
+//! Cache entries are process-local live state scoped by the active MidnightCoder auth
 //! key. Disk is best-effort cold-start persistence; entries do not reread disk
 //! after creation.
 
@@ -15,7 +15,7 @@ use std::time::Instant;
 
 use anyhow::Context;
 use arc_swap::ArcSwapOption;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_protocol::mcp::McpServerInfo;
 use serde::Deserialize;
 use serde::Serialize;
@@ -29,45 +29,49 @@ use crate::tools::ToolInfo;
 
 const MCP_TOOLS_CACHE_PUBLISH_DURATION_METRIC: &str = "codex.mcp.tools.cache_publish.duration_ms";
 
-/// The CodexAuth bits that identify a Codex Apps catalog.
+/// The MidnightCoderAuth bits that identify a MidnightCoder Apps catalog.
 ///
 /// Debug bearer-token overrides bypass the shared cache, so shared entries only
-/// need the CodexAuth-backed identity.
+/// need the MidnightCoderAuth-backed identity.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct CodexAppsToolsCacheKey {
+pub struct MidnightCoderAppsToolsCacheKey {
     pub(crate) account_id: Option<String>,
     pub(crate) chatgpt_user_id: Option<String>,
     pub(crate) is_workspace_account: bool,
 }
 
-/// Builds the CodexAuth-backed Codex Apps cache key.
-pub fn codex_apps_tools_cache_key(auth: Option<&CodexAuth>) -> CodexAppsToolsCacheKey {
-    CodexAppsToolsCacheKey {
-        account_id: auth.and_then(CodexAuth::get_account_id),
-        chatgpt_user_id: auth.and_then(CodexAuth::get_chatgpt_user_id),
-        is_workspace_account: auth.is_some_and(CodexAuth::is_workspace_account),
+/// Builds the MidnightCoderAuth-backed MidnightCoder Apps cache key.
+pub fn codex_apps_tools_cache_key(
+    auth: Option<&MidnightCoderAuth>,
+) -> MidnightCoderAppsToolsCacheKey {
+    MidnightCoderAppsToolsCacheKey {
+        account_id: auth.and_then(MidnightCoderAuth::get_account_id),
+        chatgpt_user_id: auth.and_then(MidnightCoderAuth::get_chatgpt_user_id),
+        is_workspace_account: auth.is_some_and(MidnightCoderAuth::is_workspace_account),
     }
 }
 
-/// Process-scoped registry for shared Codex Apps raw tool snapshots.
+/// Process-scoped registry for shared MidnightCoder Apps raw tool snapshots.
 ///
-/// Two clients share an entry only when they would read the same Codex Apps
+/// Two clients share an entry only when they would read the same MidnightCoder Apps
 /// catalog. New entries may seed from disk; live entries read from memory only.
 #[derive(Clone, Default)]
-pub struct CodexAppsToolsCache {
-    entries: Arc<Mutex<HashMap<CodexAppsToolsCacheIdentity, Arc<CodexAppsToolsCacheEntry>>>>,
+pub struct MidnightCoderAppsToolsCache {
+    entries: Arc<
+        Mutex<HashMap<MidnightCoderAppsToolsCacheIdentity, Arc<MidnightCoderAppsToolsCacheEntry>>>,
+    >,
 }
 
-/// Handle to one shared Codex Apps tools cache entry.
+/// Handle to one shared MidnightCoder Apps tools cache entry.
 ///
 /// The connection manager creates this from the auth key, then tool
 /// reads and refreshes for that managed client use the same entry.
 #[derive(Clone)]
-pub(crate) struct CodexAppsToolsCacheContext {
-    entry: Arc<CodexAppsToolsCacheEntry>,
+pub(crate) struct MidnightCoderAppsToolsCacheContext {
+    entry: Arc<MidnightCoderAppsToolsCacheEntry>,
 }
 
-impl CodexAppsToolsCacheContext {
+impl MidnightCoderAppsToolsCacheContext {
     pub(crate) fn tools_cache_path(&self) -> PathBuf {
         self.entry
             .identity
@@ -93,9 +97,9 @@ impl CodexAppsToolsCacheContext {
 
     pub(crate) fn begin_fetch(
         &self,
-        source: CodexAppsToolsFetchSource,
-    ) -> CodexAppsToolsFetchTicket {
-        CodexAppsToolsFetchTicket {
+        source: MidnightCoderAppsToolsFetchSource,
+    ) -> MidnightCoderAppsToolsFetchTicket {
+        MidnightCoderAppsToolsFetchTicket {
             generation: self
                 .entry
                 .next_fetch_generation
@@ -107,7 +111,7 @@ impl CodexAppsToolsCacheContext {
 
     pub(crate) fn publish_if_newest_accepted(
         &self,
-        ticket: CodexAppsToolsFetchTicket,
+        ticket: MidnightCoderAppsToolsFetchTicket,
         server_info: &McpServerInfo,
         tools: Vec<ToolInfo>,
     ) -> Vec<ToolInfo> {
@@ -141,32 +145,32 @@ impl CodexAppsToolsCacheContext {
     }
 }
 
-impl CodexAppsToolsCache {
+impl MidnightCoderAppsToolsCache {
     pub(crate) fn context(
         &self,
         codex_home: PathBuf,
-        auth_key: CodexAppsToolsCacheKey,
-    ) -> CodexAppsToolsCacheContext {
-        let identity = CodexAppsToolsCacheIdentity {
+        auth_key: MidnightCoderAppsToolsCacheKey,
+    ) -> MidnightCoderAppsToolsCacheContext {
+        let identity = MidnightCoderAppsToolsCacheIdentity {
             codex_home,
             auth_key,
         };
         let mut entries = lock_unpoisoned(&self.entries);
         let entry = entries
             .entry(identity.clone())
-            .or_insert_with(|| Arc::new(CodexAppsToolsCacheEntry::new(identity)))
+            .or_insert_with(|| Arc::new(MidnightCoderAppsToolsCacheEntry::new(identity)))
             .clone();
-        CodexAppsToolsCacheContext { entry }
+        MidnightCoderAppsToolsCacheContext { entry }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum CodexAppsToolsFetchSource {
+pub(crate) enum MidnightCoderAppsToolsFetchSource {
     Startup,
     HardRefresh,
 }
 
-impl CodexAppsToolsFetchSource {
+impl MidnightCoderAppsToolsFetchSource {
     fn as_str(self) -> &'static str {
         match self {
             Self::Startup => "startup",
@@ -175,20 +179,20 @@ impl CodexAppsToolsFetchSource {
     }
 }
 
-pub(crate) struct CodexAppsToolsFetchTicket {
+pub(crate) struct MidnightCoderAppsToolsFetchTicket {
     generation: u64,
-    source: CodexAppsToolsFetchSource,
+    source: MidnightCoderAppsToolsFetchSource,
 }
 
-struct CodexAppsToolsCacheEntry {
-    identity: CodexAppsToolsCacheIdentity,
+struct MidnightCoderAppsToolsCacheEntry {
+    identity: MidnightCoderAppsToolsCacheIdentity,
     current_tools: ArcSwapOption<Vec<ToolInfo>>,
     next_fetch_generation: AtomicU64,
     last_accepted_generation: Mutex<u64>,
 }
 
-impl CodexAppsToolsCacheEntry {
-    fn new(identity: CodexAppsToolsCacheIdentity) -> Self {
+impl MidnightCoderAppsToolsCacheEntry {
+    fn new(identity: MidnightCoderAppsToolsCacheIdentity) -> Self {
         let current_tools = load_cached_codex_apps_tools_for_identity(&identity).map(Arc::new);
         Self {
             identity,
@@ -199,17 +203,17 @@ impl CodexAppsToolsCacheEntry {
     }
 }
 
-/// Everything that decides whether two Codex Apps clients can share tools.
+/// Everything that decides whether two MidnightCoder Apps clients can share tools.
 ///
 /// The auth key says whose catalog we are reading. `codex_home` keeps the
 /// persisted cache under the right home directory.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct CodexAppsToolsCacheIdentity {
+struct MidnightCoderAppsToolsCacheIdentity {
     codex_home: PathBuf,
-    auth_key: CodexAppsToolsCacheKey,
+    auth_key: MidnightCoderAppsToolsCacheKey,
 }
 
-impl CodexAppsToolsCacheIdentity {
+impl MidnightCoderAppsToolsCacheIdentity {
     fn cache_path_in(&self, cache_dir: &str) -> PathBuf {
         // `codex_home` is already the parent directory. Keep it out of the
         // filename hash so non-UTF-8 Unix paths cannot collapse distinct auth
@@ -224,7 +228,7 @@ impl CodexAppsToolsCacheIdentity {
 
 #[cfg(test)]
 fn write_cached_codex_apps_tools_for_test(
-    cache_context: &CodexAppsToolsCacheContext,
+    cache_context: &MidnightCoderAppsToolsCacheContext,
     server_info: &McpServerInfo,
     tools: &[ToolInfo],
 ) {
@@ -236,61 +240,61 @@ fn write_cached_codex_apps_tools_for_test(
 }
 
 pub(crate) fn load_startup_cached_codex_apps_server_info(
-    cache_context: &CodexAppsToolsCacheContext,
+    cache_context: &MidnightCoderAppsToolsCacheContext,
 ) -> Option<McpServerInfo> {
     load_cached_codex_apps_server_info(cache_context)
 }
 
 #[cfg(test)]
 fn read_cached_codex_apps_tools(
-    cache_context: &CodexAppsToolsCacheContext,
+    cache_context: &MidnightCoderAppsToolsCacheContext,
 ) -> Option<Vec<ToolInfo>> {
     load_cached_codex_apps_tools_for_identity(&cache_context.entry.identity)
 }
 
 #[instrument(level = "trace", skip_all)]
 fn load_cached_codex_apps_tools_for_identity(
-    identity: &CodexAppsToolsCacheIdentity,
+    identity: &MidnightCoderAppsToolsCacheIdentity,
 ) -> Option<Vec<ToolInfo>> {
     let cache_path = identity.cache_path_in(CODEX_APPS_TOOLS_CACHE_DIR);
     let bytes = std::fs::read(cache_path).ok()?;
-    let cache: CodexAppsToolsDiskCache = serde_json::from_slice(&bytes).ok()?;
+    let cache: MidnightCoderAppsToolsDiskCache = serde_json::from_slice(&bytes).ok()?;
     (cache.schema_version == CODEX_APPS_TOOLS_CACHE_SCHEMA_VERSION).then_some(cache.tools)
 }
 
 fn write_cached_codex_apps_tools(
-    cache_context: &CodexAppsToolsCacheContext,
+    cache_context: &MidnightCoderAppsToolsCacheContext,
     tools: &[ToolInfo],
 ) -> anyhow::Result<()> {
     let cache_path = cache_context.tools_cache_path();
-    let bytes = serde_json::to_vec_pretty(&CodexAppsToolsDiskCache {
+    let bytes = serde_json::to_vec_pretty(&MidnightCoderAppsToolsDiskCache {
         schema_version: CODEX_APPS_TOOLS_CACHE_SCHEMA_VERSION,
         tools: tools.to_vec(),
     })
-    .context("failed to serialize Codex Apps tools cache")?;
+    .context("failed to serialize MidnightCoder Apps tools cache")?;
     write_codex_apps_cache_file(&cache_path, "tools", bytes)
 }
 
 #[instrument(level = "trace", skip_all)]
 fn load_cached_codex_apps_server_info(
-    cache_context: &CodexAppsToolsCacheContext,
+    cache_context: &MidnightCoderAppsToolsCacheContext,
 ) -> Option<McpServerInfo> {
     let bytes = std::fs::read(cache_context.server_info_cache_path()).ok()?;
-    let cache: CodexAppsServerInfoDiskCache = serde_json::from_slice(&bytes).ok()?;
+    let cache: MidnightCoderAppsServerInfoDiskCache = serde_json::from_slice(&bytes).ok()?;
     (cache.schema_version == CODEX_APPS_SERVER_INFO_CACHE_SCHEMA_VERSION)
         .then_some(cache.server_info)
 }
 
 fn write_cached_codex_apps_server_info(
-    cache_context: &CodexAppsToolsCacheContext,
+    cache_context: &MidnightCoderAppsToolsCacheContext,
     server_info: &McpServerInfo,
 ) -> anyhow::Result<()> {
     let cache_path = cache_context.server_info_cache_path();
-    let bytes = serde_json::to_vec_pretty(&CodexAppsServerInfoDiskCache {
+    let bytes = serde_json::to_vec_pretty(&MidnightCoderAppsServerInfoDiskCache {
         schema_version: CODEX_APPS_SERVER_INFO_CACHE_SCHEMA_VERSION,
         server_info: server_info.clone(),
     })
-    .context("failed to serialize Codex Apps server info cache")?;
+    .context("failed to serialize MidnightCoder Apps server info cache")?;
     write_codex_apps_cache_file(&cache_path, "server info", bytes)
 }
 
@@ -302,14 +306,14 @@ fn write_codex_apps_cache_file(
     if let Some(parent) = cache_path.parent() {
         std::fs::create_dir_all(parent).with_context(|| {
             format!(
-                "failed to create Codex Apps {cache_name} cache directory `{}`",
+                "failed to create MidnightCoder Apps {cache_name} cache directory `{}`",
                 parent.display()
             )
         })?;
     }
     std::fs::write(cache_path, bytes).with_context(|| {
         format!(
-            "failed to write Codex Apps {cache_name} cache `{}`",
+            "failed to write MidnightCoder Apps {cache_name} cache `{}`",
             cache_path.display()
         )
     })?;
@@ -317,18 +321,18 @@ fn write_codex_apps_cache_file(
 }
 
 fn persist_codex_apps_cache(
-    cache_context: &CodexAppsToolsCacheContext,
+    cache_context: &MidnightCoderAppsToolsCacheContext,
     server_info: &McpServerInfo,
     tools: &[ToolInfo],
 ) {
     let cache_write_start = Instant::now();
     let tools_result = write_cached_codex_apps_tools(cache_context, tools);
     if let Err(err) = &tools_result {
-        tracing::warn!("failed to write Codex Apps tools cache: {err:#}");
+        tracing::warn!("failed to write MidnightCoder Apps tools cache: {err:#}");
     }
     let server_info_result = write_cached_codex_apps_server_info(cache_context, server_info);
     if let Err(err) = &server_info_result {
-        tracing::warn!("failed to write Codex Apps server info cache: {err:#}");
+        tracing::warn!("failed to write MidnightCoder Apps server info cache: {err:#}");
     }
     let status = if tools_result.is_ok() && server_info_result.is_ok() {
         "success"
@@ -343,13 +347,13 @@ fn persist_codex_apps_cache(
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct CodexAppsToolsDiskCache {
+struct MidnightCoderAppsToolsDiskCache {
     schema_version: u8,
     tools: Vec<ToolInfo>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct CodexAppsServerInfoDiskCache {
+struct MidnightCoderAppsServerInfoDiskCache {
     schema_version: u8,
     server_info: McpServerInfo,
 }

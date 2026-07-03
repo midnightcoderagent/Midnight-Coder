@@ -233,6 +233,7 @@ pub(crate) struct BottomPane {
     /// When a status row exists, this summary is mirrored inline in that row;
     /// when no status row exists, it renders as its own footer row.
     unified_exec_footer: UnifiedExecFooter,
+    status_activity_message: Option<String>,
     /// Preview of pending steers and queued drafts shown above the composer.
     pending_input_preview: PendingInputPreview,
     /// Inactive threads with pending approval requests.
@@ -290,6 +291,7 @@ impl BottomPane {
             is_task_running: false,
             status: None,
             unified_exec_footer: UnifiedExecFooter::new(),
+            status_activity_message: None,
             pending_input_preview: PendingInputPreview::new(),
             pending_thread_approvals: PendingThreadApprovals::new(),
             esc_backtrack_hint: false,
@@ -1276,8 +1278,32 @@ impl BottomPane {
     /// standalone unified-exec footer row to be visible.
     fn sync_status_inline_message(&mut self) {
         if let Some(status) = self.status.as_mut() {
-            status.update_inline_message(self.unified_exec_footer.summary_text());
+            let unified_exec_summary = self.unified_exec_footer.summary_text();
+            let message = match (
+                self.status_activity_message.as_deref(),
+                unified_exec_summary.as_deref(),
+            ) {
+                (Some(activity), Some(unified_exec)) => {
+                    Some(format!("{activity} · {unified_exec}"))
+                }
+                (Some(activity), None) => Some(activity.to_string()),
+                (None, Some(unified_exec)) => Some(unified_exec.to_string()),
+                (None, None) => None,
+            };
+            status.update_inline_message(message);
         }
+    }
+
+    pub(crate) fn set_status_activity_message(&mut self, message: Option<String>) {
+        let message = message
+            .map(|message| message.trim().to_string())
+            .filter(|message| !message.is_empty());
+        if self.status_activity_message == message {
+            return;
+        }
+        self.status_activity_message = message;
+        self.sync_status_inline_message();
+        self.request_redraw();
     }
 
     pub(crate) fn composer_is_empty(&self) -> bool {
@@ -1898,7 +1924,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -1999,7 +2025,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: true,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2019,7 +2045,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: true,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2047,7 +2073,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2297,7 +2323,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2344,7 +2370,7 @@ mod tests {
             for x in 0..area.width {
                 row.push(buf[(x, y)].symbol().chars().next().unwrap_or(' '));
             }
-            if row.contains("Ask Codex") {
+            if row.contains("Ask MidnightCoder") {
                 found_composer = true;
                 break;
             }
@@ -2364,7 +2390,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2391,7 +2417,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2422,7 +2448,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2445,7 +2471,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2474,7 +2500,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2511,7 +2537,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2543,7 +2569,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2574,7 +2600,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2603,7 +2629,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2626,7 +2652,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(vec![SkillMetadata {
@@ -2655,7 +2681,7 @@ mod tests {
 
         while let Ok(ev) = rx.try_recv() {
             assert!(
-                !matches!(ev, AppEvent::CodexOp(Op::Interrupt { .. })),
+                !matches!(ev, AppEvent::MidnightCoderOp(Op::Interrupt { .. })),
                 "expected Esc to not send Op::Interrupt when dismissing skill popup"
             );
         }
@@ -2674,7 +2700,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2693,7 +2719,7 @@ mod tests {
 
         while let Ok(ev) = rx.try_recv() {
             assert!(
-                !matches!(ev, AppEvent::CodexOp(Op::Interrupt { .. })),
+                !matches!(ev, AppEvent::MidnightCoderOp(Op::Interrupt { .. })),
                 "expected Esc to not send Op::Interrupt while command popup is active"
             );
         }
@@ -2709,7 +2735,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2729,7 +2755,7 @@ mod tests {
 
         while let Ok(ev) = rx.try_recv() {
             assert!(
-                !matches!(ev, AppEvent::CodexOp(Op::Interrupt { .. })),
+                !matches!(ev, AppEvent::MidnightCoderOp(Op::Interrupt { .. })),
                 "expected Esc to not send Op::Interrupt while typing `/agent`"
             );
         }
@@ -2745,7 +2771,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2774,7 +2800,7 @@ mod tests {
 
         while let Ok(ev) = rx.try_recv() {
             assert!(
-                !matches!(ev, AppEvent::CodexOp(Op::Interrupt { .. })),
+                !matches!(ev, AppEvent::MidnightCoderOp(Op::Interrupt { .. })),
                 "expected Esc release after dismissing agent picker to not interrupt"
             );
         }
@@ -2793,7 +2819,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2804,7 +2830,10 @@ mod tests {
         pane.handle_key_event(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
 
         assert!(
-            matches!(rx.try_recv(), Ok(AppEvent::CodexOp(Op::Interrupt { .. }))),
+            matches!(
+                rx.try_recv(),
+                Ok(AppEvent::MidnightCoderOp(Op::Interrupt { .. }))
+            ),
             "expected Esc to send Op::Interrupt while a task is running"
         );
     }
@@ -2828,7 +2857,10 @@ mod tests {
 
         pane.handle_key_event(KeyEvent::new(KeyCode::F(12), KeyModifiers::NONE));
         assert!(
-            matches!(rx.try_recv(), Ok(AppEvent::CodexOp(Op::Interrupt { .. }))),
+            matches!(
+                rx.try_recv(),
+                Ok(AppEvent::MidnightCoderOp(Op::Interrupt { .. }))
+            ),
             "expected configured key to interrupt while `/agent` is being edited"
         );
     }
@@ -2904,7 +2936,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -2952,7 +2984,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),
@@ -3030,7 +3062,7 @@ mod tests {
             frame_requester: FrameRequester::test_dummy(),
             has_input_focus: true,
             enhanced_keys_supported: false,
-            placeholder_text: "Ask Codex to do anything".to_string(),
+            placeholder_text: "Ask MidnightCoder to do anything".to_string(),
             disable_paste_burst: false,
             animations_enabled: true,
             skills: Some(Vec::new()),

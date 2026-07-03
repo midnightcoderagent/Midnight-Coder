@@ -52,6 +52,13 @@ impl ChatWidget {
     pub(super) fn on_task_started(&mut self) {
         self.input_queue.user_turn_pending_start = false;
         self.reset_safety_buffering_for_turn_start();
+        let input_tokens_estimate = self
+            .token_info
+            .as_ref()
+            .map(|info| info.last_token_usage.tokens_in_context_window())
+            .unwrap_or_default();
+        self.live_token_rate = Some(LiveTokenRateState::new(input_tokens_estimate));
+        self.refresh_live_token_rate_status();
         self.turn_lifecycle.start(Instant::now());
         self.transcript.reset_turn_flags();
         self.adaptive_chunking.reset();
@@ -169,6 +176,7 @@ impl ChatWidget {
         self.status_state.pending_status_indicator_restore = false;
         self.input_queue.user_turn_pending_start = false;
         self.clear_active_hook_cell();
+        self.clear_live_token_rate_status();
         self.turn_lifecycle.finish();
         self.update_task_running_state();
         self.running_commands.clear();
@@ -209,6 +217,24 @@ impl ChatWidget {
         }
 
         self.maybe_show_pending_rate_limit_prompt();
+    }
+
+    pub(super) fn record_live_token_output_delta(&mut self, delta: &str) {
+        if let Some(rate) = self.live_token_rate.as_mut() {
+            rate.record_output_delta(delta);
+            self.refresh_live_token_rate_status();
+        }
+    }
+
+    pub(super) fn clear_live_token_rate_status(&mut self) {
+        self.live_token_rate = None;
+        self.bottom_pane
+            .set_status_activity_message(/*message*/ None);
+    }
+
+    fn refresh_live_token_rate_status(&mut self) {
+        let message = self.live_token_rate.as_ref().map(LiveTokenRateState::label);
+        self.bottom_pane.set_status_activity_message(message);
     }
 
     pub(super) fn maybe_prompt_plan_implementation(&mut self) {
@@ -288,11 +314,11 @@ impl ChatWidget {
 
     pub(super) fn handle_app_server_steer_rejected_error(
         &mut self,
-        codex_error_info: &AppServerCodexErrorInfo,
+        codex_error_info: &AppServerMidnightCoderErrorInfo,
     ) -> bool {
         matches!(
             codex_error_info,
-            AppServerCodexErrorInfo::ActiveTurnNotSteerable { .. }
+            AppServerMidnightCoderErrorInfo::ActiveTurnNotSteerable { .. }
         ) && self.enqueue_rejected_steer()
     }
 
@@ -311,6 +337,7 @@ impl ChatWidget {
         // do not leave an orphaned running row behind if no matching completion
         // event arrived before cancellation.
         self.clear_active_hook_cell();
+        self.clear_live_token_rate_status();
         // Reset running state and clear streaming buffers.
         self.input_queue.user_turn_pending_start = false;
         self.turn_lifecycle.finish();
@@ -335,7 +362,7 @@ impl ChatWidget {
         self.finalize_turn();
 
         let message = if message.trim().is_empty() {
-            "Codex is currently experiencing high load.".to_string()
+            "MidnightCoder is currently experiencing high load.".to_string()
         } else {
             message
         };
@@ -391,7 +418,7 @@ impl ChatWidget {
         match rate_limit_reached_type {
             Some(RateLimitReachedType::WorkspaceOwnerCreditsDepleted) => {
                 self.on_error(
-                    "You're out of credits. Your workspace is out of credits. Add credits to continue using Codex."
+                    "You're out of credits. Your workspace is out of credits. Add credits to continue using MidnightCoder."
                         .to_string(),
                 );
             }
@@ -418,7 +445,7 @@ impl ChatWidget {
     pub(super) fn handle_non_retry_error(
         &mut self,
         message: String,
-        codex_error_info: Option<AppServerCodexErrorInfo>,
+        codex_error_info: Option<AppServerMidnightCoderErrorInfo>,
     ) {
         if codex_error_info
             .as_ref()

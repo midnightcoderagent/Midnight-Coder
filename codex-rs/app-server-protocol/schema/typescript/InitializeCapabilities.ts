@@ -15,7 +15,7 @@ experimentalApi: boolean,
  */
 requestAttestation: boolean,
 /**
- * Allow downstream MCP servers to request OpenAI extended form elicitations.
+ * Allow downstream MCP servers to request MidnightCoder extended form elicitations.
  */
 mcpServerOpenaiFormElicitation?: boolean,
 /**

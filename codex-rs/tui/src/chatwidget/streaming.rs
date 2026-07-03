@@ -117,6 +117,7 @@ impl ChatWidget {
             return;
         }
         if !delta.is_empty() {
+            self.record_live_token_output_delta(&delta);
             self.record_visible_turn_activity();
         }
         if !self.transcript.plan_item_active {
@@ -201,6 +202,9 @@ impl ChatWidget {
         // For reasoning deltas, do not stream to history. Accumulate the
         // current reasoning block and extract the first bold element
         // (between **/**) as the chunk header. Show this header as status.
+        if !delta.is_empty() {
+            self.record_live_token_output_delta(&delta);
+        }
         self.reasoning_buffer.push_str(&delta);
 
         if self.safety_buffering_is_waiting() {
@@ -387,6 +391,7 @@ impl ChatWidget {
     #[inline]
     pub(super) fn handle_streaming_delta(&mut self, delta: String) {
         if !delta.is_empty() {
+            self.record_live_token_output_delta(&delta);
             self.record_visible_turn_activity();
             self.mark_safety_buffering_agent_message_started();
         }
@@ -441,7 +446,11 @@ impl ChatWidget {
                 return;
             }
 
-            self.bottom_pane.hide_status_indicator();
+            if self.live_token_rate.is_some() {
+                self.bottom_pane.ensure_status_indicator();
+            } else {
+                self.bottom_pane.hide_status_indicator();
+            }
             self.transcript.active_cell =
                 Some(Box::new(history_cell::StreamingAgentTailCell::new(
                     tail_lines,
@@ -458,7 +467,11 @@ impl ChatWidget {
                 return;
             }
 
-            self.bottom_pane.hide_status_indicator();
+            if self.live_token_rate.is_some() {
+                self.bottom_pane.ensure_status_indicator();
+            } else {
+                self.bottom_pane.hide_status_indicator();
+            }
             self.transcript.active_cell = Some(Box::new(history_cell::StreamingPlanTailCell::new(
                 tail_lines,
                 !controller.tail_starts_stream(),

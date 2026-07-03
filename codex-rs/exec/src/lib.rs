@@ -72,7 +72,7 @@ use codex_core::config::resolve_profile_v2_config_path;
 use codex_core::find_thread_meta_by_name_str;
 use codex_core::format_exec_policy_error_with_source;
 use codex_core::path_utils;
-use codex_feedback::CodexFeedback;
+use codex_feedback::MidnightCoderFeedback;
 use codex_git_utils::get_git_repo_root;
 use codex_login::AuthConfig;
 use codex_login::default_client::set_default_client_residency_requirement;
@@ -102,9 +102,9 @@ use codex_utils_cli::SharedCliOptions;
 use codex_utils_oss::ensure_oss_provider_ready;
 use codex_utils_oss::get_default_model_for_oss_provider;
 use event_processor_with_human_output::EventProcessorWithHumanOutput;
-pub use event_processor_with_jsonl_output::CodexStatus;
 pub use event_processor_with_jsonl_output::CollectedThreadEvents;
 pub use event_processor_with_jsonl_output::EventProcessorWithJsonOutput;
+pub use event_processor_with_jsonl_output::MidnightCoderStatus;
 pub use exec_events::AgentMessageItem;
 pub use exec_events::CollabAgentState;
 pub use exec_events::CollabAgentStatus;
@@ -212,7 +212,6 @@ struct ExecRunArgs {
     json_mode: bool,
     last_message_file: Option<PathBuf>,
     model_provider: Option<String>,
-    oss: bool,
     output_schema_path: Option<PathBuf>,
     prompt: Option<String>,
     skip_git_repo_check: bool,
@@ -266,7 +265,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
     let SharedCliOptions {
         images,
         model: model_cli_arg,
-        oss,
+        oss: _oss,
         oss_provider,
         config_profile_v2,
         sandbox_mode: sandbox_mode_cli_arg,
@@ -373,7 +372,8 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
     let run_loader_overrides = loader_overrides.clone();
     let run_cloud_config_bundle = cloud_config_bundle.clone();
 
-    let model_provider = if oss {
+    let use_local_provider = shared.oss;
+    let model_provider = if use_local_provider {
         let bootstrap_config_with_cloud_config;
         let config_toml_for_oss = if oss_provider.is_none() {
             // The first load intentionally skips cloud config so we can read
@@ -406,10 +406,10 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         None // No OSS mode enabled
     };
 
-    // When using `--oss`, let the bootstrapper pick the model based on selected provider
+    // Let the bootstrapper pick the model based on the local provider.
     let model = if let Some(model) = model_cli_arg {
         Some(model)
-    } else if oss {
+    } else if use_local_provider {
         model_provider
             .as_ref()
             .and_then(|provider_id| get_default_model_for_oss_provider(provider_id))
@@ -440,7 +440,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         developer_instructions: None,
         personality: None,
         compact_prompt: None,
-        show_raw_agent_reasoning: oss.then_some(true),
+        show_raw_agent_reasoning: use_local_provider.then_some(true),
         tools_web_search_request: None,
         ephemeral: ephemeral.then_some(true),
         bypass_hook_trust: bypass_hook_trust.then_some(true),
@@ -557,7 +557,7 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         loader_overrides: run_loader_overrides,
         strict_config,
         cloud_config_bundle: run_cloud_config_bundle,
-        feedback: CodexFeedback::new(),
+        feedback: MidnightCoderFeedback::new(),
         log_db: None,
         state_db: state_db.clone(),
         environment_manager: std::sync::Arc::new(environment_manager),
@@ -582,7 +582,6 @@ pub async fn run_main(cli: Cli, arg0_paths: Arg0DispatchPaths) -> anyhow::Result
         json_mode,
         last_message_file,
         model_provider,
-        oss,
         output_schema_path,
         prompt,
         skip_git_repo_check,
@@ -679,7 +678,6 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
         json_mode,
         last_message_file,
         model_provider,
-        oss,
         output_schema_path,
         prompt,
         skip_git_repo_check,
@@ -694,15 +692,15 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
             last_message_file.clone(),
         )),
     };
-    if oss {
-        // We're in the oss section, so provider_id should be Some
+    if model_provider.is_some() {
+        // Local provider mode should always resolve a provider id.
         // Let's handle None case gracefully though just in case
         let provider_id = match model_provider.as_ref() {
             Some(id) => id,
             None => {
-                error!("OSS provider unexpectedly not set when oss flag is used");
+                error!("local provider unexpectedly not set");
                 return Err(anyhow::anyhow!(
-                    "OSS provider not set but oss flag was used"
+                    "local provider mode did not resolve a provider"
                 ));
             }
         };
@@ -854,7 +852,7 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
 
     exec_span.record("thread.id", primary_thread_id_for_span.as_str());
 
-    // Print the effective configuration and initial request so users can see what Codex
+    // Print the effective configuration and initial request so users can see what MidnightCoder
     // is using.
     event_processor.print_config_summary(&config, &prompt_summary, &session_configured);
     if !json_mode
@@ -864,7 +862,7 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
         event_processor.process_warning(message);
     }
 
-    info!("Codex initialized with event: {session_configured:?}");
+    info!("MidnightCoder initialized with event: {session_configured:?}");
 
     let (interrupt_tx, mut interrupt_rx) = mpsc::unbounded_channel::<()>();
     tokio::spawn(async move {
@@ -1017,8 +1015,8 @@ async fn run_exec_session(args: ExecRunArgs) -> anyhow::Result<()> {
                     &task_id,
                 ) {
                     match event_processor.process_server_notification(notification) {
-                        CodexStatus::Running => {}
-                        CodexStatus::InitiateShutdown => {
+                        MidnightCoderStatus::Running => {}
+                        MidnightCoderStatus::InitiateShutdown => {
                             if let Err(err) = request_shutdown(
                                 &client,
                                 &mut request_ids,

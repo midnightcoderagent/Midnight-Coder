@@ -3,7 +3,7 @@ use crate::agent::status::is_final;
 use crate::tools::handlers::multi_agents_spec::WaitAgentTimeoutOptions;
 use crate::tools::handlers::multi_agents_spec::create_wait_agent_tool_v1;
 use crate::turn_timing::now_unix_timestamp_ms;
-use codex_protocol::error::CodexErr;
+use codex_protocol::error::MidnightCoderErr;
 use codex_tools::ToolSpec;
 use futures::FutureExt;
 use futures::StreamExt;
@@ -121,7 +121,7 @@ impl Handler {
                     }
                     status_rxs.push((*id, rx));
                 }
-                Err(CodexErr::ThreadNotFound(_)) => {
+                Err(MidnightCoderErr::ThreadNotFound(_)) => {
                     initial_final_statuses.push((*id, AgentStatus::NotFound));
                 }
                 Err(err) => {

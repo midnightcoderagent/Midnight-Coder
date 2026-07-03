@@ -1,10 +1,12 @@
 use super::*;
 use crate::environment_selection::TurnEnvironmentSnapshot;
 use crate::shell_snapshot::ShellSnapshotFile;
+use codex_api::ProviderRequestOptions;
 use codex_core_skills::HostSkillsSnapshot;
 use codex_file_system::FileSystemSandboxContext;
 use codex_model_provider::SharedModelProvider;
 use codex_model_provider::create_model_provider;
+use codex_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
 use codex_protocol::SessionId;
 use codex_protocol::ThreadId;
 use codex_protocol::models::AdditionalPermissionProfile;
@@ -21,6 +23,18 @@ use futures::future::Shared;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use tracing::instrument;
+
+const OLLAMA_CONTEXT_WINDOW_BUCKETS: [i64; 8] = [
+    4_096, 8_192, 16_384, 32_768, 65_536, 131_072, 262_144, 524_288,
+];
+const DEFAULT_OLLAMA_NUM_CTX: i64 = 32_768;
+
+fn bucket_ollama_context_window(context_window: i64) -> i64 {
+    OLLAMA_CONTEXT_WINDOW_BUCKETS
+        .into_iter()
+        .find(|bucket| *bucket >= context_window)
+        .unwrap_or(context_window)
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct TurnSkillsContext {
@@ -192,6 +206,41 @@ impl TurnContext {
             .map(|context_window| {
                 context_window.saturating_mul(effective_context_window_percent) / 100
             })
+    }
+
+    pub(crate) fn provider_request_options(&self) -> Option<ProviderRequestOptions> {
+        if !self.uses_ollama_provider() {
+            return None;
+        }
+
+        let num_ctx = self
+            .config
+            .ollama_num_ctx
+            .or_else(|| {
+                self.model_context_window()
+                    .map(bucket_ollama_context_window)
+            })
+            .or(Some(DEFAULT_OLLAMA_NUM_CTX));
+        let options = ProviderRequestOptions { num_ctx };
+        (!options.is_empty()).then_some(options)
+    }
+
+    pub(crate) fn uses_ollama_provider(&self) -> bool {
+        let provider_id = self.config.model_provider_id.as_str();
+        let provider_name = self.config.model_provider.name.as_str();
+        provider_id == OLLAMA_OSS_PROVIDER_ID
+            || provider_id.to_ascii_lowercase().contains("ollama")
+            || provider_name.to_ascii_lowercase().contains("ollama")
+            || self
+                .config
+                .model_provider
+                .base_url
+                .as_deref()
+                .is_some_and(|base_url| base_url.contains(":11434"))
+    }
+
+    pub(crate) fn model_tools_enabled(&self) -> bool {
+        true
     }
 
     pub(crate) fn apps_enabled(&self) -> bool {
@@ -574,9 +623,9 @@ impl Session {
         &self,
         sub_id: String,
         updates: SessionSettingsUpdate,
-    ) -> CodexResult<Arc<TurnContext>> {
+    ) -> MidnightCoderResult<Arc<TurnContext>> {
         let notify_config_contributors = !self.services.extensions.config_contributors().is_empty();
-        let update_result: CodexResult<_> = {
+        let update_result: MidnightCoderResult<_> = {
             let mut state = self.state.lock().await;
             match state.session_configuration.clone().apply(&updates) {
                 Ok(next) => {
@@ -603,7 +652,7 @@ impl Session {
                         new_config,
                     ))
                 }
-                Err(err) => Err(CodexErr::InvalidRequest(err.to_string())),
+                Err(err) => Err(MidnightCoderErr::InvalidRequest(err.to_string())),
             }
         };
 
@@ -616,11 +665,11 @@ impl Session {
                         id: sub_id.clone(),
                         msg: EventMsg::Error(ErrorEvent {
                             message: message.clone(),
-                            codex_error_info: Some(CodexErrorInfo::BadRequest),
+                            codex_error_info: Some(MidnightCoderErrorInfo::BadRequest),
                         }),
                     })
                     .await;
-                    return Err(CodexErr::InvalidRequest(message));
+                    return Err(MidnightCoderErr::InvalidRequest(message));
                 }
             };
         self.emit_config_changed_contributors(previous_config.as_ref(), new_config.as_ref());

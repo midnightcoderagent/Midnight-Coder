@@ -12,19 +12,28 @@ use codex_feedback::FeedbackRequestTags;
 use codex_feedback::emit_feedback_request_tags_with_auth_env;
 use codex_login::AuthEnvTelemetry;
 use codex_login::AuthManager;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_login::collect_auth_env_telemetry;
 use codex_login::default_client::build_reqwest_client;
 use codex_model_provider_info::ModelProviderInfo;
 use codex_models_manager::manager::ModelsEndpointClient;
 use codex_models_manager::manager::ModelsEndpointFuture;
+use codex_models_manager::model_info::BASE_INSTRUCTIONS;
 use codex_otel::TelemetryAuthMode;
-use codex_protocol::error::CodexErr;
+use codex_protocol::config_types::ReasoningSummary;
+use codex_protocol::error::MidnightCoderErr;
 use codex_protocol::error::Result as CoreResult;
+use codex_protocol::openai_models::ConfigShellToolType;
 use codex_protocol::openai_models::ModelInfo;
+use codex_protocol::openai_models::ModelVisibility;
+use codex_protocol::openai_models::ToolMode;
+use codex_protocol::openai_models::TruncationPolicyConfig;
+use codex_protocol::openai_models::WebSearchToolType;
+use codex_protocol::openai_models::default_input_modalities;
 use codex_response_debug_context::extract_response_debug_context;
 use codex_response_debug_context::telemetry_transport_error_message;
 use http::HeaderMap;
+use serde_json::Value as JsonValue;
 use tokio::time::timeout;
 
 use crate::auth::agent_identity_telemetry;
@@ -33,7 +42,7 @@ use crate::auth::resolve_provider_auth;
 const MODELS_REFRESH_TIMEOUT: Duration = Duration::from_secs(5);
 const MODELS_ENDPOINT: &str = "/models";
 
-/// Provider-owned OpenAI-compatible `/models` endpoint.
+/// Provider-owned MidnightCoder-compatible `/models` endpoint.
 #[derive(Debug)]
 pub(crate) struct OpenAiModelsEndpoint {
     provider_info: ModelProviderInfo,
@@ -51,7 +60,7 @@ impl OpenAiModelsEndpoint {
         }
     }
 
-    async fn auth(&self) -> Option<CodexAuth> {
+    async fn auth(&self) -> Option<MidnightCoderAuth> {
         match self.auth_manager.as_ref() {
             Some(auth_manager) => auth_manager.auth().await,
             None => None,
@@ -62,26 +71,31 @@ impl OpenAiModelsEndpoint {
         self.auth()
             .await
             .as_ref()
-            .is_some_and(CodexAuth::uses_codex_backend)
+            .is_some_and(MidnightCoderAuth::uses_codex_backend)
     }
 
     async fn list_models(
         &self,
         client_version: &str,
     ) -> CoreResult<(Vec<ModelInfo>, Option<String>)> {
+        if self.has_ollama_catalog() {
+            return self.list_ollama_models().await;
+        }
+
         let _timer =
             codex_otel::start_global_timer("codex.remote_models.fetch_update.duration_ms", &[]);
         let auth = self.auth().await;
-        let auth_mode = auth.as_ref().map(CodexAuth::auth_mode);
+        let auth_mode = auth.as_ref().map(MidnightCoderAuth::auth_mode);
         let api_provider = self.provider_info.to_api_provider(auth_mode)?;
         let api_auth = resolve_provider_auth(auth.as_ref(), &self.provider_info)?;
         let transport = ReqwestTransport::new(build_reqwest_client());
         let auth_telemetry = auth_header_telemetry(api_auth.as_ref());
-        let agent_identity_telemetry = if let Some(CodexAuth::AgentIdentity(auth)) = auth.as_ref() {
-            Some(agent_identity_telemetry(auth))
-        } else {
-            None
-        };
+        let agent_identity_telemetry =
+            if let Some(MidnightCoderAuth::AgentIdentity(auth)) = auth.as_ref() {
+                Some(agent_identity_telemetry(auth))
+            } else {
+                None
+            };
         let request_telemetry: Arc<dyn RequestTelemetry> = Arc::new(ModelsRequestTelemetry {
             auth_mode: auth_mode.map(|mode| TelemetryAuthMode::from(mode).to_string()),
             auth_header_attached: auth_telemetry.attached,
@@ -97,8 +111,56 @@ impl OpenAiModelsEndpoint {
             client.list_models(client_version, HeaderMap::new()),
         )
         .await
-        .map_err(|_| CodexErr::Timeout)?
+        .map_err(|_| MidnightCoderErr::Timeout)?
         .map_err(map_api_error)
+    }
+
+    fn has_ollama_catalog(&self) -> bool {
+        let name = self.provider_info.name.to_ascii_lowercase();
+        if name.contains("ollama") {
+            return true;
+        }
+
+        self.provider_info
+            .base_url
+            .as_deref()
+            .is_some_and(|base_url| base_url.contains(":11434"))
+    }
+
+    async fn list_ollama_models(&self) -> CoreResult<(Vec<ModelInfo>, Option<String>)> {
+        let base_url = self.provider_info.base_url.as_deref().ok_or_else(|| {
+            MidnightCoderErr::InvalidRequest("Ollama base_url is required".into())
+        })?;
+        let host_root = ollama_host_root(base_url);
+        let url = format!("{}/api/tags", host_root.trim_end_matches('/'));
+        let response = build_reqwest_client()
+            .get(url)
+            .send()
+            .await
+            .map_err(|err| MidnightCoderErr::InvalidRequest(err.to_string()))?;
+        if !response.status().is_success() {
+            return Err(MidnightCoderErr::InvalidRequest(format!(
+                "failed to list Ollama models: HTTP {}",
+                response.status()
+            )));
+        }
+        let body = response
+            .json::<JsonValue>()
+            .await
+            .map_err(|err| MidnightCoderErr::InvalidRequest(err.to_string()))?;
+        let models = body
+            .get("models")
+            .and_then(JsonValue::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|value| ollama_model_info(value))
+            .enumerate()
+            .map(|(index, mut model)| {
+                model.priority = i32::try_from(index).unwrap_or(i32::MAX);
+                model
+            })
+            .collect();
+        Ok((models, None))
     }
 
     fn auth_env(&self) -> AuthEnvTelemetry {
@@ -115,6 +177,14 @@ impl ModelsEndpointClient for OpenAiModelsEndpoint {
         self.provider_info.has_command_auth()
     }
 
+    fn has_provider_catalog(&self) -> bool {
+        self.has_ollama_catalog()
+    }
+
+    fn provider_catalog_is_authoritative(&self) -> bool {
+        self.has_ollama_catalog()
+    }
+
     fn uses_codex_backend(&self) -> ModelsEndpointFuture<'_, bool> {
         Box::pin(OpenAiModelsEndpoint::uses_codex_backend(self))
     }
@@ -125,6 +195,64 @@ impl ModelsEndpointClient for OpenAiModelsEndpoint {
     ) -> ModelsEndpointFuture<'a, CoreResult<(Vec<ModelInfo>, Option<String>)>> {
         Box::pin(OpenAiModelsEndpoint::list_models(self, client_version))
     }
+}
+
+fn ollama_host_root(base_url: &str) -> String {
+    let trimmed = base_url.trim().trim_end_matches('/');
+    trimmed.strip_suffix("/v1").unwrap_or(trimmed).to_string()
+}
+
+fn ollama_model_info(value: &JsonValue) -> Option<ModelInfo> {
+    let model = value.get("name").and_then(JsonValue::as_str)?;
+    let model = normalize_ollama_model_name(model);
+
+    Some(ModelInfo {
+        slug: model.clone(),
+        display_name: model,
+        description: Some("Modelo instalado no Ollama configurado".to_string()),
+        default_reasoning_level: None,
+        supported_reasoning_levels: Vec::new(),
+        shell_type: ConfigShellToolType::Default,
+        visibility: ModelVisibility::List,
+        supported_in_api: true,
+        priority: 0,
+        additional_speed_tiers: Vec::new(),
+        service_tiers: Vec::new(),
+        default_service_tier: None,
+        availability_nux: None,
+        upgrade: None,
+        base_instructions: BASE_INSTRUCTIONS.to_string(),
+        model_messages: None,
+        supports_reasoning_summaries: false,
+        default_reasoning_summary: ReasoningSummary::Auto,
+        support_verbosity: false,
+        default_verbosity: None,
+        apply_patch_tool_type: None,
+        web_search_tool_type: WebSearchToolType::Text,
+        truncation_policy: TruncationPolicyConfig::bytes(/*limit*/ 10_000),
+        supports_parallel_tool_calls: false,
+        supports_image_detail_original: false,
+        context_window: None,
+        max_context_window: None,
+        auto_compact_token_limit: None,
+        comp_hash: None,
+        effective_context_window_percent: 95,
+        experimental_supported_tools: Vec::new(),
+        input_modalities: default_input_modalities(),
+        used_fallback_model_metadata: false,
+        supports_search_tool: false,
+        use_responses_lite: false,
+        auto_review_model_override: None,
+        tool_mode: Some(ToolMode::CodeMode),
+        multi_agent_version: None,
+    })
+}
+
+fn normalize_ollama_model_name(model_name: &str) -> String {
+    model_name
+        .strip_suffix(":latest")
+        .unwrap_or(model_name)
+        .to_string()
 }
 
 #[derive(Clone)]
@@ -230,6 +358,8 @@ mod tests {
 
     use super::*;
     use codex_protocol::config_types::ModelProviderAuthInfo;
+    use pretty_assertions::assert_eq;
+    use serde_json::json;
 
     fn provider_info_with_command_auth() -> ModelProviderInfo {
         ModelProviderInfo {
@@ -266,5 +396,40 @@ mod tests {
         );
 
         assert!(!endpoint.has_command_auth());
+    }
+
+    #[test]
+    fn ollama_models_mark_tool_capable_entries_with_code_mode() {
+        let model = ollama_model_info(&json!({
+            "name": "ollama-tool-model",
+            "capabilities": ["completion", "tools"],
+        }))
+        .expect("model should parse");
+
+        assert_eq!(model.tool_mode, Some(ToolMode::CodeMode));
+        assert!(!model.used_fallback_model_metadata);
+    }
+
+    #[test]
+    fn ollama_models_default_to_code_mode_even_without_tools_capability() {
+        let model = ollama_model_info(&json!({
+            "name": "gemma3:4b",
+            "capabilities": ["completion"],
+        }))
+        .expect("model should parse");
+
+        assert_eq!(model.tool_mode, Some(ToolMode::CodeMode));
+    }
+
+    #[test]
+    fn ollama_models_strip_latest_alias() {
+        let model = ollama_model_info(&json!({
+            "name": "custom-local-model:latest",
+        }))
+        .expect("model should parse");
+
+        assert_eq!(model.slug, "custom-local-model");
+        assert_eq!(model.display_name, "custom-local-model");
+        assert_eq!(model.tool_mode, Some(ToolMode::CodeMode));
     }
 }

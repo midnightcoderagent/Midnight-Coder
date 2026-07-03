@@ -55,7 +55,77 @@ pub(crate) const FRAMES_VBARS: [&str; 36] = frames_for!("vbars");
 pub(crate) const FRAMES_SHAPES: [&str; 36] = frames_for!("shapes");
 pub(crate) const FRAMES_SLUG: [&str; 36] = frames_for!("slug");
 
+pub(crate) const FRAMES_MC_RUNNING: [&str; 6] = [
+    r#"                          _
+                     .-._  ( )
+        MIDNIGHT    /   _\/|\
+              _____/   /_ MC)
+             /        /  |
+        ____/   .--. /  / \
+       /___/___/   ./__/   \__
+              `---'    \
+
+          midcoder > cargo build
+      ====================================="#,
+    r#"                            _
+                       .-._  ( )
+        MIDNIGHT      /   _\/|\
+                _____/   /_ MC)
+               /        /  |
+          ____/   .--. /  / \
+         /___/___/   ./__/   \__
+                `---'    \
+
+            midcoder > cargo build
+        ====================================="#,
+    r#"                              _
+                         .-._  ( )
+        MIDNIGHT        /   _\/|\
+                  _____/   /_ MC)
+                 /        /  |
+            ____/   .--. /  / \
+           /___/___/   ./__/   \__
+                  `---'    \
+
+              midcoder > cargo build
+          ====================================="#,
+    r#"                            _
+                       ( )  _.-.
+        CODER          /|\_   \
+                      (MC _\   \_____
+                       |  \        \
+                      / \  \ .--.   \____
+                  __/   \__\.   \___\___/
+                         /    `---'
+
+            midcoder > tests pass
+        ====================================="#,
+    r#"                          _
+                     ( )  _.-.
+        CODER        /|\_   \
+                    (MC _\   \_____
+                     |  \        \
+                    / \  \ .--.   \____
+                __/   \__\.   \___\___/
+                       /    `---'
+
+          midcoder > tests pass
+      ====================================="#,
+    r#"                        _
+                   ( )  _.-.
+        CODER      /|\_   \
+                  (MC _\   \_____
+                   |  \        \
+                  / \  \ .--.   \____
+              __/   \__\.   \___\___/
+                     /    `---'
+
+        midcoder > tests pass
+    ====================================="#,
+];
+
 pub(crate) const ALL_VARIANTS: &[&[&str]] = &[
+    &FRAMES_MC_RUNNING,
     &FRAMES_DEFAULT,
     &FRAMES_CODEX,
     &FRAMES_OPENAI,

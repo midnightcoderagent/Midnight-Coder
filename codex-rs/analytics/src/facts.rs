@@ -1,6 +1,6 @@
 use crate::events::AppServerRpcTransport;
-use crate::events::CodexRuntimeMetadata;
 use crate::events::GuardianReviewEventParams;
+use crate::events::MidnightCoderRuntimeMetadata;
 use codex_app_server_protocol::ClientRequest;
 use codex_app_server_protocol::ClientResponsePayload;
 use codex_app_server_protocol::InitializeParams;
@@ -15,7 +15,7 @@ use codex_protocol::config_types::ModeKind;
 use codex_protocol::config_types::Personality;
 use codex_protocol::config_types::ReasoningSummary;
 use codex_protocol::config_types::ServiceTier;
-use codex_protocol::error::CodexErr;
+use codex_protocol::error::MidnightCoderErr;
 use codex_protocol::models::PermissionProfile;
 use codex_protocol::openai_models::ReasoningEffort;
 use codex_protocol::protocol::AskForApproval;
@@ -122,25 +122,25 @@ pub struct TurnProfileFact {
 }
 
 #[derive(Clone)]
-pub struct TurnCodexErrorFact {
+pub struct TurnMidnightCoderErrorFact {
     pub(crate) turn_id: String,
     pub(crate) thread_id: String,
-    pub(crate) error: TurnCodexError,
+    pub(crate) error: TurnMidnightCoderError,
 }
 
-impl TurnCodexErrorFact {
-    pub fn from_codex_err(thread_id: String, turn_id: String, error: &CodexErr) -> Self {
+impl TurnMidnightCoderErrorFact {
+    pub fn from_codex_err(thread_id: String, turn_id: String, error: &MidnightCoderErr) -> Self {
         Self {
             turn_id,
             thread_id,
-            error: TurnCodexError::from_codex_err(error),
+            error: TurnMidnightCoderError::from_codex_err(error),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CodexErrKind {
+pub enum MidnightCoderErrKind {
     TurnAborted,
     SessionBudgetExceeded,
     Stream,
@@ -181,13 +181,13 @@ pub enum CodexErrKind {
 }
 
 #[derive(Clone)]
-pub(crate) struct TurnCodexError {
-    pub(crate) kind: CodexErrKind,
+pub(crate) struct TurnMidnightCoderError {
+    pub(crate) kind: MidnightCoderErrKind,
     pub(crate) http_status_code: Option<u16>,
 }
 
-impl TurnCodexError {
-    fn from_codex_err(error: &CodexErr) -> Self {
+impl TurnMidnightCoderError {
+    fn from_codex_err(error: &MidnightCoderErr) -> Self {
         Self {
             kind: error.into(),
             http_status_code: error.http_status_code_value(),
@@ -195,50 +195,50 @@ impl TurnCodexError {
     }
 }
 
-impl From<&CodexErr> for CodexErrKind {
-    fn from(error: &CodexErr) -> Self {
+impl From<&MidnightCoderErr> for MidnightCoderErrKind {
+    fn from(error: &MidnightCoderErr) -> Self {
         match error {
-            CodexErr::TurnAborted => CodexErrKind::TurnAborted,
-            CodexErr::SessionBudgetExceeded => CodexErrKind::SessionBudgetExceeded,
-            CodexErr::Stream(..) => CodexErrKind::Stream,
-            CodexErr::ContextWindowExceeded => CodexErrKind::ContextWindowExceeded,
-            CodexErr::ThreadNotFound(_) => CodexErrKind::ThreadNotFound,
-            CodexErr::AgentLimitReached { .. } => CodexErrKind::AgentLimitReached,
-            CodexErr::SessionConfiguredNotFirstEvent => {
-                CodexErrKind::SessionConfiguredNotFirstEvent
+            MidnightCoderErr::TurnAborted => MidnightCoderErrKind::TurnAborted,
+            MidnightCoderErr::SessionBudgetExceeded => MidnightCoderErrKind::SessionBudgetExceeded,
+            MidnightCoderErr::Stream(..) => MidnightCoderErrKind::Stream,
+            MidnightCoderErr::ContextWindowExceeded => MidnightCoderErrKind::ContextWindowExceeded,
+            MidnightCoderErr::ThreadNotFound(_) => MidnightCoderErrKind::ThreadNotFound,
+            MidnightCoderErr::AgentLimitReached { .. } => MidnightCoderErrKind::AgentLimitReached,
+            MidnightCoderErr::SessionConfiguredNotFirstEvent => {
+                MidnightCoderErrKind::SessionConfiguredNotFirstEvent
             }
-            CodexErr::Timeout => CodexErrKind::Timeout,
-            CodexErr::RequestTimeout => CodexErrKind::RequestTimeout,
-            CodexErr::Spawn => CodexErrKind::Spawn,
-            CodexErr::Interrupted => CodexErrKind::Interrupted,
-            CodexErr::UnexpectedStatus(_) => CodexErrKind::UnexpectedStatus,
-            CodexErr::InvalidRequest(_) => CodexErrKind::InvalidRequest,
-            CodexErr::InvalidImageRequest() => CodexErrKind::InvalidImageRequest,
-            CodexErr::UsageLimitReached(_) => CodexErrKind::UsageLimitReached,
-            CodexErr::ServerOverloaded => CodexErrKind::ServerOverloaded,
-            CodexErr::CyberPolicy { .. } => CodexErrKind::CyberPolicy,
-            CodexErr::ResponseStreamFailed(_) => CodexErrKind::ResponseStreamFailed,
-            CodexErr::ConnectionFailed(_) => CodexErrKind::ConnectionFailed,
-            CodexErr::QuotaExceeded => CodexErrKind::QuotaExceeded,
-            CodexErr::UsageNotIncluded => CodexErrKind::UsageNotIncluded,
-            CodexErr::InternalServerError => CodexErrKind::InternalServerError,
-            CodexErr::RetryLimit(_) => CodexErrKind::RetryLimit,
-            CodexErr::InternalAgentDied => CodexErrKind::InternalAgentDied,
-            CodexErr::Sandbox(_) => CodexErrKind::Sandbox,
-            CodexErr::LandlockSandboxExecutableNotProvided => {
-                CodexErrKind::LandlockSandboxExecutableNotProvided
+            MidnightCoderErr::Timeout => MidnightCoderErrKind::Timeout,
+            MidnightCoderErr::RequestTimeout => MidnightCoderErrKind::RequestTimeout,
+            MidnightCoderErr::Spawn => MidnightCoderErrKind::Spawn,
+            MidnightCoderErr::Interrupted => MidnightCoderErrKind::Interrupted,
+            MidnightCoderErr::UnexpectedStatus(_) => MidnightCoderErrKind::UnexpectedStatus,
+            MidnightCoderErr::InvalidRequest(_) => MidnightCoderErrKind::InvalidRequest,
+            MidnightCoderErr::InvalidImageRequest() => MidnightCoderErrKind::InvalidImageRequest,
+            MidnightCoderErr::UsageLimitReached(_) => MidnightCoderErrKind::UsageLimitReached,
+            MidnightCoderErr::ServerOverloaded => MidnightCoderErrKind::ServerOverloaded,
+            MidnightCoderErr::CyberPolicy { .. } => MidnightCoderErrKind::CyberPolicy,
+            MidnightCoderErr::ResponseStreamFailed(_) => MidnightCoderErrKind::ResponseStreamFailed,
+            MidnightCoderErr::ConnectionFailed(_) => MidnightCoderErrKind::ConnectionFailed,
+            MidnightCoderErr::QuotaExceeded => MidnightCoderErrKind::QuotaExceeded,
+            MidnightCoderErr::UsageNotIncluded => MidnightCoderErrKind::UsageNotIncluded,
+            MidnightCoderErr::InternalServerError => MidnightCoderErrKind::InternalServerError,
+            MidnightCoderErr::RetryLimit(_) => MidnightCoderErrKind::RetryLimit,
+            MidnightCoderErr::InternalAgentDied => MidnightCoderErrKind::InternalAgentDied,
+            MidnightCoderErr::Sandbox(_) => MidnightCoderErrKind::Sandbox,
+            MidnightCoderErr::LandlockSandboxExecutableNotProvided => {
+                MidnightCoderErrKind::LandlockSandboxExecutableNotProvided
             }
-            CodexErr::UnsupportedOperation(_) => CodexErrKind::UnsupportedOperation,
-            CodexErr::RefreshTokenFailed(_) => CodexErrKind::RefreshTokenFailed,
-            CodexErr::Fatal(_) => CodexErrKind::Fatal,
-            CodexErr::Io(_) => CodexErrKind::Io,
-            CodexErr::Json(_) => CodexErrKind::Json,
+            MidnightCoderErr::UnsupportedOperation(_) => MidnightCoderErrKind::UnsupportedOperation,
+            MidnightCoderErr::RefreshTokenFailed(_) => MidnightCoderErrKind::RefreshTokenFailed,
+            MidnightCoderErr::Fatal(_) => MidnightCoderErrKind::Fatal,
+            MidnightCoderErr::Io(_) => MidnightCoderErrKind::Io,
+            MidnightCoderErr::Json(_) => MidnightCoderErrKind::Json,
             #[cfg(target_os = "linux")]
-            CodexErr::LandlockRuleset(_) => CodexErrKind::LandlockRuleset,
+            MidnightCoderErr::LandlockRuleset(_) => MidnightCoderErrKind::LandlockRuleset,
             #[cfg(target_os = "linux")]
-            CodexErr::LandlockPathFd(_) => CodexErrKind::LandlockPathFd,
-            CodexErr::TokioJoin(_) => CodexErrKind::TokioJoin,
-            CodexErr::EnvVar(_) => CodexErrKind::EnvVar,
+            MidnightCoderErr::LandlockPathFd(_) => MidnightCoderErrKind::LandlockPathFd,
+            MidnightCoderErr::TokioJoin(_) => MidnightCoderErrKind::TokioJoin,
+            MidnightCoderErr::EnvVar(_) => MidnightCoderErrKind::EnvVar,
         }
     }
 }
@@ -270,7 +270,7 @@ pub enum TurnSteerRejectionReason {
 }
 
 #[derive(Clone)]
-pub struct CodexTurnSteerEvent {
+pub struct MidnightCoderTurnSteerEvent {
     pub expected_turn_id: Option<String>,
     pub accepted_turn_id: Option<String>,
     pub num_input_images: usize,
@@ -404,7 +404,7 @@ pub enum CompactionStatus {
 }
 
 #[derive(Clone)]
-pub struct CodexCompactionEvent {
+pub struct MidnightCoderCompactionEvent {
     pub thread_id: String,
     pub turn_id: String,
     pub trigger: CompactionTrigger,
@@ -413,7 +413,7 @@ pub struct CodexCompactionEvent {
     pub phase: CompactionPhase,
     pub strategy: CompactionStrategy,
     pub status: CompactionStatus,
-    pub codex_error_kind: Option<CodexErrKind>,
+    pub codex_error_kind: Option<MidnightCoderErrKind>,
     pub codex_error_http_status_code: Option<u16>,
     pub active_context_tokens_before: i64,
     pub active_context_tokens_after: i64,
@@ -435,7 +435,7 @@ pub enum GoalEventKind {
 }
 
 #[derive(Clone)]
-pub struct CodexGoalEvent {
+pub struct MidnightCoderGoalEvent {
     pub thread_id: String,
     pub turn_id: Option<String>,
     pub goal_id: String,
@@ -452,7 +452,7 @@ pub(crate) enum AnalyticsFact {
         connection_id: u64,
         params: InitializeParams,
         product_client_id: String,
-        runtime: CodexRuntimeMetadata,
+        runtime: MidnightCoderRuntimeMetadata,
         rpc_transport: AppServerRpcTransport,
     },
     ClientRequest {
@@ -497,13 +497,13 @@ pub(crate) enum AnalyticsFact {
 
 pub(crate) enum CustomAnalyticsFact {
     SubAgentThreadStarted(SubAgentThreadStartedInput),
-    Compaction(Box<CodexCompactionEvent>),
-    Goal(Box<CodexGoalEvent>),
+    Compaction(Box<MidnightCoderCompactionEvent>),
+    Goal(Box<MidnightCoderGoalEvent>),
     GuardianReview(Box<GuardianReviewEventParams>),
     TurnResolvedConfig(Box<TurnResolvedConfigFact>),
     TurnTokenUsage(Box<TurnTokenUsageFact>),
     TurnProfile(Box<TurnProfileFact>),
-    TurnCodexError(Box<TurnCodexErrorFact>),
+    TurnMidnightCoderError(Box<TurnMidnightCoderErrorFact>),
     SkillInvoked(SkillInvokedInput),
     AppMentioned(AppMentionedInput),
     AppUsed(AppUsedInput),

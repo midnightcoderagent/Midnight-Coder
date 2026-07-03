@@ -1,20 +1,20 @@
-import { CodexOptions } from "./codexOptions";
-import { CodexExec } from "./exec";
+import { MidnightCoderOptions } from "./codexOptions";
+import { MidnightCoderExec } from "./exec";
 import { Thread } from "./thread";
 import { ThreadOptions } from "./threadOptions";
 
 /**
- * Codex is the main class for interacting with the Codex agent.
+ * MidnightCoder is the main class for interacting with the MidnightCoder agent.
  *
  * Use the `startThread()` method to start a new thread or `resumeThread()` to resume a previously started thread.
  */
-export class Codex {
-  private exec: CodexExec;
-  private options: CodexOptions;
+export class MidnightCoder {
+  private exec: MidnightCoderExec;
+  private options: MidnightCoderOptions;
 
-  constructor(options: CodexOptions = {}) {
+  constructor(options: MidnightCoderOptions = {}) {
     const { codexPathOverride, env, config } = options;
-    this.exec = new CodexExec(codexPathOverride, env, config);
+    this.exec = new MidnightCoderExec(codexPathOverride, env, config);
     this.options = options;
   }
 

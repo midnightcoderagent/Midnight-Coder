@@ -39,15 +39,15 @@ use codex_core::config::ConfigBuilder;
 use codex_core::config::ConfigOverrides;
 use codex_core::config::find_codex_home;
 use codex_features::FEATURES;
-use codex_install_context::CodexPackageLayout;
 use codex_install_context::InstallContext;
 use codex_install_context::InstallMethod;
+use codex_install_context::MidnightCoderPackageLayout;
 use codex_install_context::StandalonePlatform;
 use codex_login::AuthDotJson;
 use codex_login::AuthManager;
 use codex_login::CODEX_ACCESS_TOKEN_ENV_VAR;
 use codex_login::CODEX_API_KEY_ENV_VAR;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_login::OPENAI_API_KEY_ENV_VAR;
 use codex_login::default_client::build_reqwest_client;
 use codex_login::default_client::default_headers;
@@ -90,7 +90,7 @@ use thread_inventory::thread_inventory_check;
 use title::terminal_title_check;
 use updates::updates_check;
 
-const OPENAI_BETA_HEADER: &str = "OpenAI-Beta";
+const OPENAI_BETA_HEADER: &str = "MidnightCoder-Beta";
 const RESPONSES_WEBSOCKETS_V2_BETA_HEADER_VALUE: &str = "responses_websockets=2026-02-06";
 const WEBSOCKET_IMMEDIATE_CLOSE_GRACE: Duration = Duration::from_millis(250);
 const SLOW_CHECK_PROGRESS_THRESHOLD: Duration = Duration::from_secs(2);
@@ -143,7 +143,7 @@ const TMUX_OPTION_NAMES: &[&str] = &[
 const NARROW_TERMINAL_COLUMNS: u16 = 80;
 const NARROW_TERMINAL_ROWS: u16 = 24;
 
-/// Options for building a local Codex diagnostic report.
+/// Options for building a local MidnightCoder diagnostic report.
 ///
 /// The command always runs the full bounded diagnostic set. Human output includes
 /// detailed diagnostics by default; --summary keeps the terminal output compact.
@@ -517,7 +517,7 @@ async fn load_config(
         .harness_overrides(overrides)
         .build()
         .await
-        .context("failed to load Codex config")
+        .context("failed to load MidnightCoder config")
 }
 
 fn config_overrides_from_interactive(
@@ -847,7 +847,7 @@ fn installation_check(show_details: bool) -> DoctorCheck {
                 status = status.max(CheckStatus::Warning);
                 summary = "npm-managed launch is missing package-root provenance".to_string();
                 remediation = Some(
-                    "Reinstall or update Codex so the JS shim provides CODEX_MANAGED_PACKAGE_ROOT."
+                    "Reinstall or update MidnightCoder so the JS shim provides CODEX_MANAGED_PACKAGE_ROOT."
                         .to_string(),
                 );
             }
@@ -948,7 +948,7 @@ fn describe_install_context(context: &InstallContext) -> String {
 
 fn describe_method_with_package_layout(
     method: &str,
-    package_layout: Option<&CodexPackageLayout>,
+    package_layout: Option<&MidnightCoderPackageLayout>,
 ) -> String {
     match package_layout {
         Some(package_layout) => {
@@ -1252,7 +1252,7 @@ fn auth_check(config: &Config) -> DoctorCheck {
             "auth.credentials",
             "auth",
             CheckStatus::Fail,
-            "no Codex credentials were found",
+            "no MidnightCoder credentials were found",
         )
         .details(details)
         .remediation("Run codex login or provide an API key through a supported auth env var."),
@@ -1275,7 +1275,7 @@ fn provider_specific_auth_check(
     env_var_present: impl Fn(&str) -> bool,
 ) -> Option<DoctorCheck> {
     details.push(format!(
-        "model provider requires OpenAI auth: {requires_openai_auth}"
+        "model provider requires MidnightCoder auth: {requires_openai_auth}"
     ));
     if requires_openai_auth {
         return None;
@@ -1315,7 +1315,7 @@ fn provider_specific_auth_check(
                 "auth.credentials",
                 "auth",
                 CheckStatus::Ok,
-                "OpenAI auth is not required for the active model provider",
+                "MidnightCoder auth is not required for the active model provider",
             )
             .details(details),
         ),
@@ -2461,7 +2461,7 @@ fn websocket_error_detail(err: &ApiError) -> String {
     }
 }
 
-fn auth_mode_name(auth: &CodexAuth) -> &'static str {
+fn auth_mode_name(auth: &MidnightCoderAuth) -> &'static str {
     match auth.auth_mode() {
         AuthMode::ApiKey => "api_key",
         AuthMode::Chatgpt => "chatgpt",
@@ -2578,7 +2578,7 @@ fn default_reachability_plan() -> ReachabilityPlan {
     provider_reachability_plan_from_parts(
         ProviderAuthReachabilityMode::Chatgpt,
         "openai",
-        "OpenAI",
+        "MidnightCoder",
         /*provider_base_url*/ None,
         /*provider_query_params*/ None,
         /*is_amazon_bedrock*/ false,
@@ -3486,12 +3486,12 @@ mod tests {
             Vec::new(),
             |_| false,
         )
-        .expect("non-OpenAI provider should produce a provider-specific check");
+        .expect("non-MidnightCoder provider should produce a provider-specific check");
 
         assert_eq!(check.status, CheckStatus::Ok);
         assert_eq!(
             check.summary,
-            "OpenAI auth is not required for the active model provider"
+            "MidnightCoder auth is not required for the active model provider"
         );
     }
 
@@ -3500,11 +3500,11 @@ mod tests {
         let check = provider_specific_auth_check(
             /*requires_openai_auth*/ false,
             Some("PROVIDER_API_KEY"),
-            Some("Set PROVIDER_API_KEY before running Codex."),
+            Some("Set PROVIDER_API_KEY before running MidnightCoder."),
             Vec::new(),
             |_| false,
         )
-        .expect("non-OpenAI provider should produce a provider-specific check");
+        .expect("non-MidnightCoder provider should produce a provider-specific check");
 
         assert_eq!(check.status, CheckStatus::Fail);
         assert_eq!(
@@ -3513,7 +3513,7 @@ mod tests {
         );
         assert_eq!(
             check.remediation,
-            Some("Set PROVIDER_API_KEY before running Codex.".to_string())
+            Some("Set PROVIDER_API_KEY before running MidnightCoder.".to_string())
         );
     }
 
@@ -3682,7 +3682,7 @@ mod tests {
         let plan = provider_reachability_plan_from_parts(
             ProviderAuthReachabilityMode::ApiKey,
             "openai",
-            "OpenAI",
+            "MidnightCoder",
             /*provider_base_url*/ None,
             /*provider_query_params*/ None,
             /*is_amazon_bedrock*/ false,
@@ -3735,7 +3735,7 @@ mod tests {
         let plan = provider_reachability_plan_from_parts(
             ProviderAuthReachabilityMode::ApiKey,
             "openai",
-            "OpenAI",
+            "MidnightCoder",
             Some(&format!("http://{addr}/xxxx")),
             /*provider_query_params*/ None,
             /*is_amazon_bedrock*/ false,
@@ -3776,7 +3776,7 @@ mod tests {
         let plan = provider_reachability_plan_from_parts(
             ProviderAuthReachabilityMode::ApiKey,
             "openai",
-            "OpenAI",
+            "MidnightCoder",
             Some(&format!("http://{addr}/v1")),
             /*provider_query_params*/ None,
             /*is_amazon_bedrock*/ false,

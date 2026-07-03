@@ -4,12 +4,12 @@ use super::*;
 
 impl ChatWidget {
     pub(crate) fn new_with_app_event(common: ChatWidgetInit) -> Self {
-        Self::new_with_op_target(common, CodexOpTarget::AppEvent)
+        Self::new_with_op_target(common, MidnightCoderOpTarget::AppEvent)
     }
 
     pub(super) fn new_with_op_target(
         common: ChatWidgetInit,
-        codex_op_target: CodexOpTarget,
+        codex_op_target: MidnightCoderOpTarget,
     ) -> Self {
         let ChatWidgetInit {
             config,
@@ -123,6 +123,7 @@ impl ChatWidget {
             runtime_model_provider_base_url,
             remote_connection: None,
             token_info: None,
+            live_token_rate: None,
             rate_limit_snapshots_by_limit_id: BTreeMap::new(),
             refreshing_status_outputs: Vec::new(),
             next_status_refresh_request_id: 0,

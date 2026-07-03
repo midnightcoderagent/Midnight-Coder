@@ -390,7 +390,7 @@ impl AuthModeWidget {
         let mut lines: Vec<Line> = vec![
             Line::from(vec![
                 "  ".into(),
-                "Sign in with ChatGPT to use Codex as part of your paid plan".into(),
+                "Sign in with ChatGPT to use MidnightCoder as part of your paid plan".into(),
             ]),
             Line::from(vec![
                 "  ".into(),
@@ -551,18 +551,18 @@ impl AuthModeWidget {
             "".into(),
             "  Before you start:".into(),
             "".into(),
-            "  Decide how much autonomy you want to grant Codex".into(),
+            "  Decide how much autonomy you want to grant MidnightCoder".into(),
             Line::from(vec![
                 "  For more details see the ".into(),
                 crate::terminal_hyperlinks::osc8_hyperlink(
                     "https://developers.openai.com/codex/security",
-                    "Codex docs",
+                    "MidnightCoder docs",
                 )
                 .underlined(),
             ])
             .dim(),
             "".into(),
-            "  Codex can make mistakes".into(),
+            "  MidnightCoder can make mistakes".into(),
             "  Review the code it writes and commands it runs"
                 .dim()
                 .into(),
@@ -606,7 +606,7 @@ impl AuthModeWidget {
         let lines = vec![
             "✓ API key configured".fg(Color::Green).into(),
             "".into(),
-            "  Codex will use usage-based billing with your API key.".into(),
+            "  MidnightCoder will use usage-based billing with your API key.".into(),
         ];
 
         Paragraph::new(lines)
@@ -625,7 +625,7 @@ impl AuthModeWidget {
         let mut intro_lines: Vec<Line> = vec![
             Line::from(vec![
                 "> ".into(),
-                "Use your own OpenAI API key for usage-based billing".bold(),
+                "Use your own MidnightCoder API key for usage-based billing".bold(),
             ]),
             "".into(),
             "  Paste or type your API key below. It will be stored locally in auth.json.".into(),
@@ -1052,7 +1052,7 @@ mod tests {
                 /*auth_route_config*/ None,
             )
             .await,
-            feedback: codex_feedback::CodexFeedback::new(),
+            feedback: codex_feedback::MidnightCoderFeedback::new(),
             log_db: None,
             state_db: None,
             environment_manager: Arc::new(

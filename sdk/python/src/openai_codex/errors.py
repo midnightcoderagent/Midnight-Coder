@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 
-class CodexError(Exception):
+class MidnightCoderError(Exception):
     """Base exception for SDK errors."""
 
 
-class JsonRpcError(CodexError):
+class JsonRpcError(MidnightCoderError):
     """Raw JSON-RPC error wrapper from the server."""
 
     def __init__(self, code: int, message: str, data: Any = None):
@@ -17,35 +17,35 @@ class JsonRpcError(CodexError):
         self.data = data
 
 
-class TransportClosedError(CodexError):
-    """Raised when the Codex transport closes unexpectedly."""
+class TransportClosedError(MidnightCoderError):
+    """Raised when the MidnightCoder transport closes unexpectedly."""
 
 
-class CodexRpcError(JsonRpcError):
+class MidnightCoderRpcError(JsonRpcError):
     """Base typed error for JSON-RPC failures."""
 
 
-class ParseError(CodexRpcError):
+class ParseError(MidnightCoderRpcError):
     """Raised when a request or response cannot be parsed."""
 
 
-class InvalidRequestError(CodexRpcError):
+class InvalidRequestError(MidnightCoderRpcError):
     """Raised when the runtime rejects the request shape."""
 
 
-class MethodNotFoundError(CodexRpcError):
+class MethodNotFoundError(MidnightCoderRpcError):
     """Raised when the requested operation is unavailable."""
 
 
-class InvalidParamsError(CodexRpcError):
+class InvalidParamsError(MidnightCoderRpcError):
     """Raised when an operation receives invalid parameters."""
 
 
-class InternalRpcError(CodexRpcError):
+class InternalRpcError(MidnightCoderRpcError):
     """Raised when the runtime reports an internal RPC failure."""
 
 
-class ServerBusyError(CodexRpcError):
+class ServerBusyError(MidnightCoderRpcError):
     """Server is overloaded / unavailable and caller should retry."""
 
 
@@ -104,7 +104,7 @@ def map_jsonrpc_error(code: int, message: str, data: Any = None) -> JsonRpcError
             return ServerBusyError(code, message, data)
         if _contains_retry_limit_text(message):
             return RetryLimitExceededError(code, message, data)
-        return CodexRpcError(code, message, data)
+        return MidnightCoderRpcError(code, message, data)
 
     return JsonRpcError(code, message, data)
 

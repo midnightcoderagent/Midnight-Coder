@@ -45,16 +45,16 @@ use crate::mcp_tool_call::build_guardian_mcp_tool_review_request;
 use crate::mcp_tool_call::is_mcp_tool_approval_question_id;
 use crate::mcp_tool_call::lookup_mcp_tool_metadata;
 use crate::mcp_tool_call::mcp_approvals_reviewer;
-use crate::session::Codex;
-use crate::session::CodexSpawnArgs;
-use crate::session::CodexSpawnOk;
+use crate::session::MidnightCoder;
+use crate::session::MidnightCoderSpawnArgs;
+use crate::session::MidnightCoderSpawnOk;
 use crate::session::SUBMISSION_CHANNEL_CAPACITY;
 use crate::session::emit_subagent_session_started;
 use crate::session::session::Session;
 use crate::session::turn_context::TurnContext;
 use codex_login::AuthManager;
 use codex_models_manager::manager::SharedModelsManager;
-use codex_protocol::error::CodexErr;
+use codex_protocol::error::MidnightCoderErr;
 use codex_protocol::protocol::InitialHistory;
 use codex_protocol::protocol::MultiAgentVersion;
 
@@ -67,7 +67,7 @@ struct PendingMcpInvocation {
     metadata: Option<McpToolApprovalMetadata>,
 }
 
-/// Start an interactive sub-Codex thread and return IO channels.
+/// Start an interactive sub-MidnightCoder thread and return IO channels.
 ///
 /// The returned `events_rx` yields non-approval events emitted by the sub-agent.
 /// Approval requests are handled via `parent_session` and are not surfaced.
@@ -82,7 +82,7 @@ pub(crate) async fn run_codex_thread_interactive(
     cancel_token: CancellationToken,
     subagent_source: SubAgentSource,
     initial_history: Option<InitialHistory>,
-) -> Result<Codex, CodexErr> {
+) -> Result<MidnightCoder, MidnightCoderErr> {
     let (tx_sub, rx_sub) = async_channel::bounded(SUBMISSION_CHANNEL_CAPACITY);
     let (tx_ops, rx_ops) = async_channel::bounded(SUBMISSION_CHANNEL_CAPACITY);
     let conversation_history = initial_history.unwrap_or(InitialHistory::New);
@@ -91,51 +91,55 @@ pub(crate) async fn run_codex_thread_interactive(
         instructions: parent_session.user_instructions().await,
         warnings: Vec::new(),
     };
-    let CodexSpawnOk { codex, .. } = Box::pin(Codex::spawn(CodexSpawnArgs {
-        config,
-        allow_provider_model_fallback: false,
-        user_instructions,
-        installation_id: parent_session.installation_id.clone(),
-        auth_manager,
-        models_manager,
-        environment_manager: parent_session
-            .services
-            .turn_environments
-            .environment_manager(),
-        skills_service: Arc::clone(&parent_session.services.skills_service),
-        plugins_manager: Arc::clone(&parent_session.services.plugins_manager),
-        mcp_manager: Arc::clone(&parent_session.services.mcp_manager),
-        code_mode_session_provider: parent_session.services.code_mode_service.session_provider(),
-        extensions: Arc::clone(&parent_session.services.extensions),
-        conversation_history,
-        requested_history_mode: None,
-        session_source: SessionSource::SubAgent(subagent_source.clone()),
-        forked_from_thread_id,
-        parent_thread_id: Some(parent_session.thread_id),
-        thread_source: Some(ThreadSource::Subagent),
-        originator: parent_ctx.originator.clone(),
-        agent_control: parent_session.services.agent_control.clone(),
-        dynamic_tools: Vec::new(),
-        metrics_service_name: None,
-        user_shell_override: None,
-        inherited_environments: Some(parent_ctx.environments.clone()),
-        inherited_exec_policy: Some(Arc::clone(&parent_session.services.exec_policy)),
-        parent_rollout_thread_trace: codex_rollout_trace::ThreadTraceContext::disabled(),
-        parent_trace: None,
-        environment_selections: parent_ctx.environments.to_selections(),
-        thread_extension_init: codex_extension_api::ExtensionDataInit::default(),
-        supports_openai_form_elicitation: parent_session
-            .services
-            .supports_openai_form_elicitation
-            .load(std::sync::atomic::Ordering::Relaxed),
-        analytics_events_client: Some(parent_session.services.analytics_events_client.clone()),
-        thread_store: Arc::clone(&parent_session.services.thread_store),
-        attestation_provider: parent_session.services.attestation_provider.clone(),
-        external_time_provider: Some(Arc::clone(&parent_session.services.time_provider)),
-        inherited_multi_agent_version: Some(MultiAgentVersion::Disabled),
-    }))
-    .or_cancel(&cancel_token)
-    .await??;
+    let MidnightCoderSpawnOk { codex, .. } =
+        Box::pin(MidnightCoder::spawn(MidnightCoderSpawnArgs {
+            config,
+            allow_provider_model_fallback: false,
+            user_instructions,
+            installation_id: parent_session.installation_id.clone(),
+            auth_manager,
+            models_manager,
+            environment_manager: parent_session
+                .services
+                .turn_environments
+                .environment_manager(),
+            skills_service: Arc::clone(&parent_session.services.skills_service),
+            plugins_manager: Arc::clone(&parent_session.services.plugins_manager),
+            mcp_manager: Arc::clone(&parent_session.services.mcp_manager),
+            code_mode_session_provider: parent_session
+                .services
+                .code_mode_service
+                .session_provider(),
+            extensions: Arc::clone(&parent_session.services.extensions),
+            conversation_history,
+            requested_history_mode: None,
+            session_source: SessionSource::SubAgent(subagent_source.clone()),
+            forked_from_thread_id,
+            parent_thread_id: Some(parent_session.thread_id),
+            thread_source: Some(ThreadSource::Subagent),
+            originator: parent_ctx.originator.clone(),
+            agent_control: parent_session.services.agent_control.clone(),
+            dynamic_tools: Vec::new(),
+            metrics_service_name: None,
+            user_shell_override: None,
+            inherited_environments: Some(parent_ctx.environments.clone()),
+            inherited_exec_policy: Some(Arc::clone(&parent_session.services.exec_policy)),
+            parent_rollout_thread_trace: codex_rollout_trace::ThreadTraceContext::disabled(),
+            parent_trace: None,
+            environment_selections: parent_ctx.environments.to_selections(),
+            thread_extension_init: codex_extension_api::ExtensionDataInit::default(),
+            supports_openai_form_elicitation: parent_session
+                .services
+                .supports_openai_form_elicitation
+                .load(std::sync::atomic::Ordering::Relaxed),
+            analytics_events_client: Some(parent_session.services.analytics_events_client.clone()),
+            thread_store: Arc::clone(&parent_session.services.thread_store),
+            attestation_provider: parent_session.services.attestation_provider.clone(),
+            external_time_provider: Some(Arc::clone(&parent_session.services.time_provider)),
+            inherited_multi_agent_version: Some(MultiAgentVersion::Disabled),
+        }))
+        .or_cancel(&cancel_token)
+        .await??;
     let thread_config = codex.thread_config_snapshot().await;
     let client_metadata = parent_session.app_server_client_metadata().await;
     emit_subagent_session_started(
@@ -180,7 +184,7 @@ pub(crate) async fn run_codex_thread_interactive(
         forward_ops(codex_for_ops, rx_ops, cancel_token_ops).await;
     });
 
-    Ok(Codex {
+    Ok(MidnightCoder {
         tx_sub: tx_ops,
         rx_event: rx_sub,
         agent_status: codex.agent_status.clone(),
@@ -204,7 +208,7 @@ pub(crate) async fn run_codex_thread_one_shot(
     subagent_source: SubAgentSource,
     final_output_json_schema: Option<Value>,
     initial_history: Option<InitialHistory>,
-) -> Result<Codex, CodexErr> {
+) -> Result<MidnightCoder, MidnightCoderErr> {
     // Use a child token so we can stop the delegate after completion without
     // requiring the caller to cancel the parent token.
     let child_cancel = cancel_token.child_token();
@@ -265,7 +269,7 @@ pub(crate) async fn run_codex_thread_one_shot(
     let (tx_closed, rx_closed) = async_channel::bounded(SUBMISSION_CHANNEL_CAPACITY);
     drop(rx_closed);
 
-    Ok(Codex {
+    Ok(MidnightCoder {
         rx_event: rx_bridge,
         tx_sub: tx_closed,
         agent_status,
@@ -275,7 +279,7 @@ pub(crate) async fn run_codex_thread_one_shot(
 }
 
 async fn forward_events(
-    codex: Arc<Codex>,
+    codex: Arc<MidnightCoder>,
     tx_sub: Sender<Event>,
     parent_session: Arc<Session>,
     parent_ctx: Arc<TurnContext>,
@@ -440,7 +444,7 @@ async fn forward_events(
 }
 
 /// Ask the delegate to stop and drain its events so background sends do not hit a closed channel.
-async fn shutdown_delegate(codex: &Codex) {
+async fn shutdown_delegate(codex: &MidnightCoder) {
     let _ = codex.submit(Op::Interrupt).await;
     let _ = codex.submit(Op::Shutdown {}).await;
 
@@ -458,7 +462,7 @@ async fn shutdown_delegate(codex: &Codex) {
 }
 
 async fn forward_event_or_shutdown(
-    codex: &Codex,
+    codex: &MidnightCoder,
     tx_sub: &Sender<Event>,
     cancel_token: &CancellationToken,
     event: Event,
@@ -474,7 +478,7 @@ async fn forward_event_or_shutdown(
 
 /// Forward ops from a caller to a sub-agent, respecting cancellation.
 async fn forward_ops(
-    codex: Arc<Codex>,
+    codex: Arc<MidnightCoder>,
     rx_ops: Receiver<Submission>,
     cancel_token_ops: CancellationToken,
 ) {
@@ -489,7 +493,7 @@ async fn forward_ops(
 
 /// Handle an ExecApprovalRequest by consulting the parent session and replying.
 async fn handle_exec_approval(
-    codex: &Codex,
+    codex: &MidnightCoder,
     turn_id: String,
     parent_session: &Arc<Session>,
     parent_ctx: &Arc<TurnContext>,
@@ -574,7 +578,7 @@ async fn handle_exec_approval(
 
 /// Handle an ApplyPatchApprovalRequest by consulting the parent session and replying.
 async fn handle_patch_approval(
-    codex: &Codex,
+    codex: &MidnightCoder,
     _id: String,
     parent_session: &Arc<Session>,
     parent_ctx: &Arc<TurnContext>,
@@ -677,7 +681,7 @@ async fn handle_patch_approval(
 }
 
 async fn handle_request_user_input(
-    codex: &Codex,
+    codex: &MidnightCoder,
     id: String,
     parent_session: &Arc<Session>,
     parent_ctx: &Arc<TurnContext>,
@@ -794,7 +798,7 @@ async fn maybe_auto_review_mcp_request_user_input(
 }
 
 async fn handle_request_permissions(
-    codex: &Codex,
+    codex: &MidnightCoder,
     parent_session: &Arc<Session>,
     parent_ctx: &Arc<TurnContext>,
     event: RequestPermissionsEvent,

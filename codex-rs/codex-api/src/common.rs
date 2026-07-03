@@ -76,7 +76,7 @@ pub enum ResponseEvent {
     SafetyBuffering(SafetyBuffering),
     OutputItemDone(ResponseItem),
     OutputItemAdded(ResponseItem),
-    /// Emitted when the server includes `OpenAI-Model` on the stream response.
+    /// Emitted when the server includes `MidnightCoder-Model` on the stream response.
     /// This can differ from the requested model when backend safety routing applies.
     ServerModel(String),
     /// Emitted when the server recommends additional account verification.
@@ -166,7 +166,7 @@ pub enum TextFormatType {
 
 #[derive(Debug, Serialize, Default, Clone, PartialEq)]
 pub struct TextFormat {
-    /// Format type used by the OpenAI text controls.
+    /// Format type used by the MidnightCoder text controls.
     pub r#type: TextFormatType,
     /// When true, the server is expected to strictly validate responses.
     pub strict: bool,
@@ -184,6 +184,22 @@ pub struct TextControls {
     pub verbosity: Option<OpenAiVerbosity>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub format: Option<TextFormat>,
+}
+
+/// Provider-native request options for MidnightCoder-compatible APIs.
+///
+/// These are omitted for providers that do not support them. Ollama accepts
+/// `options.num_ctx` on both its native API and MidnightCoder-compatible `/v1/responses`.
+#[derive(Debug, Serialize, Default, Clone, PartialEq, Eq)]
+pub struct ProviderRequestOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_ctx: Option<i64>,
+}
+
+impl ProviderRequestOptions {
+    pub fn is_empty(&self) -> bool {
+        self.num_ctx.is_none()
+    }
 }
 
 #[derive(Debug, Serialize, Default, Clone, PartialEq)]
@@ -226,6 +242,8 @@ pub struct ResponsesApiRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<TextControls>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<ProviderRequestOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub client_metadata: Option<HashMap<String, String>>,
 }
 
@@ -246,6 +264,7 @@ impl From<&ResponsesApiRequest> for ResponseCreateWsRequest {
             service_tier: request.service_tier.clone(),
             prompt_cache_key: request.prompt_cache_key.clone(),
             text: request.text.clone(),
+            options: request.options.clone(),
             generate: None,
             client_metadata: request.client_metadata.clone(),
         }
@@ -274,6 +293,8 @@ pub struct ResponseCreateWsRequest {
     pub prompt_cache_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text: Option<TextControls>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub options: Option<ProviderRequestOptions>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub generate: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]

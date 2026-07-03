@@ -88,7 +88,7 @@ impl ChatGptEnvironment {
 /// Borrowed durable signing material for a registered agent identity.
 ///
 /// This intentionally does not include a task id. Task ids are scoped to a
-/// single Codex run, while the agent runtime id and private key are the
+/// single MidnightCoder run, while the agent runtime id and private key are the
 /// reusable identity material used to register and sign that run task.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AgentIdentityKey<'a> {
@@ -375,7 +375,7 @@ pub async fn register_agent_identity(
         .json(&request)
         .timeout(AGENT_REGISTRATION_TIMEOUT);
     if is_fedramp_account {
-        request_builder = request_builder.header("X-OpenAI-Fedramp", "true");
+        request_builder = request_builder.header("X-MidnightCoder-Fedramp", "true");
     }
 
     let response = request_builder

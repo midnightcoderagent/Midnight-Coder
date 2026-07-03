@@ -1773,7 +1773,7 @@ async fn get_account_with_managed_bedrock_provider() -> Result<()> {
         received,
         GetAccountResponse {
             account: Some(Account::AmazonBedrock {
-                credential_source: AmazonBedrockCredentialSource::CodexManaged,
+                credential_source: AmazonBedrockCredentialSource::MidnightCoderManaged,
             }),
             requires_openai_auth: false,
         }

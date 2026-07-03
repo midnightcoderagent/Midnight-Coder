@@ -1,5 +1,5 @@
 use codex_extension_api::ExtensionData;
-use codex_protocol::protocol::CodexErrorInfo;
+use codex_protocol::protocol::MidnightCoderErrorInfo;
 use codex_protocol::protocol::TokenUsage;
 use codex_protocol::protocol::TurnAbortReason;
 
@@ -75,7 +75,7 @@ impl Session {
     pub(crate) async fn emit_turn_error_lifecycle(
         &self,
         turn_context: &TurnContext,
-        error: CodexErrorInfo,
+        error: MidnightCoderErrorInfo,
     ) {
         for contributor in self.services.extensions.turn_lifecycle_contributors() {
             contributor

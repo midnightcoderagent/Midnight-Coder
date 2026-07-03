@@ -300,7 +300,7 @@ impl TurnRequestProcessor {
     async fn load_thread(
         &self,
         thread_id: &str,
-    ) -> Result<(ThreadId, Arc<CodexThread>), JSONRPCErrorError> {
+    ) -> Result<(ThreadId, Arc<MidnightCoderThread>), JSONRPCErrorError> {
         // Resolve the core conversation handle from a v2 thread id string.
         let thread_id = ThreadId::from_string(thread_id)
             .map_err(|err| invalid_request(format!("invalid thread id: {err}")))?;
@@ -317,7 +317,7 @@ impl TurnRequestProcessor {
     async fn ensure_direct_input_allowed(
         &self,
         request_id: &ConnectionRequestId,
-        thread: &CodexThread,
+        thread: &MidnightCoderThread,
     ) -> Result<(), JSONRPCErrorError> {
         if thread.multi_agent_version() == Some(MultiAgentVersion::V2)
             && matches!(
@@ -411,9 +411,9 @@ impl TurnRequestProcessor {
     async fn submit_core_op(
         &self,
         request_id: &ConnectionRequestId,
-        thread: &CodexThread,
+        thread: &MidnightCoderThread,
         op: Op,
-    ) -> CodexResult<String> {
+    ) -> MidnightCoderResult<String> {
         thread
             .submit_with_trace(op, self.request_trace_context(request_id).await)
             .await
@@ -477,7 +477,7 @@ impl TurnRequestProcessor {
             .await
             .map_err(|err| {
                 internal_error(format!(
-                    "failed to update OpenAI form elicitation support: {err}"
+                    "failed to update MidnightCoder form elicitation support: {err}"
                 ))
             })?;
 
@@ -570,7 +570,7 @@ impl TurnRequestProcessor {
 
     async fn build_environment_override(
         &self,
-        thread: &CodexThread,
+        thread: &MidnightCoderThread,
         cwd: Option<AbsolutePathBuf>,
         environment_selections: Option<Vec<TurnEnvironmentSelection>>,
     ) -> Option<TurnEnvironmentSelections> {
@@ -603,7 +603,7 @@ impl TurnRequestProcessor {
 
     async fn build_thread_settings_overrides(
         &self,
-        thread: &CodexThread,
+        thread: &MidnightCoderThread,
         params: ThreadSettingsBuildParams,
     ) -> Result<codex_protocol::protocol::ThreadSettingsOverrides, JSONRPCErrorError> {
         let ThreadSettingsBuildParams {
@@ -713,7 +713,7 @@ impl TurnRequestProcessor {
 
         if has_any_overrides {
             thread
-                .preview_thread_settings_overrides(CodexThreadSettingsOverrides {
+                .preview_thread_settings_overrides(MidnightCoderThreadSettingsOverrides {
                     environments: environments.clone(),
                     workspace_roots: runtime_workspace_roots.clone(),
                     approval_policy,
@@ -821,14 +821,14 @@ impl TurnRequestProcessor {
             .inject_response_items(items)
             .await
             .map_err(|err| match err {
-                CodexErr::InvalidRequest(message) => invalid_request(message),
+                MidnightCoderErr::InvalidRequest(message) => invalid_request(message),
                 err => internal_error(format!("failed to inject response items: {err}")),
             })?;
         Ok(ThreadInjectItemsResponse {})
     }
 
     async fn set_app_server_client_info(
-        thread: &CodexThread,
+        thread: &MidnightCoderThread,
         app_server_client_name: Option<String>,
         app_server_client_version: Option<String>,
     ) -> Result<(), JSONRPCErrorError> {
@@ -920,9 +920,11 @@ impl TurnRequestProcessor {
                         };
                         let error = TurnError {
                             message: message.clone(),
-                            codex_error_info: Some(CodexErrorInfo::ActiveTurnNotSteerable {
-                                turn_kind: turn_kind.into(),
-                            }),
+                            codex_error_info: Some(
+                                MidnightCoderErrorInfo::ActiveTurnNotSteerable {
+                                    turn_kind: turn_kind.into(),
+                                },
+                            ),
                             additional_details: None,
                         };
                         let data = match serde_json::to_value(error) {
@@ -959,7 +961,7 @@ impl TurnRequestProcessor {
         &self,
         request_id: &ConnectionRequestId,
         thread_id: &str,
-    ) -> Result<Option<(ThreadId, Arc<CodexThread>)>, JSONRPCErrorError> {
+    ) -> Result<Option<(ThreadId, Arc<MidnightCoderThread>)>, JSONRPCErrorError> {
         let (thread_id, thread) = self.load_thread(thread_id).await?;
 
         match self
@@ -1171,7 +1173,7 @@ impl TurnRequestProcessor {
     async fn start_inline_review(
         &self,
         request_id: &ConnectionRequestId,
-        parent_thread: Arc<CodexThread>,
+        parent_thread: Arc<MidnightCoderThread>,
         review_request: ReviewRequest,
         display_text: &str,
         parent_thread_id: String,
@@ -1194,7 +1196,7 @@ impl TurnRequestProcessor {
         &self,
         request_id: &ConnectionRequestId,
         parent_thread_id: ThreadId,
-        parent_thread: Arc<CodexThread>,
+        parent_thread: Arc<MidnightCoderThread>,
         review_request: ReviewRequest,
         display_text: &str,
     ) -> std::result::Result<(), JSONRPCErrorError> {

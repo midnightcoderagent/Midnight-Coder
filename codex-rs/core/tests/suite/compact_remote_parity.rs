@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 use codex_features::Feature;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_protocol::config_types::ServiceTier;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::Op;
@@ -15,7 +15,7 @@ use core_test_support::hooks::trust_discovered_hooks;
 use core_test_support::responses;
 use core_test_support::responses::ResponseMock;
 use core_test_support::skip_if_no_network;
-use core_test_support::test_codex::TestCodexHarness;
+use core_test_support::test_codex::TestMidnightCoderHarness;
 use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event;
 use pretty_assertions::assert_eq;
@@ -41,10 +41,10 @@ enum AuthCase {
 }
 
 impl AuthCase {
-    fn build(self) -> CodexAuth {
+    fn build(self) -> MidnightCoderAuth {
         match self {
-            AuthCase::ChatGpt => CodexAuth::create_dummy_chatgpt_auth_for_testing(),
-            AuthCase::ApiKey => CodexAuth::from_api_key("dummy"),
+            AuthCase::ChatGpt => MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing(),
+            AuthCase::ApiKey => MidnightCoderAuth::from_api_key("dummy"),
         }
     }
 }
@@ -486,7 +486,7 @@ async fn run_manual_hook_session(mode: Mode) -> Result<Value> {
     }))
 }
 
-async fn build_auto_harness(mode: Mode) -> Result<TestCodexHarness> {
+async fn build_auto_harness(mode: Mode) -> Result<TestMidnightCoderHarness> {
     build_harness_inner(
         mode,
         RunSettings::default(),
@@ -496,7 +496,11 @@ async fn build_auto_harness(mode: Mode) -> Result<TestCodexHarness> {
     .await
 }
 
-async fn build_harness(mode: Mode, settings: RunSettings, hooks: bool) -> Result<TestCodexHarness> {
+async fn build_harness(
+    mode: Mode,
+    settings: RunSettings,
+    hooks: bool,
+) -> Result<TestMidnightCoderHarness> {
     build_harness_inner(mode, settings, hooks, /*auto_compact_limit*/ None).await
 }
 
@@ -505,7 +509,7 @@ async fn build_harness_inner(
     settings: RunSettings,
     hooks: bool,
     auto_compact_limit: Option<i64>,
-) -> Result<TestCodexHarness> {
+) -> Result<TestMidnightCoderHarness> {
     fs::create_dir_all(FIXED_CWD)?;
     let mut builder = test_codex()
         .with_auth(settings.auth.build())
@@ -516,7 +520,7 @@ async fn build_harness_inner(
     if hooks {
         builder = builder.with_pre_build_hook(write_manual_compact_hooks);
     }
-    TestCodexHarness::with_builder(builder.with_config(move |config| {
+    TestMidnightCoderHarness::with_builder(builder.with_config(move |config| {
         config.cwd = codex_utils_absolute_path::AbsolutePathBuf::from_absolute_path(PathBuf::from(
             FIXED_CWD,
         ))
@@ -536,7 +540,7 @@ async fn build_harness_inner(
     .await
 }
 
-fn rollout_path(harness: &TestCodexHarness) -> PathBuf {
+fn rollout_path(harness: &TestMidnightCoderHarness) -> PathBuf {
     harness
         .test()
         .session_configured
@@ -546,7 +550,7 @@ fn rollout_path(harness: &TestCodexHarness) -> PathBuf {
 }
 
 async fn mount_legacy_compact_if_needed(
-    harness: &TestCodexHarness,
+    harness: &TestMidnightCoderHarness,
     mode: Mode,
 ) -> Option<ResponseMock> {
     match mode {
@@ -564,7 +568,7 @@ fn follow_up_index(request_count: usize) -> usize {
 
 async fn capture_from_requests(
     mode: Mode,
-    codex: &codex_core::CodexThread,
+    codex: &codex_core::MidnightCoderThread,
     rollout_path: &Path,
     responses_mock: &ResponseMock,
     compact_mock: Option<&ResponseMock>,
@@ -602,7 +606,10 @@ async fn capture_from_requests(
     })
 }
 
-async fn submit_user_input(codex: &codex_core::CodexThread, items: Vec<UserInput>) -> Result<()> {
+async fn submit_user_input(
+    codex: &codex_core::MidnightCoderThread,
+    items: Vec<UserInput>,
+) -> Result<()> {
     codex
         .submit(Op::UserInput {
             items,
@@ -616,7 +623,7 @@ async fn submit_user_input(codex: &codex_core::CodexThread, items: Vec<UserInput
     Ok(())
 }
 
-async fn wait_for_turn_complete(codex: &codex_core::CodexThread) {
+async fn wait_for_turn_complete(codex: &codex_core::MidnightCoderThread) {
     wait_for_event(codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 }
 

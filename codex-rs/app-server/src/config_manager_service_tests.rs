@@ -64,7 +64,7 @@ X-Doc = "42"
 #[tokio::test]
 async fn write_value_preserves_comments_and_order() -> Result<()> {
     let tmp = tempdir().expect("tempdir");
-    let original = r#"# Codex user configuration
+    let original = r#"# MidnightCoder user configuration
 model = "gpt-5.2"
 approval_policy = "on-request"
 
@@ -90,7 +90,7 @@ unified_exec = true
         .expect("write succeeds");
 
     let updated = std::fs::read_to_string(tmp.path().join(CONFIG_TOML_FILE)).expect("read config");
-    let expected = r#"# Codex user configuration
+    let expected = r#"# MidnightCoder user configuration
 model = "gpt-5.2"
 approval_policy = "on-request"
 
@@ -127,6 +127,26 @@ async fn clear_missing_nested_config_is_noop() -> Result<()> {
     assert_eq!(response.status, WriteStatus::Ok);
     assert_eq!(response.overridden_metadata, None);
     assert_eq!(std::fs::read_to_string(&path)?, "");
+    Ok(())
+}
+
+#[tokio::test]
+async fn creating_user_config_bootstraps_platform_specific_tool_settings() -> Result<()> {
+    let tmp = tempdir().expect("tempdir");
+    let config_path = tmp.path().join(CONFIG_TOML_FILE);
+    let config_path =
+        AbsolutePathBuf::from_absolute_path(config_path.clone()).expect("absolute config path");
+
+    create_empty_user_layer(&config_path)
+        .await
+        .expect("bootstrap write succeeds");
+
+    let contents = std::fs::read_to_string(&config_path).expect("read config");
+    if cfg!(target_os = "windows") {
+        assert_eq!(contents, "[windows]\nsandbox = \"unelevated\"\n");
+    } else {
+        assert!(contents.is_empty(), "{contents}");
+    }
     Ok(())
 }
 
@@ -681,7 +701,7 @@ async fn reserved_builtin_provider_override_rejected() {
         .write_value(ConfigValueWriteParams {
             file_path: Some(tmp.path().join(CONFIG_TOML_FILE).display().to_string()),
             key_path: "model_providers.openai.name".to_string(),
-            value: serde_json::json!("OpenAI Override"),
+            value: serde_json::json!("MidnightCoder Override"),
             merge_strategy: MergeStrategy::Replace,
             expected_version: None,
         })

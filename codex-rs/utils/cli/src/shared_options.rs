@@ -1,4 +1,4 @@
-//! Shared command-line flags used by both interactive and non-interactive Codex entry points.
+//! Shared command-line flags used by both interactive and non-interactive MidnightCoder entry points.
 
 use crate::SandboxModeCliArg;
 use clap::Args;
@@ -21,16 +21,16 @@ pub struct SharedCliOptions {
     #[arg(long, short = 'm')]
     pub model: Option<String>,
 
-    /// Use open-source provider.
+    /// Use a local open-source provider.
     #[arg(long = "oss", default_value_t = false)]
     pub oss: bool,
 
-    /// Specify which local provider to use (lmstudio or ollama).
+    /// Specify which local provider to use (lmstudio, ollama, or llama as an Ollama alias).
     /// If not specified with --oss, will use config default or show selection.
     #[arg(long = "local-provider")]
     pub oss_provider: Option<String>,
 
-    /// Layer $CODEX_HOME/<name>.config.toml on top of the base user config.
+    /// Layer $MIDCODER_HOME/<name>.config.toml on top of the base user config.
     #[arg(long = "profile", short = 'p')]
     pub config_profile_v2: Option<ProfileV2Name>,
 

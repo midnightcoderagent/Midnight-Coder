@@ -18,9 +18,9 @@ use tracing::warn;
 
 use crate::model::AgentThreadId;
 use crate::model::CodeModeRuntimeToolId;
-use crate::model::CodexTurnId;
 use crate::model::ExecutionStatus;
 use crate::model::ModelVisibleCallId;
+use crate::model::MidnightCoderTurnId;
 use crate::model::ToolCallId;
 use crate::model::ToolCallKind;
 use crate::model::ToolCallSummary;
@@ -47,14 +47,14 @@ enum ToolDispatchTraceContextState {
 struct EnabledToolDispatchTraceContext {
     writer: Arc<TraceWriter>,
     thread_id: AgentThreadId,
-    codex_turn_id: CodexTurnId,
+    codex_turn_id: MidnightCoderTurnId,
     tool_call_id: ToolCallId,
 }
 
-/// Core-facing request data for the canonical Codex tool boundary.
+/// Core-facing request data for the canonical MidnightCoder tool boundary.
 pub struct ToolDispatchInvocation {
     pub thread_id: AgentThreadId,
-    pub codex_turn_id: CodexTurnId,
+    pub codex_turn_id: MidnightCoderTurnId,
     pub tool_call_id: ToolCallId,
     pub tool_name: String,
     pub tool_namespace: Option<String>,
@@ -103,7 +103,7 @@ pub enum ToolDispatchResult {
     CodeModeResponse { value: JsonValue },
 }
 
-/// Raw invocation payload for the canonical Codex tool boundary.
+/// Raw invocation payload for the canonical MidnightCoder tool boundary.
 #[derive(Serialize)]
 struct DispatchedToolTraceRequest<'a> {
     tool_name: &'a str,

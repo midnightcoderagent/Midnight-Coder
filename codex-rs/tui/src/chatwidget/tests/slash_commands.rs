@@ -146,7 +146,7 @@ async fn slash_compact_eagerly_queues_follow_up_before_turn_start() {
 
     assert!(chat.bottom_pane.is_task_running());
     match rx.try_recv() {
-        Ok(AppEvent::CodexOp(Op::Compact)) => {}
+        Ok(AppEvent::MidnightCoderOp(Op::Compact)) => {}
         other => panic!("expected compact op to be submitted, got {other:?}"),
     }
 
@@ -164,6 +164,48 @@ async fn slash_compact_eagerly_queues_follow_up_before_turn_start() {
         "queued before compact turn start"
     );
     assert_matches!(op_rx.try_recv(), Err(TryRecvError::Empty));
+}
+
+#[tokio::test]
+async fn slash_compact_zero_sets_summarize_resume_type() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.dispatch_command_with_args(SlashCommand::Compact, "0".to_string(), Vec::new());
+
+    match rx.try_recv() {
+        Ok(AppEvent::PersistResumeTypeSelection { resume_type }) => {
+            assert_eq!(resume_type, "summarize");
+        }
+        other => panic!("expected resume type update, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn slash_compact_one_sets_drop_history_resume_type() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.dispatch_command_with_args(SlashCommand::Compact, "1".to_string(), Vec::new());
+
+    match rx.try_recv() {
+        Ok(AppEvent::PersistResumeTypeSelection { resume_type }) => {
+            assert_eq!(resume_type, "drop-history");
+        }
+        other => panic!("expected resume type update, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn slash_compact_off_disables_auto_compaction() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.dispatch_command_with_args(SlashCommand::Compact, "off".to_string(), Vec::new());
+
+    match rx.try_recv() {
+        Ok(AppEvent::PersistAutoCompaction { enabled }) => {
+            assert!(!enabled);
+        }
+        other => panic!("expected auto-compaction update, got {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -191,7 +233,7 @@ async fn queued_slash_compact_dispatches_after_active_turn() {
     assert!(
         events
             .iter()
-            .any(|event| matches!(event, AppEvent::CodexOp(Op::Compact))),
+            .any(|event| matches!(event, AppEvent::MidnightCoderOp(Op::Compact))),
         "expected queued /compact to submit compact op; events: {events:?}"
     );
 }
@@ -469,7 +511,7 @@ async fn queued_bare_rename_drains_next_input_after_name_update() {
     assert!(
         events.iter().any(|event| matches!(
             event,
-            AppEvent::CodexOp(Op::SetThreadName { name }) if name == "Queued rename"
+            AppEvent::MidnightCoderOp(Op::SetThreadName { name }) if name == "Queued rename"
         )),
         "expected rename prompt to submit thread name; events: {events:?}"
     );
@@ -514,7 +556,7 @@ async fn queued_inline_rename_does_not_drain_again_before_turn_started() {
     assert!(
         events.iter().any(|event| matches!(
             event,
-            AppEvent::CodexOp(Op::SetThreadName { name }) if name == "Queued rename"
+            AppEvent::MidnightCoderOp(Op::SetThreadName { name }) if name == "Queued rename"
         )),
         "expected queued /rename to submit thread name; events: {events:?}"
     );
@@ -1182,7 +1224,7 @@ async fn slash_rename_prefills_existing_thread_name() {
 
     assert_matches!(
         rx.try_recv(),
-        Ok(AppEvent::CodexOp(Op::SetThreadName { name })) if name == "Current project title"
+        Ok(AppEvent::MidnightCoderOp(Op::SetThreadName { name })) if name == "Current project title"
     );
 }
 
@@ -1578,7 +1620,7 @@ async fn pending_token_activity_refresh_keeps_composer_visible_in_short_viewport
             .vt100()
             .screen()
             .contents()
-            .contains("Ask Codex to do anything")
+            .contains("Ask MidnightCoder to do anything")
     );
 }
 
@@ -2634,7 +2676,7 @@ async fn fast_slash_command_updates_and_persists_local_service_tier() {
     assert!(
         events.iter().any(|event| matches!(
             event,
-            AppEvent::CodexOp(Op::OverrideTurnContext {
+            AppEvent::MidnightCoderOp(Op::OverrideTurnContext {
                 service_tier: Some(Some(service_tier)),
                 ..
             }) if service_tier == ServiceTier::Fast.request_value()
@@ -2667,7 +2709,7 @@ async fn fast_keybinding_toggle_uses_same_events_as_fast_slash_command() {
     assert!(
         events.iter().any(|event| matches!(
             event,
-            AppEvent::CodexOp(Op::OverrideTurnContext {
+            AppEvent::MidnightCoderOp(Op::OverrideTurnContext {
                 service_tier: Some(Some(service_tier)),
                 ..
             }) if service_tier == ServiceTier::Fast.request_value()
@@ -2787,7 +2829,7 @@ async fn queued_fast_slash_applies_before_next_queued_message() {
     assert!(
         events.iter().any(|event| matches!(
             event,
-            AppEvent::CodexOp(Op::OverrideTurnContext {
+            AppEvent::MidnightCoderOp(Op::OverrideTurnContext {
                 service_tier: Some(Some(service_tier)),
                 ..
             }) if service_tier == ServiceTier::Fast.request_value()
@@ -2827,7 +2869,7 @@ async fn user_turn_sends_standard_override_after_fast_is_turned_off() {
     assert!(
         events.iter().any(|event| matches!(
             event,
-            AppEvent::CodexOp(Op::OverrideTurnContext {
+            AppEvent::MidnightCoderOp(Op::OverrideTurnContext {
                 service_tier: Some(Some(service_tier)),
                 ..
             }) if service_tier == SERVICE_TIER_DEFAULT_REQUEST_VALUE
@@ -2920,7 +2962,7 @@ async fn compact_queues_user_messages_snapshot() {
     handle_error(
         &mut chat,
         "cannot steer a compact turn",
-        Some(CodexErrorInfo::ActiveTurnNotSteerable {
+        Some(MidnightCoderErrorInfo::ActiveTurnNotSteerable {
             turn_kind: NonSteerableTurnKind::Compact,
         }),
     );

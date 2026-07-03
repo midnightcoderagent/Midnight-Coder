@@ -1695,6 +1695,8 @@ fn config_granular_approval_policy_is_marked_experimental() {
     let reason = crate::experimental_api::ExperimentalApi::experimental_reason(&Config {
         model: None,
         review_model: None,
+        mini_model: None,
+        resume_type: None,
         model_context_window: None,
         model_auto_compact_token_limit: None,
         model_auto_compact_token_limit_scope: None,
@@ -1734,6 +1736,8 @@ fn config_approvals_reviewer_is_marked_experimental() {
     let reason = crate::experimental_api::ExperimentalApi::experimental_reason(&Config {
         model: None,
         review_model: None,
+        mini_model: None,
+        resume_type: None,
         model_context_window: None,
         model_auto_compact_token_limit: None,
         model_auto_compact_token_limit_scope: None,
@@ -1990,7 +1994,7 @@ fn mcp_server_elicitation_request_from_core_openai_form_request() {
         message: "Choose a report".to_string(),
         requested_schema: requested_schema.clone(),
     })
-    .expect("OpenAI form request should convert");
+    .expect("MidnightCoder form request should convert");
 
     assert_eq!(
         request,
@@ -3823,7 +3827,7 @@ fn marketplace_upgrade_response_serializes_camel_case_fields() {
 
 #[test]
 fn codex_error_info_serializes_http_status_code_in_camel_case() {
-    let value = CodexErrorInfo::ResponseTooManyFailedAttempts {
+    let value = MidnightCoderErrorInfo::ResponseTooManyFailedAttempts {
         http_status_code: Some(401),
     };
 
@@ -3840,14 +3844,14 @@ fn codex_error_info_serializes_http_status_code_in_camel_case() {
 #[test]
 fn codex_error_info_serializes_cyber_policy_in_camel_case() {
     assert_eq!(
-        serde_json::to_value(CodexErrorInfo::CyberPolicy).unwrap(),
+        serde_json::to_value(MidnightCoderErrorInfo::CyberPolicy).unwrap(),
         json!("cyberPolicy")
     );
 }
 
 #[test]
 fn codex_error_info_serializes_active_turn_not_steerable_turn_kind_in_camel_case() {
-    let value = CodexErrorInfo::ActiveTurnNotSteerable {
+    let value = MidnightCoderErrorInfo::ActiveTurnNotSteerable {
         turn_kind: NonSteerableTurnKind::Review,
     };
 

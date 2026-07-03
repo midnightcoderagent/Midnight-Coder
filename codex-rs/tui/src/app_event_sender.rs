@@ -34,7 +34,7 @@ impl AppEventSender {
     pub(crate) fn send(&self, event: AppEvent) {
         // Record inbound events for high-fidelity session replay.
         // Avoid double-logging Ops; those are logged at the point of submission.
-        if !matches!(event, AppEvent::CodexOp(_)) {
+        if !matches!(event, AppEvent::MidnightCoderOp(_)) {
             session_log::log_inbound_app_event(&event);
         }
         if let Err(e) = self.app_event_tx.send(event) {
@@ -43,36 +43,36 @@ impl AppEventSender {
     }
 
     pub(crate) fn interrupt(&self) {
-        self.send(AppEvent::CodexOp(AppCommand::interrupt()));
+        self.send(AppEvent::MidnightCoderOp(AppCommand::interrupt()));
     }
 
     pub(crate) fn interrupt_and_restore_prompt_if_no_output(&self) {
-        self.send(AppEvent::CodexOp(
+        self.send(AppEvent::MidnightCoderOp(
             AppCommand::interrupt_and_restore_prompt_if_no_output(),
         ));
     }
 
     pub(crate) fn compact(&self) {
-        self.send(AppEvent::CodexOp(AppCommand::compact()));
+        self.send(AppEvent::MidnightCoderOp(AppCommand::compact()));
     }
 
     pub(crate) fn set_thread_name(&self, name: String) {
-        self.send(AppEvent::CodexOp(AppCommand::set_thread_name(name)));
+        self.send(AppEvent::MidnightCoderOp(AppCommand::set_thread_name(name)));
     }
 
     pub(crate) fn review(&self, target: ReviewTarget) {
-        self.send(AppEvent::CodexOp(AppCommand::review(target)));
+        self.send(AppEvent::MidnightCoderOp(AppCommand::review(target)));
     }
 
     pub(crate) fn list_skills(&self, cwds: Vec<PathBuf>, force_reload: bool) {
-        self.send(AppEvent::CodexOp(AppCommand::list_skills(
+        self.send(AppEvent::MidnightCoderOp(AppCommand::list_skills(
             cwds,
             force_reload,
         )));
     }
 
     pub(crate) fn user_input_answer(&self, id: String, response: ToolRequestUserInputResponse) {
-        self.send(AppEvent::CodexOp(AppCommand::user_input_answer(
+        self.send(AppEvent::MidnightCoderOp(AppCommand::user_input_answer(
             id, response,
         )));
     }

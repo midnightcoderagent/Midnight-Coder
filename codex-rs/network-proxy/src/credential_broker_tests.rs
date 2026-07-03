@@ -54,7 +54,9 @@ fn virtualize_child_env_replaces_supported_credentials() {
     broker.virtualize_child_env(&mut env);
 
     let github_dummy = env.get("GH_TOKEN").expect("dummy GitHub token");
-    let openai_dummy = env.get("OPENAI_API_KEY").expect("dummy OpenAI API key");
+    let openai_dummy = env
+        .get("OPENAI_API_KEY")
+        .expect("dummy MidnightCoder API key");
     assert_credential_shape(github_token, github_dummy, "github_pat_");
     assert_credential_shape(openai_api_key, openai_dummy, "sk-proj-");
     env.insert("OPENAI_API_KEY".to_string(), "sk-user-override".to_string());
@@ -151,7 +153,9 @@ fn inject_request_headers_requires_dummy_and_preserves_explicit_authorization() 
     let broker = CredentialBroker::new(/*enabled*/ true);
     let mut env = env_map([("OPENAI_API_KEY", "sk-real")]);
     broker.virtualize_child_env(&mut env);
-    let openai_api_key = env.get("OPENAI_API_KEY").expect("dummy OpenAI API key");
+    let openai_api_key = env
+        .get("OPENAI_API_KEY")
+        .expect("dummy MidnightCoder API key");
     let mut headers = HeaderMap::new();
 
     broker.inject_request_headers("api.openai.com", &mut headers);

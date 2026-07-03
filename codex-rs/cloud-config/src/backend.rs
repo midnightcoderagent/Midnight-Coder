@@ -6,7 +6,7 @@ use codex_config::CloudConfigFragment;
 use codex_config::CloudConfigTomlBundle;
 use codex_config::CloudRequirementsFragment;
 use codex_config::CloudRequirementsTomlBundle;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use std::future::Future;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,7 +40,7 @@ pub(crate) enum BundleRequestError {
 pub(crate) trait BundleClient: Send + Sync {
     fn get_bundle(
         &self,
-        auth: &CodexAuth,
+        auth: &MidnightCoderAuth,
     ) -> impl Future<Output = Result<CloudConfigBundle, BundleRequestError>> + Send;
 }
 
@@ -55,7 +55,10 @@ impl BackendBundleClient {
 }
 
 impl BundleClient for BackendBundleClient {
-    async fn get_bundle(&self, auth: &CodexAuth) -> Result<CloudConfigBundle, BundleRequestError> {
+    async fn get_bundle(
+        &self,
+        auth: &MidnightCoderAuth,
+    ) -> Result<CloudConfigBundle, BundleRequestError> {
         let client = BackendClient::from_auth(self.base_url.clone(), auth)
             .inspect_err(|err| {
                 tracing::warn!(

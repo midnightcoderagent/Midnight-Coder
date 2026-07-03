@@ -72,7 +72,7 @@ function Assert-ValidReleaseVersion {
     )
 
     if ($Version -cne "latest" -and $Version -cnotmatch "^[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta)(?:\.[0-9]+)?)?$") {
-        throw "Invalid Codex release version: $Version. Expected latest or x.y.z[-alpha[.N]|-beta[.N]]."
+        throw "Invalid MidnightCoder release version: $Version. Expected latest or x.y.z[-alpha[.N]|-beta[.N]]."
     }
 }
 
@@ -107,7 +107,7 @@ function Get-ReleaseAssetMetadata {
 
     $metadata = Find-ReleaseAssetMetadata -AssetName $AssetName -ResolvedVersion $ResolvedVersion
     if ($null -eq $metadata) {
-        throw "Could not find release asset $AssetName for Codex $ResolvedVersion."
+        throw "Could not find release asset $AssetName for MidnightCoder $ResolvedVersion."
     }
 
     return $metadata
@@ -121,7 +121,7 @@ function Test-ArchiveDigest {
 
     $actualDigest = (Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actualDigest -ne $ExpectedDigest) {
-        throw "Downloaded Codex archive checksum did not match expected digest. Expected $ExpectedDigest but got $actualDigest."
+        throw "Downloaded MidnightCoder archive checksum did not match expected digest. Expected $ExpectedDigest but got $actualDigest."
     }
 }
 
@@ -225,7 +225,7 @@ function Resolve-Version {
 
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/openai/codex/releases/latest"
     if (-not $release.tag_name) {
-        Write-Error "Failed to resolve the latest Codex release version."
+        Write-Error "Failed to resolve the latest MidnightCoder release version."
         exit 1
     }
 
@@ -236,15 +236,15 @@ function Resolve-Version {
 
 function Get-VersionFromBinary {
     param(
-        [string]$CodexPath
+        [string]$MidnightCoderPath
     )
 
-    if (-not (Test-Path -LiteralPath $CodexPath -PathType Leaf)) {
+    if (-not (Test-Path -LiteralPath $MidnightCoderPath -PathType Leaf)) {
         return $null
     }
 
     try {
-        $versionOutput = & $CodexPath --version 2>$null
+        $versionOutput = & $MidnightCoderPath --version 2>$null
     } catch {
         return $null
     }
@@ -261,12 +261,12 @@ function Get-CurrentInstalledVersion {
         [string]$StandaloneCurrentDir
     )
 
-    $standaloneVersion = Get-VersionFromBinary -CodexPath (Join-Path $StandaloneCurrentDir "bin\codex.exe")
+    $standaloneVersion = Get-VersionFromBinary -MidnightCoderPath (Join-Path $StandaloneCurrentDir "bin\codex.exe")
     if (-not [string]::IsNullOrWhiteSpace($standaloneVersion)) {
         return $standaloneVersion
     }
 
-    $standaloneVersion = Get-VersionFromBinary -CodexPath (Join-Path $StandaloneCurrentDir "codex.exe")
+    $standaloneVersion = Get-VersionFromBinary -MidnightCoderPath (Join-Path $StandaloneCurrentDir "codex.exe")
     if (-not [string]::IsNullOrWhiteSpace($standaloneVersion)) {
         return $standaloneVersion
     }
@@ -328,9 +328,9 @@ function Move-OldStandaloneBinIfApproved {
         return $null
     }
 
-    Write-Step "We found an older Codex install at $VisibleBinDir"
-    Write-WarningStep "To continue, Codex needs to update the install at this path."
-    if (-not (Prompt-YesNo "Replace it with the current Codex setup now?")) {
+    Write-Step "We found an older MidnightCoder install at $VisibleBinDir"
+    Write-WarningStep "To continue, MidnightCoder needs to update the install at this path."
+    if (-not (Prompt-YesNo "Replace it with the current MidnightCoder setup now?")) {
         throw "Cannot replace older standalone install without confirmation: $VisibleBinDir"
     }
 
@@ -341,7 +341,7 @@ function Move-OldStandaloneBinIfApproved {
 }
 
 function Add-JunctionSupportType {
-    if (([System.Management.Automation.PSTypeName]'CodexInstaller.Junction').Type) {
+    if (([System.Management.Automation.PSTypeName]'MidnightCoderInstaller.Junction').Type) {
         return
     }
 
@@ -353,7 +353,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32.SafeHandles;
 
-namespace CodexInstaller
+namespace MidnightCoderInstaller
 {
     public static class Junction
     {
@@ -460,7 +460,7 @@ function Set-JunctionTarget {
     )
 
     Add-JunctionSupportType
-    [CodexInstaller.Junction]::SetTarget($LinkPath, $TargetPath)
+    [MidnightCoderInstaller.Junction]::SetTarget($LinkPath, $TargetPath)
 }
 
 function Test-IsJunction {
@@ -594,14 +594,14 @@ function Test-ReleaseIsComplete {
             }
         }
         default {
-            throw "Unknown Codex installer layout: $Layout"
+            throw "Unknown MidnightCoder installer layout: $Layout"
         }
     }
 
     return (Split-Path -Leaf $ReleaseDir) -eq "$ExpectedVersion-$ExpectedTarget"
 }
 
-function Get-ExistingCodexCommand {
+function Get-ExistingMidnightCoderCommand {
     $existing = Get-Command codex -ErrorAction SilentlyContinue
     if ($null -eq $existing) {
         return $null
@@ -610,7 +610,7 @@ function Get-ExistingCodexCommand {
     return $existing.Source
 }
 
-function Get-ExistingCodexManager {
+function Get-ExistingMidnightCoderManager {
     param(
         [string]$ExistingPath,
         [string]$VisibleBinDir
@@ -640,14 +640,14 @@ function Get-ConflictingInstall {
         [string]$VisibleBinDir
     )
 
-    $existingPath = Get-ExistingCodexCommand
-    $manager = Get-ExistingCodexManager -ExistingPath $existingPath -VisibleBinDir $VisibleBinDir
+    $existingPath = Get-ExistingMidnightCoderCommand
+    $manager = Get-ExistingMidnightCoderManager -ExistingPath $existingPath -VisibleBinDir $VisibleBinDir
     if ($null -eq $manager) {
         return $null
     }
 
-    Write-Step "Detected existing $manager-managed Codex at $existingPath"
-    Write-WarningStep "Multiple managed Codex installs can be ambiguous because PATH order decides which one runs."
+    Write-Step "Detected existing $manager-managed MidnightCoder at $existingPath"
+    Write-WarningStep "Multiple managed MidnightCoder installs can be ambiguous because PATH order decides which one runs."
 
     return [PSCustomObject]@{
         Manager = $manager
@@ -673,19 +673,19 @@ function Maybe-HandleConflictingInstall {
     }
     $uninstallCommand = if ($manager -eq "bun") { "bun" } else { "npm" }
 
-    if (Prompt-YesNo "Uninstall the existing $manager-managed Codex now?") {
+    if (Prompt-YesNo "Uninstall the existing $manager-managed MidnightCoder now?") {
         Write-Step "Running: $uninstallCommand $($uninstallArgs -join ' ')"
         try {
             & $uninstallCommand @uninstallArgs
         } catch {
-            Write-WarningStep "Failed to uninstall the existing $manager-managed Codex. Continuing with the standalone install."
+            Write-WarningStep "Failed to uninstall the existing $manager-managed MidnightCoder. Continuing with the standalone install."
         }
     } else {
-        Write-WarningStep "Leaving the existing $manager-managed Codex installed. PATH order will determine which codex runs."
+        Write-WarningStep "Leaving the existing $manager-managed MidnightCoder installed. PATH order will determine which codex runs."
     }
 }
 
-function Test-VisibleCodexCommand {
+function Test-VisibleMidnightCoderCommand {
     param(
         [string]$VisibleBinDir
     )
@@ -693,7 +693,7 @@ function Test-VisibleCodexCommand {
     $codexCommand = Join-Path $VisibleBinDir "codex.exe"
     & $codexCommand --version *> $null
     if ($LASTEXITCODE -ne 0) {
-        throw "Installed Codex command failed verification: $codexCommand --version"
+        throw "Installed MidnightCoder command failed verification: $codexCommand --version"
     }
 }
 
@@ -703,7 +703,7 @@ if ($env:OS -ne "Windows_NT") {
 }
 
 if (-not [Environment]::Is64BitOperatingSystem) {
-    Write-Error "Codex requires a 64-bit version of Windows."
+    Write-Error "MidnightCoder requires a 64-bit version of Windows."
     exit 1
 }
 
@@ -738,7 +738,7 @@ $releasesDir = Join-Path $standaloneRoot "releases"
 $currentDir = Join-Path $standaloneRoot "current"
 $lockPath = Join-Path $standaloneRoot "install.lock"
 
-$defaultVisibleBinDir = Join-Path $env:LOCALAPPDATA "Programs\OpenAI\Codex\bin"
+$defaultVisibleBinDir = Join-Path $env:LOCALAPPDATA "Programs\OpenAI\MidnightCoder\bin"
 if ([string]::IsNullOrWhiteSpace($env:CODEX_INSTALL_DIR)) {
     $visibleBinDir = $defaultVisibleBinDir
 } else {
@@ -751,11 +751,11 @@ $releaseName = "$resolvedVersion-$target"
 $releaseDir = Join-Path $releasesDir $releaseName
 
 if (-not [string]::IsNullOrWhiteSpace($currentVersion) -and $currentVersion -ne $resolvedVersion) {
-    Write-Step "Updating Codex CLI from $currentVersion to $resolvedVersion"
+    Write-Step "Updating MidnightCoder from $currentVersion to $resolvedVersion"
 } elseif (-not [string]::IsNullOrWhiteSpace($currentVersion)) {
-    Write-Step "Updating Codex CLI"
+    Write-Step "Updating MidnightCoder"
 } else {
-    Write-Step "Installing Codex CLI"
+    Write-Step "Installing MidnightCoder"
 }
 Write-Step "Detected platform: $platformLabel"
 Write-Step "Resolved version: $resolvedVersion"
@@ -774,7 +774,7 @@ if ($null -eq $packageMetadata -or $null -eq $checksumMetadata) {
     if ($null -ne $packageMetadata) {
         $installLayout = "LegacyPlatformNpm"
     } else {
-        throw "Could not find Codex package or platform npm release assets for Codex $resolvedVersion."
+        throw "Could not find MidnightCoder package or platform npm release assets for MidnightCoder $resolvedVersion."
     }
     $checksumMetadata = $null
 }
@@ -794,7 +794,7 @@ try {
             $checksumPath = Join-Path $tempDir $checksumAsset
             $stagingDir = Join-Path $releasesDir ".staging.$releaseName.$PID"
 
-            Write-Step "Downloading Codex CLI"
+            Write-Step "Downloading MidnightCoder"
             if ($installLayout -eq "Package") {
                 Invoke-WebRequest -Uri $checksumMetadata.Url -OutFile $checksumPath
                 Test-ArchiveDigest -ArchivePath $checksumPath -ExpectedDigest $checksumMetadata.Sha256
@@ -813,7 +813,7 @@ try {
             if ($installLayout -eq "Package") {
                 tar -xzf $archivePath -C $stagingDir
                 if (-not (Test-PackageContentsAreComplete -PackageDir $stagingDir)) {
-                    throw "Downloaded Codex package archive did not contain the expected package layout."
+                    throw "Downloaded MidnightCoder package archive did not contain the expected package layout."
                 }
             } else {
                 $extractDir = Join-Path $tempDir "extract"
@@ -835,7 +835,7 @@ try {
                 }
 
                 if (-not (Test-LegacyPlatformNpmContentsAreComplete -PackageDir $stagingDir)) {
-                    throw "Downloaded Codex npm archive did not contain the expected legacy platform package layout."
+                    throw "Downloaded MidnightCoder npm archive did not contain the expected legacy platform package layout."
                 }
             }
 
@@ -858,7 +858,7 @@ try {
         $oldStandaloneBackup = Move-OldStandaloneBinIfApproved -VisibleBinDir $visibleBinDir -DefaultVisibleBinDir $defaultVisibleBinDir
         try {
             Ensure-Junction -LinkPath $visibleBinDir -TargetPath $currentBinDir -InstallerOwnedTargetPrefix $standaloneRoot
-            Test-VisibleCodexCommand -VisibleBinDir $visibleBinDir
+            Test-VisibleMidnightCoderCommand -VisibleBinDir $visibleBinDir
         } catch {
             if ($null -ne $oldStandaloneBackup -and (Test-Path -LiteralPath $oldStandaloneBackup)) {
                 if (Test-Path -LiteralPath $visibleBinDir) {
@@ -915,10 +915,10 @@ if ($prioritizeVisibleBin) {
 
 Write-Step "Current PowerShell session: codex"
 Write-Step "Future PowerShell windows: open a new PowerShell window and run: codex"
-Write-Host "Codex CLI $resolvedVersion installed successfully."
+Write-Host "MidnightCoder $resolvedVersion installed successfully."
 
 $codexCommand = Join-Path $visibleBinDir "codex.exe"
-if (Prompt-YesNo "Start Codex now?") {
-    Write-Step "Launching Codex"
+if (Prompt-YesNo "Start MidnightCoder now?") {
+    Write-Step "Launching MidnightCoder"
     & $codexCommand
 }

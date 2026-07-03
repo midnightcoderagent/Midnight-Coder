@@ -3,9 +3,9 @@ source: tui/src/chatwidget/tests/status_and_layout.rs
 expression: normalized_backend_snapshot(terminal.backend())
 ---
 "                                                                                "
-"• Analyzing (0s • esc to interrupt)                                             "
+"• Analyzing (0s • esc to interrupt) · read -- tok/s · write 4000 tok/s          "
 "                                                                                "
 "                                                                                "
-"› Ask Codex to do anything                                                      "
+"› Ask MidnightCoder to do anything                                              "
 "                                                                                "
 "  gpt-5.5 default · /tmp/project                                                "

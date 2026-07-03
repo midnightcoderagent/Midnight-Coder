@@ -24,7 +24,7 @@ use crate::spawn::SpawnChildRequest;
 use crate::spawn::StdioPolicy;
 use crate::spawn::spawn_child_async;
 use codex_network_proxy::NetworkProxy;
-use codex_protocol::error::CodexErr;
+use codex_protocol::error::MidnightCoderErr;
 use codex_protocol::error::Result;
 use codex_protocol::error::SandboxErr;
 use codex_protocol::exec_output::ExecToolCallOutput;
@@ -132,9 +132,9 @@ fn select_process_exec_tool_sandbox_type(
 fn network_proxy_environment_error(
     network_environment_id: Option<&str>,
     err: impl std::fmt::Display,
-) -> CodexErr {
+) -> MidnightCoderErr {
     let environment_id = network_environment_id.unwrap_or("default");
-    CodexErr::Io(io::Error::other(format!(
+    MidnightCoderErr::Io(io::Error::other(format!(
         "failed to prepare network proxy for environment `{environment_id}`: {err}"
     )))
 }
@@ -363,7 +363,7 @@ pub fn build_exec_request(
             })?;
     }
     let (program, args) = command.split_first().ok_or_else(|| {
-        CodexErr::Io(io::Error::new(
+        MidnightCoderErr::Io(io::Error::new(
             io::ErrorKind::InvalidInput,
             "command args are empty",
         ))
@@ -410,7 +410,7 @@ pub fn build_exec_request(
                 windows_sandbox_workspace_roots,
             )
         })
-        .map_err(CodexErr::from)?;
+        .map_err(MidnightCoderErr::from)?;
     let use_windows_elevated_backend = windows_sandbox_uses_elevated_backend(
         exec_req.windows_sandbox_level,
         exec_req.network.is_some(),
@@ -430,7 +430,7 @@ pub fn build_exec_request(
             exec_req.windows_sandbox_level,
         )
     }
-    .map_err(CodexErr::UnsupportedOperation)?;
+    .map_err(MidnightCoderErr::UnsupportedOperation)?;
     Ok(exec_req)
 }
 
@@ -466,11 +466,11 @@ pub(crate) async fn execute_exec_request(
     // TODO(anp): Keep PathUri through the local process launch boundary.
     let cwd = cwd
         .to_abs_path()
-        .map_err(|err| CodexErr::InvalidRequest(format!("invalid exec cwd: {err}")))?;
+        .map_err(|err| MidnightCoderErr::InvalidRequest(format!("invalid exec cwd: {err}")))?;
     // TODO(anp): Keep PathUri through the Windows sandbox launch boundary.
     let windows_sandbox_policy_cwd = windows_sandbox_policy_cwd
         .to_abs_path()
-        .map_err(|err| CodexErr::InvalidRequest(format!("invalid sandbox cwd: {err}")))?;
+        .map_err(|err| MidnightCoderErr::InvalidRequest(format!("invalid sandbox cwd: {err}")))?;
 
     let params = ExecParams {
         command,
@@ -651,7 +651,7 @@ async fn exec_windows_sandbox(
     };
     let permission_profile = permission_profile.clone();
     let codex_home = find_codex_home().map_err(|err| {
-        CodexErr::Io(io::Error::other(format!(
+        MidnightCoderErr::Io(io::Error::other(format!(
             "windows sandbox: failed to resolve codex_home: {err}"
         )))
     })?;
@@ -719,12 +719,12 @@ async fn exec_windows_sandbox(
                 sandbox_level,
                 &err.to_string(),
             );
-            return Err(CodexErr::Io(io::Error::other(format!(
+            return Err(MidnightCoderErr::Io(io::Error::other(format!(
                 "windows sandbox: {err}"
             ))));
         }
         Err(join_err) => {
-            return Err(CodexErr::Io(io::Error::other(format!(
+            return Err(MidnightCoderErr::Io(io::Error::other(format!(
                 "windows sandbox join error: {join_err}"
             ))));
         }
@@ -763,7 +763,7 @@ async fn exec_windows_sandbox(
 }
 
 fn finalize_exec_result(
-    raw_output_result: std::result::Result<RawExecToolCallOutput, CodexErr>,
+    raw_output_result: std::result::Result<RawExecToolCallOutput, MidnightCoderErr>,
     sandbox_type: SandboxType,
     duration: Duration,
 ) -> Result<ExecToolCallOutput> {
@@ -778,7 +778,7 @@ fn finalize_exec_result(
                     if signal == TIMEOUT_CODE {
                         timed_out = true;
                     } else {
-                        return Err(CodexErr::Sandbox(SandboxErr::Signal(signal)));
+                        return Err(MidnightCoderErr::Sandbox(SandboxErr::Signal(signal)));
                     }
                 }
             }
@@ -801,13 +801,13 @@ fn finalize_exec_result(
             };
 
             if timed_out {
-                return Err(CodexErr::Sandbox(SandboxErr::Timeout {
+                return Err(MidnightCoderErr::Sandbox(SandboxErr::Timeout {
                     output: Box::new(exec_output),
                 }));
             }
 
             if is_likely_sandbox_denied(sandbox_type, &exec_output) {
-                return Err(CodexErr::Sandbox(SandboxErr::Denied {
+                return Err(MidnightCoderErr::Sandbox(SandboxErr::Denied {
                     output: Box::new(exec_output),
                     network_policy_decision: None,
                 }));
@@ -930,7 +930,7 @@ async fn exec(
     }
 
     let (program, args) = command.split_first().ok_or_else(|| {
-        CodexErr::Io(io::Error::new(
+        MidnightCoderErr::Io(io::Error::new(
             io::ErrorKind::InvalidInput,
             "command args are empty",
         ))
@@ -969,12 +969,12 @@ async fn consume_output(
     // we treat it as an exceptional I/O error
 
     let stdout_reader = child.stdout.take().ok_or_else(|| {
-        CodexErr::Io(io::Error::other(
+        MidnightCoderErr::Io(io::Error::other(
             "stdout pipe was unexpectedly not available",
         ))
     })?;
     let stderr_reader = child.stderr.take().ok_or_else(|| {
-        CodexErr::Io(io::Error::other(
+        MidnightCoderErr::Io(io::Error::other(
             "stderr pipe was unexpectedly not available",
         ))
     })?;

@@ -4,11 +4,13 @@ use std::sync::Arc;
 
 use codex_features::Feature;
 use codex_login::AuthManager;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_mcp::ToolInfo;
 use codex_model_provider::create_model_provider;
 use codex_model_provider_info::AMAZON_BEDROCK_PROVIDER_ID;
 use codex_model_provider_info::ModelProviderInfo;
+use codex_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
+use codex_models_manager::model_info::model_info_from_slug;
 use codex_protocol::config_types::WebSearchMode;
 use codex_protocol::dynamic_tools::DynamicToolSpec;
 use codex_protocol::openai_models::ApplyPatchToolType;
@@ -258,7 +260,7 @@ fn set_web_search_mode(turn: &mut TurnContext, mode: WebSearchMode) {
 
 fn use_chatgpt_auth(turn: &mut TurnContext) {
     turn.auth_manager = Some(AuthManager::from_auth_for_testing(
-        CodexAuth::create_dummy_chatgpt_auth_for_testing(),
+        MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing(),
     ));
     turn.provider = create_model_provider(
         turn.config.model_provider.clone(),
@@ -509,6 +511,28 @@ async fn shell_family_registers_visible_unified_exec_and_hidden_legacy_shell() {
     plan.assert_registered_contains(&["exec_command", "write_stdin", "shell_command"]);
     assert_eq!(plan.exposure("shell_command"), ToolExposure::Hidden);
     assert!(has_parameter(plan.visible_spec("exec_command"), "shell"));
+}
+
+#[tokio::test]
+async fn ollama_uses_visible_legacy_shell_even_when_unified_exec_is_enabled() {
+    let plan = probe(|turn| {
+        set_features(turn, &[Feature::ShellTool, Feature::UnifiedExec]);
+        set_feature(turn, Feature::ShellZshFork, /*enabled*/ false);
+        turn.config = Arc::new(crate::config::Config {
+            model_provider_id: OLLAMA_OSS_PROVIDER_ID.to_string(),
+            model_provider: ModelProviderInfo {
+                name: "Ollama".to_string(),
+                ..ModelProviderInfo::default()
+            },
+            ..(*turn.config).clone()
+        });
+        turn.model_info.shell_type = ConfigShellToolType::ShellCommand;
+    })
+    .await;
+
+    plan.assert_visible_contains(&["shell_command"]);
+    plan.assert_visible_lacks(&["exec_command", "write_stdin"]);
+    plan.assert_registered_contains(&["shell_command"]);
 }
 
 #[tokio::test]
@@ -1342,6 +1366,20 @@ async fn tool_mode_selector_overrides_feature_flags() {
     })
     .await;
     direct.assert_visible_lacks(&[
+        codex_code_mode::PUBLIC_TOOL_NAME,
+        codex_code_mode::WAIT_TOOL_NAME,
+    ]);
+}
+
+#[tokio::test]
+async fn fallback_model_info_enables_code_mode_tools() {
+    let plan = probe(|turn| {
+        set_feature(turn, Feature::CodeMode, /*enabled*/ true);
+        turn.model_info = model_info_from_slug("custom-local-model");
+    })
+    .await;
+
+    plan.assert_visible_contains(&[
         codex_code_mode::PUBLIC_TOOL_NAME,
         codex_code_mode::WAIT_TOOL_NAME,
     ]);

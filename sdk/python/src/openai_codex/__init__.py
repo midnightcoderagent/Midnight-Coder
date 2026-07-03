@@ -1,12 +1,12 @@
-"""Python SDK for running Codex workflows.
+"""Python SDK for running MidnightCoder workflows.
 
-Start with :class:`Codex` for synchronous applications or
-:class:`AsyncCodex` for async applications. Most programs create a thread and
+Start with :class:`MidnightCoder` for synchronous applications or
+:class:`AsyncMidnightCoder` for async applications. Most programs create a thread and
 run a turn::
 
-    from openai_codex import Codex, Sandbox
+    from openai_codex import MidnightCoder, Sandbox
 
-    with Codex() as codex:
+    with MidnightCoder() as codex:
         thread = codex.thread_start(sandbox=Sandbox.workspace_write)
         result = thread.run("Describe this project.")
         print(result.final_response)
@@ -16,18 +16,18 @@ from ._version import __version__
 from .api import (
     ApprovalMode,
     AsyncChatgptLoginHandle,
-    AsyncCodex,
     AsyncDeviceCodeLoginHandle,
+    AsyncMidnightCoder,
     AsyncThread,
     AsyncTurnHandle,
     ChatgptLoginHandle,
-    Codex,
     DeviceCodeLoginHandle,
     ImageInput,
     Input,
     InputItem,
     LocalImageInput,
     MentionInput,
+    MidnightCoder,
     RunInput,
     Sandbox,
     SkillInput,
@@ -36,15 +36,15 @@ from .api import (
     TurnHandle,
     TurnResult,
 )
-from .client import CodexConfig
+from .client import MidnightCoderConfig
 from .errors import (
-    CodexError,
-    CodexRpcError,
     InternalRpcError,
     InvalidParamsError,
     InvalidRequestError,
     JsonRpcError,
     MethodNotFoundError,
+    MidnightCoderError,
+    MidnightCoderRpcError,
     ParseError,
     RetryLimitExceededError,
     ServerBusyError,
@@ -55,9 +55,9 @@ from .retry import retry_on_overload
 
 __all__ = [
     "__version__",
-    "CodexConfig",
-    "Codex",
-    "AsyncCodex",
+    "MidnightCoderConfig",
+    "MidnightCoder",
+    "AsyncMidnightCoder",
     "ApprovalMode",
     "Sandbox",
     "ChatgptLoginHandle",
@@ -78,10 +78,10 @@ __all__ = [
     "SkillInput",
     "MentionInput",
     "retry_on_overload",
-    "CodexError",
+    "MidnightCoderError",
     "TransportClosedError",
     "JsonRpcError",
-    "CodexRpcError",
+    "MidnightCoderRpcError",
     "ParseError",
     "InvalidRequestError",
     "MethodNotFoundError",

@@ -10,8 +10,8 @@ use crate::session::session::Session;
 use crate::session::step_context::StepContext;
 use crate::session::turn_context::TurnContext;
 use codex_analytics::CompactionTrigger;
-use codex_protocol::error::CodexErr;
-use codex_protocol::error::Result as CodexResult;
+use codex_protocol::error::MidnightCoderErr;
+use codex_protocol::error::Result as MidnightCoderResult;
 use codex_protocol::items::ContextCompactionItem;
 use codex_protocol::items::TurnItem;
 use codex_protocol::protocol::EventMsg;
@@ -25,7 +25,7 @@ use codex_protocol::protocol::TurnStartedEvent;
 pub(crate) async fn run_manual_compact_task(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     let start_event = EventMsg::TurnStarted(TurnStartedEvent {
         turn_id: turn_context.sub_id.clone(),
         trace_id: turn_context.trace_id.clone(),
@@ -50,7 +50,7 @@ pub(crate) async fn run_inline_auto_compact_task(
     sess: Arc<Session>,
     step_context: Arc<StepContext>,
     initial_context_injection: InitialContextInjection,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     let turn_context = &step_context.turn;
     let world_state = match initial_context_injection {
         InitialContextInjection::BeforeLastUserMessage(world_state) => world_state,
@@ -66,11 +66,11 @@ async fn run_compact_task_inner(
     turn_context: &Arc<TurnContext>,
     world_state: Arc<WorldState>,
     trigger: CompactionTrigger,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     let pre_compact_outcome = run_pre_compact_hooks(sess, turn_context, trigger).await;
     match pre_compact_outcome {
         PreCompactHookOutcome::Continue => {}
-        PreCompactHookOutcome::Stopped => return Err(CodexErr::TurnAborted),
+        PreCompactHookOutcome::Stopped => return Err(MidnightCoderErr::TurnAborted),
     }
 
     let compaction_item = TurnItem::ContextCompaction(ContextCompactionItem::new());
@@ -83,7 +83,7 @@ async fn run_compact_task_inner(
 
     let post_compact_outcome = run_post_compact_hooks(sess, turn_context, trigger).await;
     if let PostCompactHookOutcome::Stopped = post_compact_outcome {
-        return Err(CodexErr::TurnAborted);
+        return Err(MidnightCoderErr::TurnAborted);
     }
 
     Ok(())

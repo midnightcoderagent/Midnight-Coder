@@ -48,12 +48,12 @@ impl Drop for EnvVarGuard {
     }
 }
 
-enum TestCodexHome {
+enum TestMidnightCoderHome {
     Persistent(PathBuf),
     Temporary(TempDir),
 }
 
-impl TestCodexHome {
+impl TestMidnightCoderHome {
     fn path(&self) -> &Path {
         match self {
             Self::Persistent(path) => path.as_path(),
@@ -62,7 +62,7 @@ impl TestCodexHome {
     }
 }
 
-fn codex_home_for_windows_sandbox_test(name: &str) -> anyhow::Result<TestCodexHome> {
+fn codex_home_for_windows_sandbox_test(name: &str) -> anyhow::Result<TestMidnightCoderHome> {
     if let Some(test_tmpdir) = std::env::var_os("TEST_TMPDIR") {
         // The elevated backend provisions machine-local sandbox users. Bazel
         // retries run in the same Windows VM, so keep CODEX_HOME stable within
@@ -70,10 +70,10 @@ fn codex_home_for_windows_sandbox_test(name: &str) -> anyhow::Result<TestCodexHo
         let codex_home = PathBuf::from(test_tmpdir).join(name);
         std::fs::create_dir_all(&codex_home)
             .with_context(|| format!("create stable test CODEX_HOME {}", codex_home.display()))?;
-        return Ok(TestCodexHome::Persistent(codex_home));
+        return Ok(TestMidnightCoderHome::Persistent(codex_home));
     }
 
-    Ok(TestCodexHome::Temporary(TempDir::new()?))
+    Ok(TestMidnightCoderHome::Temporary(TempDir::new()?))
 }
 
 fn stage_windows_sandbox_helpers() -> anyhow::Result<()> {

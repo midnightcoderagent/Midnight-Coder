@@ -333,7 +333,7 @@ impl App {
             AppEvent::FatalExitRequest(message) => {
                 return Ok(AppRunControl::Exit(ExitReason::Fatal(message)));
             }
-            AppEvent::CodexOp(op) => {
+            AppEvent::MidnightCoderOp(op) => {
                 self.chat_widget.prepare_local_op_submission(&op);
                 self.submit_active_thread_op(app_server, op).await?;
             }
@@ -1026,6 +1026,82 @@ impl App {
             AppEvent::OpenAllModelsPopup { models } => {
                 self.chat_widget.open_all_models_popup(models);
             }
+            AppEvent::ConfigureProvider { address } => {
+                self.chat_widget.add_info_message(
+                    format!("Checking provider at {address}..."),
+                    /*hint*/ None,
+                );
+                match crate::provider_config::detect_provider_config(&address).await {
+                    Ok(provider) => {
+                        match crate::config_update::write_config_batch(
+                            app_server.request_handle(),
+                            crate::config_update::build_provider_config_edits(&provider),
+                        )
+                        .await
+                        {
+                            Ok(_) => {
+                                self.config.model = Some(provider.model.clone());
+                                self.config.model_provider_id = provider.provider_id.clone();
+                                let mut model_provider =
+                                    codex_model_provider_info::create_oss_provider_with_base_url(
+                                        &provider.base_url,
+                                        codex_model_provider_info::WireApi::Responses,
+                                    );
+                                model_provider.name = provider.provider_name.clone();
+                                self.config.model_provider = model_provider.clone();
+                                self.chat_widget.set_model_provider(
+                                    provider.provider_id.clone(),
+                                    model_provider,
+                                );
+                                self.chat_widget.set_model_catalog(
+                                    crate::model_catalog::local_provider_model_presets(
+                                        &provider.models,
+                                    ),
+                                );
+                                self.chat_widget.set_model(&provider.model);
+                                let tool_status = provider
+                                    .models
+                                    .iter()
+                                    .find(|model| model.id == provider.model)
+                                    .and_then(|model| model.supports_tools)
+                                    .map_or("tool support unknown", |supports_tools| {
+                                        if supports_tools {
+                                            "tools enabled"
+                                        } else {
+                                            "tools unavailable"
+                                        }
+                                    });
+                                self.chat_widget.add_info_message(
+                                    format!(
+                                        "Provider configured: {} at {} using model {} ({tool_status}). New turns in this session may still use the provider selected when the session started.",
+                                        provider.provider_name,
+                                        provider.base_url,
+                                        provider.model
+                                    ),
+                                    Some(
+                                        "Start a new chat to use the saved provider for the whole session."
+                                            .to_string(),
+                                    ),
+                                );
+                            }
+                            Err(err) => {
+                                let error = format_config_error(&err);
+                                tracing::error!(
+                                    error = %error,
+                                    "failed to persist provider configuration"
+                                );
+                                self.chat_widget.add_error_message(format!(
+                                    "Failed to save provider configuration: {error}"
+                                ));
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        self.chat_widget
+                            .add_error_message(format!("Failed to configure provider: {err}"));
+                    }
+                }
+            }
             AppEvent::OpenFullAccessConfirmation {
                 preset,
                 return_to_permissions,
@@ -1425,7 +1501,7 @@ impl App {
                             if let Some((sample_paths, extra_count, failed_scan)) =
                                 self.chat_widget.world_writable_warning_details()
                             {
-                                self.app_event_tx.send(AppEvent::CodexOp(
+                                self.app_event_tx.send(AppEvent::MidnightCoderOp(
                                     AppCommand::override_turn_context(
                                         /*cwd*/ None,
                                         /*approval_policy*/ None,
@@ -1452,7 +1528,7 @@ impl App {
                                     },
                                 );
                             } else if let Some(selection) = profile_selection {
-                                self.app_event_tx.send(AppEvent::CodexOp(
+                                self.app_event_tx.send(AppEvent::MidnightCoderOp(
                                     AppCommand::override_turn_context(
                                         /*cwd*/ None,
                                         /*approval_policy*/ None,
@@ -1476,12 +1552,12 @@ impl App {
                                     Line::from(vec!["• ".dim(), "Sandbox ready".into()]),
                                     Line::from(vec![
                                         "  ".into(),
-                                        "Codex can now safely edit files and execute commands in your computer"
+                                        "MidnightCoder can now safely edit files and execute commands in your computer"
                                             .dark_gray(),
                                     ]),
                                 ]);
                             } else {
-                                self.app_event_tx.send(AppEvent::CodexOp(
+                                self.app_event_tx.send(AppEvent::MidnightCoderOp(
                                     AppCommand::override_turn_context(
                                         /*cwd*/ None,
                                         Some(AskForApproval::from(preset.approval)),
@@ -1509,7 +1585,7 @@ impl App {
                                     Line::from(vec!["• ".dim(), "Sandbox ready".into()]),
                                     Line::from(vec![
                                         "  ".into(),
-                                        "Codex can now safely edit files and execute commands in your computer"
+                                        "MidnightCoder can now safely edit files and execute commands in your computer"
                                             .dark_gray(),
                                     ]),
                                 ]);
@@ -1562,6 +1638,128 @@ impl App {
                         );
                         self.chat_widget
                             .add_error_message(format!("Failed to save default model: {error}"));
+                    }
+                }
+            }
+            AppEvent::PersistMiniModelSelection { model } => {
+                match crate::config_update::write_config_batch(
+                    app_server.request_handle(),
+                    crate::config_update::build_mini_model_selection_edits(model.as_str()),
+                )
+                .await
+                {
+                    Ok(_) => {
+                        self.config.mini_model = Some(model.clone());
+                        self.chat_widget.set_mini_model(Some(model.clone()));
+                        self.chat_widget.add_info_message(
+                            format!("Compaction model changed to {model}"),
+                            /*hint*/ None,
+                        );
+                    }
+                    Err(err) => {
+                        let error = format_config_error(&err);
+                        tracing::error!(
+                            error = %error,
+                            "failed to persist compaction model selection"
+                        );
+                        self.chat_widget
+                            .add_error_message(format!("Failed to save compaction model: {error}"));
+                    }
+                }
+            }
+            AppEvent::PersistResumeTypeSelection { resume_type } => {
+                match crate::config_update::write_config_batch(
+                    app_server.request_handle(),
+                    crate::config_update::build_resume_type_edits(resume_type.as_str()),
+                )
+                .await
+                {
+                    Ok(_) => {
+                        self.config.resume_type = Some(resume_type.clone());
+                        self.chat_widget.set_resume_type(Some(resume_type.clone()));
+                        self.chat_widget.add_info_message(
+                            format!("Compaction resume type changed to {resume_type}"),
+                            /*hint*/ None,
+                        );
+                    }
+                    Err(err) => {
+                        let error = format_config_error(&err);
+                        tracing::error!(
+                            error = %error,
+                            "failed to persist compaction resume type"
+                        );
+                        self.chat_widget.add_error_message(format!(
+                            "Failed to save compaction resume type: {error}"
+                        ));
+                    }
+                }
+            }
+            AppEvent::PersistContextWindow { tokens } => {
+                match crate::config_update::write_config_batch(
+                    app_server.request_handle(),
+                    crate::config_update::build_context_window_edits(tokens),
+                )
+                .await
+                {
+                    Ok(_) => {
+                        self.config.model_context_window = Some(tokens);
+                        self.config.model_auto_compact_token_limit = Some(tokens);
+                        self.chat_widget.set_context_window_limit(Some(tokens));
+                        self.chat_widget.add_info_message(
+                            format!("Context window changed to {tokens} tokens"),
+                            Some(
+                                "Auto-compaction will run when that limit is reached.".to_string(),
+                            ),
+                        );
+                    }
+                    Err(err) => {
+                        let error = format_config_error(&err);
+                        tracing::error!(
+                            error = %error,
+                            "failed to persist context window"
+                        );
+                        self.chat_widget
+                            .add_error_message(format!("Failed to save context window: {error}"));
+                    }
+                }
+            }
+            AppEvent::PersistAutoCompaction { enabled } => {
+                let token_limit = enabled
+                    .then_some(self.config.model_context_window)
+                    .flatten();
+                match crate::config_update::write_config_batch(
+                    app_server.request_handle(),
+                    crate::config_update::build_auto_compaction_edits(enabled, token_limit),
+                )
+                .await
+                {
+                    Ok(_) => {
+                        self.config.model_auto_compact_token_limit =
+                            if enabled { token_limit } else { Some(0) };
+                        self.chat_widget.set_auto_compact_token_limit(
+                            self.config.model_auto_compact_token_limit,
+                        );
+                        let message = if enabled {
+                            "Auto-compaction enabled"
+                        } else {
+                            "Auto-compaction disabled"
+                        };
+                        let hint = if enabled && token_limit.is_none() {
+                            Some("Using the model's default compaction threshold.".to_string())
+                        } else {
+                            None
+                        };
+                        self.chat_widget.add_info_message(message.to_string(), hint);
+                    }
+                    Err(err) => {
+                        let error = format_config_error(&err);
+                        tracing::error!(
+                            error = %error,
+                            "failed to persist auto-compaction setting"
+                        );
+                        self.chat_widget.add_error_message(format!(
+                            "Failed to save auto-compaction setting: {error}"
+                        ));
                     }
                 }
             }

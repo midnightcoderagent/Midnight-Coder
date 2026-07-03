@@ -8,11 +8,11 @@ use codex_model_provider::SharedModelProvider;
 use http::HeaderMap;
 
 #[derive(Clone)]
-pub(crate) struct CodexImagesBackend {
+pub(crate) struct MidnightCoderImagesBackend {
     provider: SharedModelProvider,
 }
 
-impl CodexImagesBackend {
+impl MidnightCoderImagesBackend {
     /// Creates a backend that sends image requests through the active model provider.
     pub(crate) fn new(provider: SharedModelProvider) -> Self {
         Self { provider }

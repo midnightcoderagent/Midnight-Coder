@@ -64,7 +64,8 @@ fn init_params() -> InitializeRequestParams {
     });
     InitializeRequestParams::new(
         capabilities,
-        Implementation::new("codex-test", "0.0.0-test").with_title("Codex rmcp recovery test"),
+        Implementation::new("codex-test", "0.0.0-test")
+            .with_title("MidnightCoder rmcp recovery test"),
     )
     .with_protocol_version(ProtocolVersion::V_2025_06_18)
 }

@@ -12,8 +12,8 @@ use super::X_OPENAI_SUBAGENT_HEADER;
 use crate::AttestationContext;
 use crate::AttestationProvider;
 use crate::GenerateAttestationFuture;
-use crate::responses_metadata::CodexResponsesMetadata;
-use crate::test_support::TestCodexResponsesRequestKind;
+use crate::responses_metadata::MidnightCoderResponsesMetadata;
+use crate::test_support::TestMidnightCoderResponsesRequestKind;
 use crate::test_support::responses_metadata as test_responses_metadata;
 use codex_api::AgentIdentityTelemetry;
 use codex_api::ApiError;
@@ -22,7 +22,7 @@ use codex_api::TransportError;
 use codex_login::AuthCredentialsStoreMode;
 use codex_login::AuthKeyringBackendKind;
 use codex_login::AuthManager;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_login::auth::AgentIdentityAuthPolicy;
 use codex_model_provider::BearerAuthProvider;
 use codex_model_provider::SharedModelProvider;
@@ -169,7 +169,7 @@ async fn compact_uses_bearer_after_agent_identity_session_fallback() -> anyhow::
         /*turn_id*/ None,
         format!("{}:0", client.state.thread_id),
         /*parent_thread_id*/ None,
-        TestCodexResponsesRequestKind::Turn,
+        TestMidnightCoderResponsesRequestKind::Turn,
     );
 
     let output = client
@@ -181,6 +181,7 @@ async fn compact_uses_bearer_after_agent_identity_session_fallback() -> anyhow::
                 effort: None,
                 summary: codex_protocol::config_types::ReasoningSummary::None,
                 service_tier: None,
+                provider_request_options: None,
             },
             &test_session_telemetry(),
             &CompactionTraceContext::disabled(),
@@ -225,8 +226,8 @@ fn test_responses_metadata_for_client(
     turn_id: Option<&str>,
     window_id: String,
     parent_thread_id: Option<ThreadId>,
-    request_kind: TestCodexResponsesRequestKind,
-) -> CodexResponsesMetadata {
+    request_kind: TestMidnightCoderResponsesRequestKind,
+) -> MidnightCoderResponsesMetadata {
     let thread_id = client.state.thread_id.to_string();
     test_responses_metadata(
         TEST_INSTALLATION_ID,
@@ -386,7 +387,7 @@ fn started_inference_attempt(temp: &TempDir) -> anyhow::Result<InferenceTraceAtt
         agent_path: "/root".to_string(),
         metadata_payload: None,
     })?;
-    writer.append(RawTraceEventPayload::CodexTurnStarted {
+    writer.append(RawTraceEventPayload::MidnightCoderTurnStarted {
         codex_turn_id: "turn-1".to_string(),
         thread_id: "thread-root".to_string(),
     })?;
@@ -507,7 +508,7 @@ fn build_ws_client_metadata_includes_window_lineage_and_turn_metadata() {
         Some("turn-123"),
         expected_window_id.clone(),
         Some(parent_thread_id),
-        TestCodexResponsesRequestKind::Turn,
+        TestMidnightCoderResponsesRequestKind::Turn,
     );
     let client_metadata =
         client.build_ws_client_metadata(&responses_metadata, /*use_responses_lite*/ false);
@@ -681,7 +682,7 @@ async fn bedrock_unauthorized_error_uses_provider_mapping() {
     assert_eq!(
         error.to_string(),
         format!(
-            "Amazon Bedrock rejected the request because its AWS signature has expired. Refresh your AWS credentials and retry. If `AWS_BEARER_TOKEN_BEDROCK` is set, update or unset it, then restart Codex, url: {url}"
+            "Amazon Bedrock rejected the request because its AWS signature has expired. Refresh your AWS credentials and retry. If `AWS_BEARER_TOKEN_BEDROCK` is set, update or unset it, then restart MidnightCoder, url: {url}"
         )
     );
 }
@@ -802,7 +803,7 @@ fn model_client_with_counting_attestation(
     let (auth_manager, provider) = if include_attestation {
         (
             Some(AuthManager::from_auth_for_testing(
-                CodexAuth::create_dummy_chatgpt_auth_for_testing(),
+                MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing(),
             )),
             ModelProviderInfo::create_openai_provider(Some(CHATGPT_CODEX_BASE_URL.to_string())),
         )
@@ -840,7 +841,7 @@ async fn websocket_handshake_includes_attestation_for_chatgpt_codex_responses() 
         /*turn_id*/ None,
         format!("{}:0", model_client.state.thread_id),
         /*parent_thread_id*/ None,
-        TestCodexResponsesRequestKind::WebsocketConnection,
+        TestMidnightCoderResponsesRequestKind::WebsocketConnection,
     );
 
     let headers = model_client

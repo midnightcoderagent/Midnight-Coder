@@ -71,7 +71,10 @@ async fn quota_exceeded_emits_single_error_event() -> Result<()> {
         }
     }
 
-    assert_eq!(error_events, 1, "expected exactly one Codex:Error event");
+    assert_eq!(
+        error_events, 1,
+        "expected exactly one MidnightCoder:Error event"
+    );
 
     Ok(())
 }

@@ -24,15 +24,14 @@ use codex_api::RealtimeWebsocketWriter;
 use codex_api::map_api_error;
 use codex_config::config_toml::RealtimeWsMode;
 use codex_config::config_toml::RealtimeWsVersion;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_login::default_client::default_headers;
 use codex_login::read_openai_api_key_from_env;
 use codex_model_provider_info::ModelProviderInfo;
 use codex_protocol::auth::AuthMode;
-use codex_protocol::error::CodexErr;
-use codex_protocol::error::Result as CodexResult;
+use codex_protocol::error::MidnightCoderErr;
+use codex_protocol::error::Result as MidnightCoderResult;
 use codex_protocol::models::MessagePhase;
-use codex_protocol::protocol::CodexErrorInfo;
 use codex_protocol::protocol::ConversationAudioParams;
 use codex_protocol::protocol::ConversationSpeechParams;
 use codex_protocol::protocol::ConversationStartParams;
@@ -42,6 +41,7 @@ use codex_protocol::protocol::ConversationTextRole;
 use codex_protocol::protocol::ErrorEvent;
 use codex_protocol::protocol::Event;
 use codex_protocol::protocol::EventMsg;
+use codex_protocol::protocol::MidnightCoderErrorInfo;
 use codex_protocol::protocol::RealtimeConversationClosedEvent;
 use codex_protocol::protocol::RealtimeConversationRealtimeEvent;
 use codex_protocol::protocol::RealtimeConversationSdpEvent;
@@ -288,7 +288,7 @@ impl RealtimeConversationManager {
         )
     }
 
-    async fn start(&self, start: RealtimeStart) -> CodexResult<RealtimeStartOutput> {
+    async fn start(&self, start: RealtimeStart) -> MidnightCoderResult<RealtimeStartOutput> {
         let previous_state = {
             let mut guard = self.state.lock().await;
             guard.take()
@@ -300,7 +300,7 @@ impl RealtimeConversationManager {
         self.start_inner(start).await
     }
 
-    async fn start_inner(&self, start: RealtimeStart) -> CodexResult<RealtimeStartOutput> {
+    async fn start_inner(&self, start: RealtimeStart) -> MidnightCoderResult<RealtimeStartOutput> {
         let RealtimeStart {
             api_provider,
             extra_headers,
@@ -441,14 +441,14 @@ impl RealtimeConversationManager {
         }
     }
 
-    pub(crate) async fn audio_in(&self, frame: RealtimeAudioFrame) -> CodexResult<()> {
+    pub(crate) async fn audio_in(&self, frame: RealtimeAudioFrame) -> MidnightCoderResult<()> {
         let sender = {
             let guard = self.state.lock().await;
             guard.as_ref().map(|state| state.audio_tx.clone())
         };
 
         let Some(sender) = sender else {
-            return Err(CodexErr::InvalidRequest(
+            return Err(MidnightCoderErr::InvalidRequest(
                 "conversation is not running".to_string(),
             ));
         };
@@ -459,13 +459,16 @@ impl RealtimeConversationManager {
                 warn!("dropping input audio frame due to full queue");
                 Ok(())
             }
-            Err(TrySendError::Closed(_)) => Err(CodexErr::InvalidRequest(
+            Err(TrySendError::Closed(_)) => Err(MidnightCoderErr::InvalidRequest(
                 "conversation is not running".to_string(),
             )),
         }
     }
 
-    pub(crate) async fn text_in(&self, mut params: ConversationTextParams) -> CodexResult<()> {
+    pub(crate) async fn text_in(
+        &self,
+        mut params: ConversationTextParams,
+    ) -> MidnightCoderResult<()> {
         let sender = {
             let guard = self.state.lock().await;
             guard
@@ -474,7 +477,7 @@ impl RealtimeConversationManager {
         };
 
         let Some((sender, session_kind)) = sender else {
-            return Err(CodexErr::InvalidRequest(
+            return Err(MidnightCoderErr::InvalidRequest(
                 "conversation is not running".to_string(),
             ));
         };
@@ -483,10 +486,9 @@ impl RealtimeConversationManager {
             params.text =
                 prefix_realtime_text(params.text, REALTIME_USER_TEXT_PREFIX, session_kind);
         }
-        sender
-            .send(params)
-            .await
-            .map_err(|_| CodexErr::InvalidRequest("conversation is not running".to_string()))?;
+        sender.send(params).await.map_err(|_| {
+            MidnightCoderErr::InvalidRequest("conversation is not running".to_string())
+        })?;
         Ok(())
     }
 
@@ -494,11 +496,11 @@ impl RealtimeConversationManager {
         &self,
         output_text: String,
         phase: Option<MessagePhase>,
-    ) -> CodexResult<()> {
+    ) -> MidnightCoderResult<()> {
         let handoff = {
             let guard = self.state.lock().await;
             let Some(state) = guard.as_ref() else {
-                return Err(CodexErr::InvalidRequest(
+                return Err(MidnightCoderErr::InvalidRequest(
                     "conversation is not running".to_string(),
                 ));
             };
@@ -562,15 +564,13 @@ impl RealtimeConversationManager {
                 }
             }
         };
-        handoff
-            .output_tx
-            .send(output)
-            .await
-            .map_err(|_| CodexErr::InvalidRequest("conversation is not running".to_string()))?;
+        handoff.output_tx.send(output).await.map_err(|_| {
+            MidnightCoderErr::InvalidRequest("conversation is not running".to_string())
+        })?;
         Ok(())
     }
 
-    pub(crate) async fn append_speech(&self, text: String) -> CodexResult<()> {
+    pub(crate) async fn append_speech(&self, text: String) -> MidnightCoderResult<()> {
         if text.trim().is_empty() {
             return Ok(());
         }
@@ -578,7 +578,7 @@ impl RealtimeConversationManager {
         let handoff = {
             let guard = self.state.lock().await;
             let Some(state) = guard.as_ref() else {
-                return Err(CodexErr::InvalidRequest(
+                return Err(MidnightCoderErr::InvalidRequest(
                     "conversation is not running".to_string(),
                 ));
             };
@@ -591,11 +591,13 @@ impl RealtimeConversationManager {
                 text: realtime_backend_output(text, handoff.session_kind),
             })
             .await
-            .map_err(|_| CodexErr::InvalidRequest("conversation is not running".to_string()))?;
+            .map_err(|_| {
+                MidnightCoderErr::InvalidRequest("conversation is not running".to_string())
+            })?;
         Ok(())
     }
 
-    pub(crate) async fn handoff_complete(&self) -> CodexResult<()> {
+    pub(crate) async fn handoff_complete(&self) -> MidnightCoderResult<()> {
         let handoff = {
             let guard = self.state.lock().await;
             guard.as_ref().map(|state| state.handoff.clone())
@@ -627,11 +629,9 @@ impl RealtimeConversationManager {
             }
         };
 
-        handoff
-            .output_tx
-            .send(output)
-            .await
-            .map_err(|_| CodexErr::InvalidRequest("conversation is not running".to_string()))
+        handoff.output_tx.send(output).await.map_err(|_| {
+            MidnightCoderErr::InvalidRequest("conversation is not running".to_string())
+        })
     }
 
     pub(crate) async fn clear_active_handoff(&self) {
@@ -645,7 +645,7 @@ impl RealtimeConversationManager {
         }
     }
 
-    pub(crate) async fn shutdown(&self) -> CodexResult<()> {
+    pub(crate) async fn shutdown(&self) -> MidnightCoderResult<()> {
         let state = {
             let mut guard = self.state.lock().await;
             guard.take()
@@ -681,7 +681,7 @@ pub(crate) async fn handle_start(
     sess: &Arc<Session>,
     sub_id: String,
     params: ConversationStartParams,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     let prepared_start = match prepare_realtime_start(sess, params).await {
         Ok(prepared_start) => prepared_start,
         Err(err) => {
@@ -735,7 +735,7 @@ pub(crate) enum ConfiguredRealtimeVoice {
 async fn prepare_realtime_start(
     sess: &Arc<Session>,
     params: ConversationStartParams,
-) -> CodexResult<PreparedRealtimeConversationStart> {
+) -> MidnightCoderResult<PreparedRealtimeConversationStart> {
     let provider = sess.provider().await;
     let auth_manager = sess
         .services
@@ -814,14 +814,14 @@ async fn prepare_realtime_start(
 fn validate_avas_webrtc_start(
     version: RealtimeWsVersion,
     session_type: RealtimeWsMode,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     if version != RealtimeWsVersion::V1 {
-        return Err(CodexErr::InvalidRequest(
+        return Err(MidnightCoderErr::InvalidRequest(
             "AVAS realtime calls require realtime v1".to_string(),
         ));
     }
     if session_type != RealtimeWsMode::Conversational {
-        return Err(CodexErr::InvalidRequest(
+        return Err(MidnightCoderErr::InvalidRequest(
             "AVAS realtime calls require conversational realtime".to_string(),
         ));
     }
@@ -833,7 +833,7 @@ pub(crate) async fn build_realtime_session_config(
     params: &ConversationStartParams,
     version: RealtimeWsVersion,
     configured_voice: ConfiguredRealtimeVoice,
-) -> CodexResult<RealtimeSessionConfig> {
+) -> MidnightCoderResult<RealtimeSessionConfig> {
     let config = sess.get_config().await;
     let prompt = prepare_realtime_backend_prompt(
         params.prompt.clone(),
@@ -871,7 +871,7 @@ pub(crate) async fn build_realtime_session_config(
     if version == RealtimeWsVersion::V1
         && matches!(params.output_modality, RealtimeOutputModality::Text)
     {
-        return Err(CodexErr::InvalidRequest(
+        return Err(MidnightCoderErr::InvalidRequest(
             "text realtime output modality requires realtime v2".to_string(),
         ));
     }
@@ -932,7 +932,10 @@ fn realtime_backend_item(text: String, prefix: Option<&str>) -> String {
     truncate_realtime_text_to_token_budget(&text, REALTIME_ASSISTANT_OUTPUT_TOKEN_BUDGET)
 }
 
-fn validate_realtime_voice(version: RealtimeWsVersion, voice: RealtimeVoice) -> CodexResult<()> {
+fn validate_realtime_voice(
+    version: RealtimeWsVersion,
+    voice: RealtimeVoice,
+) -> MidnightCoderResult<()> {
     let voices = RealtimeVoicesList::builtin();
     let allowed = match version {
         RealtimeWsVersion::V1 => &voices.v1,
@@ -951,7 +954,7 @@ fn validate_realtime_voice(version: RealtimeWsVersion, voice: RealtimeVoice) -> 
         .map(|voice| voice.wire_name())
         .collect::<Vec<_>>()
         .join(", ");
-    Err(CodexErr::InvalidRequest(format!(
+    Err(MidnightCoderErr::InvalidRequest(format!(
         "realtime voice `{}` is not supported for {version}; supported voices: {allowed}",
         voice.wire_name()
     )))
@@ -961,7 +964,7 @@ async fn handle_start_inner(
     sess: &Arc<Session>,
     sub_id: &str,
     prepared_start: PreparedRealtimeConversationStart,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     let PreparedRealtimeConversationStart {
         api_provider,
         extra_headers,
@@ -1096,8 +1099,13 @@ pub(crate) async fn handle_audio(
         if sess.conversation.running_state().await.is_some() {
             warn!("realtime audio input failed while the session was already ending");
         } else {
-            send_conversation_error(sess, sub_id, err.to_string(), CodexErrorInfo::BadRequest)
-                .await;
+            send_conversation_error(
+                sess,
+                sub_id,
+                err.to_string(),
+                MidnightCoderErrorInfo::BadRequest,
+            )
+            .await;
         }
     }
 }
@@ -1145,7 +1153,10 @@ fn escape_xml_text(input: &str) -> String {
         .replace('>', "&gt;")
 }
 
-fn realtime_api_key(auth: Option<&CodexAuth>, provider: &ModelProviderInfo) -> CodexResult<String> {
+fn realtime_api_key(
+    auth: Option<&MidnightCoderAuth>,
+    provider: &ModelProviderInfo,
+) -> MidnightCoderResult<String> {
     if let Some(api_key) = provider.api_key()? {
         return Ok(api_key);
     }
@@ -1154,7 +1165,7 @@ fn realtime_api_key(auth: Option<&CodexAuth>, provider: &ModelProviderInfo) -> C
         return Ok(token);
     }
 
-    if let Some(api_key) = auth.and_then(CodexAuth::api_key) {
+    if let Some(api_key) = auth.and_then(MidnightCoderAuth::api_key) {
         return Ok(api_key.to_string());
     }
 
@@ -1166,7 +1177,7 @@ fn realtime_api_key(auth: Option<&CodexAuth>, provider: &ModelProviderInfo) -> C
         return Ok(api_key);
     }
 
-    Err(CodexErr::InvalidRequest(
+    Err(MidnightCoderErr::InvalidRequest(
         "realtime conversation requires API key auth".to_string(),
     ))
 }
@@ -1176,7 +1187,7 @@ fn realtime_request_headers(
     api_key: Option<&str>,
     version: RealtimeWsVersion,
     originator: &str,
-) -> CodexResult<Option<HeaderMap>> {
+) -> MidnightCoderResult<Option<HeaderMap>> {
     let mut headers = HeaderMap::new();
 
     if version == RealtimeWsVersion::V1 {
@@ -1191,7 +1202,7 @@ fn realtime_request_headers(
 
     if let Some(api_key) = api_key {
         let auth_value = HeaderValue::from_str(&format!("Bearer {api_key}")).map_err(|err| {
-            CodexErr::InvalidRequest(format!("invalid realtime api key header: {err}"))
+            MidnightCoderErr::InvalidRequest(format!("invalid realtime api key header: {err}"))
         })?;
         headers.insert(AUTHORIZATION, auth_value);
     }
@@ -1212,8 +1223,13 @@ pub(crate) async fn handle_text(
         if sess.conversation.running_state().await.is_some() {
             warn!("realtime text input failed while the session was already ending");
         } else {
-            send_conversation_error(sess, sub_id, err.to_string(), CodexErrorInfo::BadRequest)
-                .await;
+            send_conversation_error(
+                sess,
+                sub_id,
+                err.to_string(),
+                MidnightCoderErrorInfo::BadRequest,
+            )
+            .await;
         }
     }
 }
@@ -1229,8 +1245,13 @@ pub(crate) async fn handle_speech(
         if sess.conversation.running_state().await.is_some() {
             warn!("realtime speech append failed while the session was already ending");
         } else {
-            send_conversation_error(sess, sub_id, err.to_string(), CodexErrorInfo::BadRequest)
-                .await;
+            send_conversation_error(
+                sess,
+                sub_id,
+                err.to_string(),
+                MidnightCoderErrorInfo::BadRequest,
+            )
+            .await;
         }
     }
 }
@@ -1752,7 +1773,7 @@ async fn send_conversation_error(
     sess: &Arc<Session>,
     sub_id: String,
     message: String,
-    codex_error_info: CodexErrorInfo,
+    codex_error_info: MidnightCoderErrorInfo,
 ) {
     sess.send_event_raw(Event {
         id: sub_id,

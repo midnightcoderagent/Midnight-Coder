@@ -8,12 +8,12 @@ use codex_utils_absolute_path::AbsolutePathBuf;
 use pretty_assertions::assert_eq;
 use tempfile::TempDir;
 
-use super::CodexHomeUserInstructionsProvider;
 use super::DEFAULT_AGENTS_MD_FILENAME;
 use super::LOCAL_AGENTS_MD_FILENAME;
+use super::MidnightCoderHomeUserInstructionsProvider;
 
-fn provider(home: &TempDir) -> CodexHomeUserInstructionsProvider {
-    CodexHomeUserInstructionsProvider::new(
+fn provider(home: &TempDir) -> MidnightCoderHomeUserInstructionsProvider {
+    MidnightCoderHomeUserInstructionsProvider::new(
         AbsolutePathBuf::try_from(home.path().to_path_buf()).expect("absolute temp dir"),
     )
 }

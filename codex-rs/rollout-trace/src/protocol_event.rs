@@ -1,4 +1,4 @@
-//! Mapping from Codex protocol events into raw rollout-trace events.
+//! Mapping from MidnightCoder protocol events into raw rollout-trace events.
 //!
 //! The session layer already emits protocol events for turn lifecycle, terminal
 //! sessions, patch application, MCP calls, and collaboration tools. Rollout
@@ -27,12 +27,12 @@ use serde::Serialize;
 use std::time::Duration;
 
 use crate::AgentThreadId;
-use crate::CodexTurnId;
 use crate::ExecutionStatus;
+use crate::MidnightCoderTurnId;
 use crate::RawTraceEventPayload;
 
-pub(crate) struct CodexTurnTraceEvent {
-    pub context_turn_id: CodexTurnId,
+pub(crate) struct MidnightCoderTurnTraceEvent {
+    pub context_turn_id: MidnightCoderTurnId,
     pub payload: RawTraceEventPayload,
 }
 
@@ -40,13 +40,13 @@ pub(crate) fn codex_turn_trace_event(
     thread_id: AgentThreadId,
     default_turn_id: &str,
     event: &EventMsg,
-) -> Option<CodexTurnTraceEvent> {
+) -> Option<MidnightCoderTurnTraceEvent> {
     match event {
         EventMsg::TurnStarted(event) => {
             let codex_turn_id = event.turn_id.clone();
-            Some(CodexTurnTraceEvent {
+            Some(MidnightCoderTurnTraceEvent {
                 context_turn_id: codex_turn_id.clone(),
-                payload: RawTraceEventPayload::CodexTurnStarted {
+                payload: RawTraceEventPayload::MidnightCoderTurnStarted {
                     codex_turn_id,
                     thread_id,
                 },
@@ -54,9 +54,9 @@ pub(crate) fn codex_turn_trace_event(
         }
         EventMsg::TurnComplete(event) => {
             let codex_turn_id = event.turn_id.clone();
-            Some(CodexTurnTraceEvent {
+            Some(MidnightCoderTurnTraceEvent {
                 context_turn_id: codex_turn_id.clone(),
-                payload: RawTraceEventPayload::CodexTurnEnded {
+                payload: RawTraceEventPayload::MidnightCoderTurnEnded {
                     codex_turn_id,
                     status: ExecutionStatus::Completed,
                 },
@@ -67,9 +67,9 @@ pub(crate) fn codex_turn_trace_event(
                 .turn_id
                 .clone()
                 .unwrap_or_else(|| default_turn_id.to_string());
-            Some(CodexTurnTraceEvent {
+            Some(MidnightCoderTurnTraceEvent {
                 context_turn_id: codex_turn_id.clone(),
-                payload: RawTraceEventPayload::CodexTurnEnded {
+                payload: RawTraceEventPayload::MidnightCoderTurnEnded {
                     codex_turn_id,
                     status: execution_status_for_abort_reason(&event.reason),
                 },

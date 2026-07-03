@@ -1,7 +1,7 @@
 //! Rate-limit warning, prompt, and notice surfaces for `ChatWidget`.
 
 use super::*;
-use codex_app_server_protocol::CodexErrorInfo as AppServerCodexErrorInfo;
+use codex_app_server_protocol::MidnightCoderErrorInfo as AppServerMidnightCoderErrorInfo;
 
 pub(super) const NUDGE_MODEL_SLUG: &str = "gpt-5.4-mini";
 pub(super) const RATE_LIMIT_SWITCH_PROMPT_THRESHOLD: f64 = 90.0;
@@ -135,20 +135,22 @@ pub(super) enum RateLimitErrorKind {
 }
 
 pub(super) fn app_server_rate_limit_error_kind(
-    info: &AppServerCodexErrorInfo,
+    info: &AppServerMidnightCoderErrorInfo,
 ) -> Option<RateLimitErrorKind> {
     match info {
-        AppServerCodexErrorInfo::ServerOverloaded => Some(RateLimitErrorKind::ServerOverloaded),
-        AppServerCodexErrorInfo::UsageLimitExceeded => Some(RateLimitErrorKind::UsageLimit),
-        AppServerCodexErrorInfo::ResponseTooManyFailedAttempts {
+        AppServerMidnightCoderErrorInfo::ServerOverloaded => {
+            Some(RateLimitErrorKind::ServerOverloaded)
+        }
+        AppServerMidnightCoderErrorInfo::UsageLimitExceeded => Some(RateLimitErrorKind::UsageLimit),
+        AppServerMidnightCoderErrorInfo::ResponseTooManyFailedAttempts {
             http_status_code: Some(429),
         } => Some(RateLimitErrorKind::Generic),
         _ => None,
     }
 }
 
-pub(super) fn is_app_server_cyber_policy_error(info: &AppServerCodexErrorInfo) -> bool {
-    matches!(info, AppServerCodexErrorInfo::CyberPolicy)
+pub(super) fn is_app_server_cyber_policy_error(info: &AppServerMidnightCoderErrorInfo) -> bool {
+    matches!(info, AppServerMidnightCoderErrorInfo::CyberPolicy)
 }
 
 #[derive(Clone, Copy)]
@@ -342,20 +344,22 @@ impl ChatWidget {
         let default_effort: ReasoningEffortConfig = preset.default_reasoning_effort;
 
         let switch_actions: Vec<SelectionAction> = vec![Box::new(move |tx| {
-            tx.send(AppEvent::CodexOp(AppCommand::override_turn_context(
-                /*cwd*/ None,
-                /*approval_policy*/ None,
-                /*approvals_reviewer*/ None,
-                /*permission_profile*/ None,
-                /*active_permission_profile*/ None,
-                /*windows_sandbox_level*/ None,
-                Some(switch_model_for_events.clone()),
-                Some(Some(default_effort.clone())),
-                /*summary*/ None,
-                /*service_tier*/ None,
-                /*collaboration_mode*/ None,
-                /*personality*/ None,
-            )));
+            tx.send(AppEvent::MidnightCoderOp(
+                AppCommand::override_turn_context(
+                    /*cwd*/ None,
+                    /*approval_policy*/ None,
+                    /*approvals_reviewer*/ None,
+                    /*permission_profile*/ None,
+                    /*active_permission_profile*/ None,
+                    /*windows_sandbox_level*/ None,
+                    Some(switch_model_for_events.clone()),
+                    Some(Some(default_effort.clone())),
+                    /*summary*/ None,
+                    /*service_tier*/ None,
+                    /*collaboration_mode*/ None,
+                    /*personality*/ None,
+                ),
+            ));
             tx.send(AppEvent::UpdateModel(switch_model_for_events.clone()));
             tx.send(AppEvent::UpdateReasoningEffort(Some(
                 default_effort.clone(),

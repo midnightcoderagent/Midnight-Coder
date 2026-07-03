@@ -7,13 +7,13 @@ use codex_analytics::GuardianReviewTrackContext;
 use codex_analytics::GuardianReviewedAction;
 use codex_protocol::config_types::ApprovalsReviewer;
 use codex_protocol::protocol::AskForApproval;
-use codex_protocol::protocol::CodexErrorInfo;
 use codex_protocol::protocol::EventMsg;
 use codex_protocol::protocol::GuardianAssessmentDecisionSource;
 use codex_protocol::protocol::GuardianAssessmentEvent;
 use codex_protocol::protocol::GuardianAssessmentStatus;
 use codex_protocol::protocol::GuardianRiskLevel;
 use codex_protocol::protocol::GuardianUserAuthorization;
+use codex_protocol::protocol::MidnightCoderErrorInfo;
 use codex_protocol::protocol::ReviewDecision;
 use codex_protocol::protocol::SubAgentSource;
 use codex_protocol::protocol::TurnAbortReason;
@@ -106,7 +106,7 @@ pub(super) enum GuardianReviewError {
     },
     Session {
         message: String,
-        error_info: Option<CodexErrorInfo>,
+        error_info: Option<MidnightCoderErrorInfo>,
     },
     Parse {
         message: String,
@@ -129,7 +129,7 @@ impl GuardianReviewError {
         }
     }
 
-    fn session_with_error_info(err: anyhow::Error, error_info: CodexErrorInfo) -> Self {
+    fn session_with_error_info(err: anyhow::Error, error_info: MidnightCoderErrorInfo) -> Self {
         Self::Session {
             message: err.to_string(),
             error_info: Some(error_info),
@@ -922,11 +922,11 @@ fn should_retry_guardian_review(outcome: &GuardianReviewOutcome) -> bool {
         GuardianReviewOutcome::Error(
             GuardianReviewError::Session {
                 error_info: Some(
-                    CodexErrorInfo::ServerOverloaded
-                        | CodexErrorInfo::HttpConnectionFailed { .. }
-                        | CodexErrorInfo::ResponseStreamConnectionFailed { .. }
-                        | CodexErrorInfo::InternalServerError
-                        | CodexErrorInfo::ResponseStreamDisconnected { .. }
+                    MidnightCoderErrorInfo::ServerOverloaded
+                        | MidnightCoderErrorInfo::HttpConnectionFailed { .. }
+                        | MidnightCoderErrorInfo::ResponseStreamConnectionFailed { .. }
+                        | MidnightCoderErrorInfo::InternalServerError
+                        | MidnightCoderErrorInfo::ResponseStreamDisconnected { .. }
                 ),
                 ..
             } | GuardianReviewError::Parse { .. }
@@ -947,7 +947,7 @@ mod review_tests {
             GuardianReviewError::session(anyhow::anyhow!("guardian runtime failed"));
         let structured_session_error = GuardianReviewError::session_with_error_info(
             anyhow::anyhow!("temporary guardian failure"),
-            CodexErrorInfo::ServerOverloaded,
+            MidnightCoderErrorInfo::ServerOverloaded,
         );
 
         assert!(matches!(
@@ -977,15 +977,15 @@ mod review_tests {
             rationale: "deny".to_string(),
         };
         let transient_error_info = [
-            CodexErrorInfo::ServerOverloaded,
-            CodexErrorInfo::HttpConnectionFailed {
+            MidnightCoderErrorInfo::ServerOverloaded,
+            MidnightCoderErrorInfo::HttpConnectionFailed {
                 http_status_code: Some(502),
             },
-            CodexErrorInfo::ResponseStreamConnectionFailed {
+            MidnightCoderErrorInfo::ResponseStreamConnectionFailed {
                 http_status_code: Some(503),
             },
-            CodexErrorInfo::InternalServerError,
-            CodexErrorInfo::ResponseStreamDisconnected {
+            MidnightCoderErrorInfo::InternalServerError,
+            MidnightCoderErrorInfo::ResponseStreamDisconnected {
                 http_status_code: None,
             },
         ];
@@ -1018,7 +1018,7 @@ mod review_tests {
             (
                 GuardianReviewOutcome::Error(GuardianReviewError::session_with_error_info(
                     anyhow::anyhow!("bad request"),
-                    CodexErrorInfo::BadRequest,
+                    MidnightCoderErrorInfo::BadRequest,
                 )),
                 false,
             ),

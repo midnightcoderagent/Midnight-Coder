@@ -1,4 +1,4 @@
-//! The main Codex TUI chat surface.
+//! The main MidnightCoder TUI chat surface.
 //!
 //! `ChatWidget` consumes protocol events, builds and updates history cells, and drives rendering
 //! for both the main viewport and overlay UIs.
@@ -81,7 +81,6 @@ use crate::version::CODEX_CLI_VERSION;
 use codex_app_server_protocol::AddCreditsNudgeCreditType;
 use codex_app_server_protocol::AddCreditsNudgeEmailStatus;
 use codex_app_server_protocol::AppSummary;
-use codex_app_server_protocol::CodexErrorInfo as AppServerCodexErrorInfo;
 use codex_app_server_protocol::CollabAgentTool;
 use codex_app_server_protocol::CollabAgentToolCallStatus;
 use codex_app_server_protocol::CommandExecutionRequestApprovalParams;
@@ -96,6 +95,7 @@ use codex_app_server_protocol::McpServerElicitationRequest;
 use codex_app_server_protocol::McpServerElicitationRequestParams;
 use codex_app_server_protocol::McpServerStatusDetail;
 use codex_app_server_protocol::ModelVerification as AppServerModelVerification;
+use codex_app_server_protocol::MidnightCoderErrorInfo as AppServerMidnightCoderErrorInfo;
 use codex_app_server_protocol::RateLimitReachedType;
 use codex_app_server_protocol::RateLimitSnapshot;
 use codex_app_server_protocol::RequestId as AppServerRequestId;
@@ -367,6 +367,7 @@ use self::skills::find_skill_mentions_with_tool_mentions;
 use self::skills::is_app_mentionable;
 mod plugin_catalog;
 mod plugins;
+mod provider_config;
 use self::plugins::PluginInstallAuthFlowState;
 use self::plugins::PluginListFetchState;
 use self::plugins::PluginsCacheState;
@@ -491,7 +492,7 @@ pub(crate) struct ChatWidgetInit {
     pub(crate) has_chatgpt_account: bool,
     pub(crate) has_codex_backend_auth: bool,
     pub(crate) model_catalog: Arc<ModelCatalog>,
-    pub(crate) feedback: codex_feedback::CodexFeedback,
+    pub(crate) feedback: codex_feedback::MidnightCoderFeedback,
     pub(crate) is_first_run: bool,
     pub(crate) status_account_display: Option<StatusAccountDisplay>,
     pub(crate) runtime_model_provider_base_url: Option<String>,
@@ -513,6 +514,86 @@ pub(crate) enum ExternalEditorState {
     Active,
 }
 
+#[derive(Debug, Clone)]
+struct LiveTokenRateState {
+    started_at: Instant,
+    first_output_at: Option<Instant>,
+    input_tokens_estimate: i64,
+    output_tokens_estimate: i64,
+    input_tokens_per_second: Option<f64>,
+}
+
+impl LiveTokenRateState {
+    fn new(input_tokens_estimate: i64) -> Self {
+        Self {
+            started_at: Instant::now(),
+            first_output_at: None,
+            input_tokens_estimate: input_tokens_estimate.max(0),
+            output_tokens_estimate: 0,
+            input_tokens_per_second: None,
+        }
+    }
+
+    fn record_output_delta(&mut self, delta: &str) {
+        if delta.is_empty() {
+            return;
+        }
+        let now = Instant::now();
+        if self.first_output_at.is_none() {
+            let elapsed = now
+                .saturating_duration_since(self.started_at)
+                .as_secs_f64()
+                .max(0.001);
+            self.input_tokens_per_second = Some(self.input_tokens_estimate as f64 / elapsed);
+            self.first_output_at = Some(now);
+        }
+        self.output_tokens_estimate += estimate_delta_tokens(delta);
+    }
+
+    fn label(&self) -> String {
+        let input_rate = if self.input_tokens_estimate > 0 {
+            let rate = self.input_tokens_per_second.unwrap_or_else(|| {
+                let elapsed = Instant::now()
+                    .saturating_duration_since(self.started_at)
+                    .as_secs_f64()
+                    .max(0.001);
+                self.input_tokens_estimate as f64 / elapsed
+            });
+            format_token_rate(rate)
+        } else {
+            "--".to_string()
+        };
+        let output_rate = self.first_output_at.map_or_else(
+            || "--".to_string(),
+            |first_output_at| {
+                let elapsed = Instant::now()
+                    .saturating_duration_since(first_output_at)
+                    .as_secs_f64()
+                    .max(0.001);
+                format_token_rate(self.output_tokens_estimate as f64 / elapsed)
+            },
+        );
+        format!("read {input_rate} tok/s · write {output_rate} tok/s")
+    }
+}
+
+fn estimate_delta_tokens(delta: &str) -> i64 {
+    let chars = delta.chars().count();
+    i64::try_from(chars.saturating_add(3) / 4)
+        .unwrap_or(i64::MAX)
+        .max(1)
+}
+
+fn format_token_rate(rate: f64) -> String {
+    if rate >= 100.0 {
+        format!("{rate:.0}")
+    } else if rate >= 10.0 {
+        format!("{rate:.1}")
+    } else {
+        format!("{rate:.2}")
+    }
+}
+
 /// Maintains the per-session UI state and interaction state machines for the chat screen.
 ///
 /// `ChatWidget` owns the state derived from the protocol event stream (history cells, streaming
@@ -527,7 +608,7 @@ pub(crate) enum ExternalEditorState {
 /// active work, arming the double-press quit shortcut, and requesting shutdown-first exit.
 pub(crate) struct ChatWidget {
     app_event_tx: AppEventSender,
-    codex_op_target: CodexOpTarget,
+    codex_op_target: MidnightCoderOpTarget,
     bottom_pane: BottomPane,
     transcript: TranscriptState,
     config: Config,
@@ -550,6 +631,7 @@ pub(crate) struct ChatWidget {
     runtime_model_provider_base_url: Option<String>,
     pub(crate) remote_connection: Option<RemoteConnectionStatus>,
     token_info: Option<TokenUsageInfo>,
+    live_token_rate: Option<LiveTokenRateState>,
     rate_limit_snapshots_by_limit_id: BTreeMap<String, RateLimitSnapshotDisplay>,
     refreshing_status_outputs: Vec<(u64, StatusHistoryHandle)>,
     next_status_refresh_request_id: u64,
@@ -683,7 +765,7 @@ pub(crate) struct ChatWidget {
     turn_runtime_metrics: RuntimeMetricsSummary,
     last_rendered_width: std::cell::Cell<Option<usize>>,
     // Feedback sink for /feedback
-    feedback: codex_feedback::CodexFeedback,
+    feedback: codex_feedback::MidnightCoderFeedback,
     // Current session rollout path (if known)
     current_rollout_path: Option<PathBuf>,
     // Current working directory (if known)
@@ -749,7 +831,7 @@ pub(crate) struct ChatWidget {
 }
 
 #[cfg_attr(not(test), allow(dead_code))]
-enum CodexOpTarget {
+enum MidnightCoderOpTarget {
     Direct(UnboundedSender<AppCommand>),
     AppEvent,
 }
@@ -1814,15 +1896,15 @@ impl ChatWidget {
             self.bottom_pane.set_task_running(/*running*/ true);
         }
         match &self.codex_op_target {
-            CodexOpTarget::Direct(codex_op_tx) => {
+            MidnightCoderOpTarget::Direct(codex_op_tx) => {
                 crate::session_log::log_outbound_op(&op);
                 if let Err(e) = codex_op_tx.send(op) {
                     tracing::error!("failed to submit op: {e}");
                     return false;
                 }
             }
-            CodexOpTarget::AppEvent => {
-                self.app_event_tx.send(AppEvent::CodexOp(op));
+            MidnightCoderOpTarget::AppEvent => {
+                self.app_event_tx.send(AppEvent::MidnightCoderOp(op));
             }
         }
         true

@@ -1,5 +1,6 @@
 use super::*;
 use crate::ModelsManagerConfig;
+use codex_protocol::openai_models::ToolMode;
 use pretty_assertions::assert_eq;
 
 #[test]
@@ -71,4 +72,20 @@ fn model_context_window_uses_model_value_without_override() {
     let updated = with_config_overrides(model.clone(), &config);
 
     assert_eq!(updated, model);
+}
+
+#[test]
+fn fallback_model_info_defaults_to_code_mode_tooling() {
+    let model = model_info_from_slug("qwen3-coder:30b");
+
+    assert_eq!(model.tool_mode, Some(ToolMode::CodeMode));
+    assert_eq!(model.shell_type, ConfigShellToolType::ShellCommand);
+    assert_eq!(
+        model.apply_patch_tool_type,
+        Some(ApplyPatchToolType::Freeform)
+    );
+    assert_eq!(
+        model.experimental_supported_tools,
+        vec!["shell_command".to_string(), "apply_patch".to_string()]
+    );
 }

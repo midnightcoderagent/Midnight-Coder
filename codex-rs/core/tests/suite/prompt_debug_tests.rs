@@ -4,7 +4,7 @@ use anyhow::Result;
 use codex_core::build_prompt_input;
 use codex_core::config::ConfigBuilder;
 use codex_core::config::ConfigOverrides;
-use codex_home::CodexHomeUserInstructionsProvider;
+use codex_home::MidnightCoderHomeUserInstructionsProvider;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::ResponseItem;
 use codex_protocol::user_input::UserInput;
@@ -28,7 +28,7 @@ async fn build_prompt_input_includes_context_and_user_message() -> Result<()> {
         })
         .build()
         .await?;
-    let user_instructions_provider = Arc::new(CodexHomeUserInstructionsProvider::new(
+    let user_instructions_provider = Arc::new(MidnightCoderHomeUserInstructionsProvider::new(
         config.codex_home.clone(),
     ));
 

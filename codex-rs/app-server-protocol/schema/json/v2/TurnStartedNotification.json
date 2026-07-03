@@ -24,7 +24,7 @@
       ],
       "type": "object"
     },
-    "CodexErrorInfo": {
+    "MidnightCoderErrorInfo": {
       "description": "This translation layer make sure that we expose codex error code in camel case.\n\nWhen an upstream HTTP status is available (for example, from the Responses API or a provider), it is forwarded in `httpStatusCode` on the relevant `codexErrorInfo` variant.",
       "oneOf": [
         {
@@ -63,7 +63,7 @@
           "required": [
             "httpConnectionFailed"
           ],
-          "title": "HttpConnectionFailedCodexErrorInfo",
+          "title": "HttpConnectionFailedMidnightCoderErrorInfo",
           "type": "object"
         },
         {
@@ -87,7 +87,7 @@
           "required": [
             "responseStreamConnectionFailed"
           ],
-          "title": "ResponseStreamConnectionFailedCodexErrorInfo",
+          "title": "ResponseStreamConnectionFailedMidnightCoderErrorInfo",
           "type": "object"
         },
         {
@@ -111,7 +111,7 @@
           "required": [
             "responseStreamDisconnected"
           ],
-          "title": "ResponseStreamDisconnectedCodexErrorInfo",
+          "title": "ResponseStreamDisconnectedMidnightCoderErrorInfo",
           "type": "object"
         },
         {
@@ -135,7 +135,7 @@
           "required": [
             "responseTooManyFailedAttempts"
           ],
-          "title": "ResponseTooManyFailedAttemptsCodexErrorInfo",
+          "title": "ResponseTooManyFailedAttemptsMidnightCoderErrorInfo",
           "type": "object"
         },
         {
@@ -157,7 +157,7 @@
           "required": [
             "activeTurnNotSteerable"
           ],
-          "title": "ActiveTurnNotSteerableCodexErrorInfo",
+          "title": "ActiveTurnNotSteerableMidnightCoderErrorInfo",
           "type": "object"
         }
       ]
@@ -1457,7 +1457,7 @@
           "description": "Only populated when the Turn's status is failed."
         },
         "id": {
-          "description": "Identifier for this turn. Codex-generated turn IDs are UUIDv7.",
+          "description": "Identifier for this turn. Midnight Coder-generated turn IDs are UUIDv7.",
           "type": "string"
         },
         "items": {
@@ -1507,7 +1507,7 @@
         "codexErrorInfo": {
           "anyOf": [
             {
-              "$ref": "#/definitions/CodexErrorInfo"
+              "$ref": "#/definitions/MidnightCoderErrorInfo"
             },
             {
               "type": "null"

@@ -37,15 +37,15 @@ pub(crate) struct RateLimitStatusWithResetCredits {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-pub struct CodexWorkspaceMessagesResponse {
+pub struct MidnightCoderWorkspaceMessagesResponse {
     #[serde(default)]
-    pub messages: Vec<CodexWorkspaceMessage>,
+    pub messages: Vec<MidnightCoderWorkspaceMessage>,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
-pub struct CodexWorkspaceMessage {
+pub struct MidnightCoderWorkspaceMessage {
     pub message_id: String,
-    pub message_type: CodexWorkspaceMessageType,
+    pub message_type: MidnightCoderWorkspaceMessageType,
     pub message_body: String,
     #[serde(default)]
     pub created_at: Option<String>,
@@ -71,7 +71,7 @@ pub struct ConsumeRateLimitResetCreditResponse {
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum CodexWorkspaceMessageType {
+pub enum MidnightCoderWorkspaceMessageType {
     Headline,
     Announcement,
     #[serde(other)]
@@ -549,52 +549,53 @@ Second line"
 
     #[test]
     fn workspace_messages_response_deserializes_messages() {
-        let response: CodexWorkspaceMessagesResponse = serde_json::from_value(serde_json::json!({
-            "messages": [
-                {
-                    "message_id": "headline-id",
-                    "message_type": "headline",
-                    "message_body": "Headline body",
-                    "created_at": "2026-06-14T00:00:00Z",
-                    "archived_at": null
-                },
-                {
-                    "message_id": "announcement-id",
-                    "message_type": "announcement",
-                    "message_body": "Announcement body",
-                    "created_at": "2026-06-14T01:00:00Z",
-                    "archived_at": null
-                },
-                {
-                    "message_id": "unknown-id",
-                    "message_type": "unknown",
-                    "message_body": "Unknown body"
-                }
-            ]
-        }))
-        .expect("workspace messages response should deserialize");
+        let response: MidnightCoderWorkspaceMessagesResponse =
+            serde_json::from_value(serde_json::json!({
+                "messages": [
+                    {
+                        "message_id": "headline-id",
+                        "message_type": "headline",
+                        "message_body": "Headline body",
+                        "created_at": "2026-06-14T00:00:00Z",
+                        "archived_at": null
+                    },
+                    {
+                        "message_id": "announcement-id",
+                        "message_type": "announcement",
+                        "message_body": "Announcement body",
+                        "created_at": "2026-06-14T01:00:00Z",
+                        "archived_at": null
+                    },
+                    {
+                        "message_id": "unknown-id",
+                        "message_type": "unknown",
+                        "message_body": "Unknown body"
+                    }
+                ]
+            }))
+            .expect("workspace messages response should deserialize");
 
         assert_eq!(
             response,
-            CodexWorkspaceMessagesResponse {
+            MidnightCoderWorkspaceMessagesResponse {
                 messages: vec![
-                    CodexWorkspaceMessage {
+                    MidnightCoderWorkspaceMessage {
                         message_id: "headline-id".to_string(),
-                        message_type: CodexWorkspaceMessageType::Headline,
+                        message_type: MidnightCoderWorkspaceMessageType::Headline,
                         message_body: "Headline body".to_string(),
                         created_at: Some("2026-06-14T00:00:00Z".to_string()),
                         archived_at: None,
                     },
-                    CodexWorkspaceMessage {
+                    MidnightCoderWorkspaceMessage {
                         message_id: "announcement-id".to_string(),
-                        message_type: CodexWorkspaceMessageType::Announcement,
+                        message_type: MidnightCoderWorkspaceMessageType::Announcement,
                         message_body: "Announcement body".to_string(),
                         created_at: Some("2026-06-14T01:00:00Z".to_string()),
                         archived_at: None,
                     },
-                    CodexWorkspaceMessage {
+                    MidnightCoderWorkspaceMessage {
                         message_id: "unknown-id".to_string(),
-                        message_type: CodexWorkspaceMessageType::Unknown,
+                        message_type: MidnightCoderWorkspaceMessageType::Unknown,
                         message_body: "Unknown body".to_string(),
                         created_at: None,
                         archived_at: None,

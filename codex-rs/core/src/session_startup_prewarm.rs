@@ -11,7 +11,7 @@ use tracing::warn;
 
 use crate::client::ModelClientSession;
 use crate::guardian::routes_approval_to_guardian;
-use crate::responses_metadata::CodexResponsesRequestKind;
+use crate::responses_metadata::MidnightCoderResponsesRequestKind;
 use crate::session::INITIAL_SUBMIT_ID;
 use crate::session::session::Session;
 use crate::session::turn::build_prompt;
@@ -19,11 +19,11 @@ use crate::session::turn::built_tools;
 use codex_otel::STARTUP_PREWARM_AGE_AT_FIRST_TURN_METRIC;
 use codex_otel::STARTUP_PREWARM_DURATION_METRIC;
 use codex_otel::SessionTelemetry;
-use codex_protocol::error::Result as CodexResult;
+use codex_protocol::error::Result as MidnightCoderResult;
 use codex_protocol::models::BaseInstructions;
 
 pub(crate) struct SessionStartupPrewarmHandle {
-    task: AbortOnDropHandle<CodexResult<ModelClientSession>>,
+    task: AbortOnDropHandle<MidnightCoderResult<ModelClientSession>>,
     started_at: Instant,
     timeout: Duration,
 }
@@ -39,7 +39,7 @@ pub(crate) enum SessionStartupPrewarmResolution {
 
 impl SessionStartupPrewarmHandle {
     pub(crate) fn new(
-        task: JoinHandle<CodexResult<ModelClientSession>>,
+        task: JoinHandle<MidnightCoderResult<ModelClientSession>>,
         started_at: Instant,
         timeout: Duration,
     ) -> Self {
@@ -155,7 +155,10 @@ impl SessionStartupPrewarmHandle {
     }
 
     fn resolution_from_join_result(
-        result: std::result::Result<CodexResult<ModelClientSession>, tokio::task::JoinError>,
+        result: std::result::Result<
+            MidnightCoderResult<ModelClientSession>,
+            tokio::task::JoinError,
+        >,
         started_at: Instant,
     ) -> SessionStartupPrewarmResolution {
         match result {
@@ -241,7 +244,7 @@ impl Session {
 async fn schedule_startup_prewarm_inner(
     session: Arc<Session>,
     base_instructions: String,
-) -> CodexResult<ModelClientSession> {
+) -> MidnightCoderResult<ModelClientSession> {
     let prewarm_started_at = Instant::now();
     let startup_turn_context = session
         .new_startup_prewarm_turn_with_sub_id(INITIAL_SUBMIT_ID.to_owned())
@@ -301,7 +304,7 @@ async fn schedule_startup_prewarm_inner(
         .to_responses_metadata(
             session.installation_id.clone(),
             window_id,
-            CodexResponsesRequestKind::Prewarm,
+            MidnightCoderResponsesRequestKind::Prewarm,
         );
     let mut client_session = session.services.model_client.new_session();
     let websocket_warmup_started_at = Instant::now();

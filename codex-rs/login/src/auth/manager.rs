@@ -26,7 +26,7 @@ use codex_protocol::auth::AuthMode;
 use codex_protocol::config_types::ForcedLoginMethod;
 use codex_protocol::config_types::ModelProviderAuthInfo;
 
-use super::access_token::CodexAccessToken;
+use super::access_token::MidnightCoderAccessToken;
 use super::access_token::classify_codex_access_token;
 use super::agent_identity::ManagedChatGptAgentIdentityBinding;
 use super::agent_identity::agent_identity_authapi_base_url;
@@ -55,7 +55,7 @@ use crate::outbound_proxy::AuthRouteConfig;
 use crate::token_data::TokenData;
 use crate::token_data::parse_chatgpt_jwt_claims;
 use crate::token_data::parse_jwt_expiration;
-use codex_client::CodexHttpClient;
+use codex_client::MidnightCoderHttpClient;
 use codex_config::types::AuthCredentialsStoreMode;
 use codex_protocol::account::PlanType as AccountPlanType;
 use codex_protocol::auth::PlanType as InternalPlanType;
@@ -67,7 +67,7 @@ use thiserror::Error;
 
 /// Authentication mechanism used by the current user.
 #[derive(Debug, Clone)]
-pub enum CodexAuth {
+pub enum MidnightCoderAuth {
     ApiKey(ApiKeyAuth),
     Chatgpt(ChatgptAuth),
     ChatgptAuthTokens(ChatgptAuthTokens),
@@ -76,7 +76,7 @@ pub enum CodexAuth {
     BedrockApiKey(BedrockApiKeyAuth),
 }
 
-/// Policy for resolving Agent Identity auth from a broader Codex auth snapshot.
+/// Policy for resolving Agent Identity auth from a broader MidnightCoder auth snapshot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentIdentityAuthPolicy {
     /// Use Agent Identity auth only when the current auth is already Agent Identity.
@@ -142,7 +142,7 @@ impl AgentIdentityBootstrapCooldown {
     }
 }
 
-impl PartialEq for CodexAuth {
+impl PartialEq for MidnightCoderAuth {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::PersonalAccessToken(a), Self::PersonalAccessToken(b)) => a == b,
@@ -171,7 +171,7 @@ pub struct ChatgptAuthTokens {
 #[derive(Debug, Clone)]
 struct ChatgptAuthState {
     auth_dot_json: Arc<Mutex<Option<AuthDotJson>>>,
-    client: CodexHttpClient,
+    client: MidnightCoderHttpClient,
 }
 
 const TOKEN_REFRESH_INTERVAL: i64 = 8;
@@ -289,7 +289,7 @@ impl From<RefreshTokenError> for std::io::Error {
     }
 }
 
-impl CodexAuth {
+impl MidnightCoderAuth {
     async fn from_auth_dot_json(
         codex_home: &Path,
         auth_dot_json: AuthDotJson,
@@ -538,12 +538,12 @@ impl CodexAuth {
             )),
             Self::PersonalAccessToken(auth) => Ok(auth.access_token().to_string()),
             Self::BedrockApiKey(_) => Err(std::io::Error::other(
-                "Bedrock API key auth does not expose a Codex bearer token",
+                "Bedrock API key auth does not expose a MidnightCoder bearer token",
             )),
         }
     }
 
-    /// Returns `None` if Codex backend auth does not expose an account id.
+    /// Returns `None` if MidnightCoder backend auth does not expose an account id.
     pub fn get_account_id(&self) -> Option<String> {
         match self {
             Self::AgentIdentity(auth) => Some(auth.account_id().to_string()),
@@ -552,7 +552,7 @@ impl CodexAuth {
         }
     }
 
-    /// Returns false if Codex backend auth omits the FedRAMP claim.
+    /// Returns false if MidnightCoder backend auth omits the FedRAMP claim.
     pub fn is_fedramp_account(&self) -> bool {
         match self {
             Self::AgentIdentity(auth) => auth.is_fedramp_account(),
@@ -563,7 +563,7 @@ impl CodexAuth {
         }
     }
 
-    /// Returns `None` if Codex backend auth does not expose an account email.
+    /// Returns `None` if MidnightCoder backend auth does not expose an account email.
     pub fn get_account_email(&self) -> Option<String> {
         match self {
             Self::AgentIdentity(auth) => auth.email().map(str::to_string),
@@ -572,7 +572,7 @@ impl CodexAuth {
         }
     }
 
-    /// Returns `None` if Codex backend auth does not expose a ChatGPT user id.
+    /// Returns `None` if MidnightCoder backend auth does not expose a ChatGPT user id.
     pub fn get_chatgpt_user_id(&self) -> Option<String> {
         match self {
             Self::AgentIdentity(auth) => Some(auth.chatgpt_user_id().to_string()),
@@ -687,7 +687,7 @@ impl CodexAuth {
             ManagedChatGptAgentIdentityBinding::from_auth(self, forced_chatgpt_workspace_id)
                 .ok_or_else(|| std::io::Error::other("ChatGPT auth is unavailable"))?;
 
-        // JWT auth is loaded as CodexAuth::AgentIdentity; this path only reuses
+        // JWT auth is loaded as MidnightCoderAuth::AgentIdentity; this path only reuses
         // records created by the managed ChatGPT Agent Identity bootstrap.
         if let Some(record) = self.stored_managed_chatgpt_agent_identity_record(&binding.account_id)
             && record_matches_managed_chatgpt_binding(&record, &binding)
@@ -755,7 +755,10 @@ impl CodexAuth {
 }
 
 impl ManagedChatGptAgentIdentityBinding {
-    fn from_auth(auth: &CodexAuth, forced_workspace_id: Option<Vec<String>>) -> Option<Self> {
+    fn from_auth(
+        auth: &MidnightCoderAuth,
+        forced_workspace_id: Option<Vec<String>>,
+    ) -> Option<Self> {
         if !auth.is_chatgpt_auth() {
             return None;
         }
@@ -805,7 +808,7 @@ impl ChatgptAuth {
         &self.storage
     }
 
-    fn client(&self) -> &CodexHttpClient {
+    fn client(&self) -> &MidnightCoderHttpClient {
         &self.state.client
     }
 
@@ -938,11 +941,11 @@ pub async fn login_with_access_token(
     auth_route_config: Option<&AuthRouteConfig>,
 ) -> std::io::Result<()> {
     let auth_dot_json = match classify_codex_access_token(access_token) {
-        CodexAccessToken::PersonalAccessToken(access_token) => {
+        MidnightCoderAccessToken::PersonalAccessToken(access_token) => {
             let auth = PersonalAccessTokenAuth::load(access_token, auth_route_config).await?;
             ensure_personal_access_token_workspace_allowed(forced_chatgpt_workspace_id, &auth)?;
             AuthDotJson {
-                // Infer PAT auth from the credential field so older Codex builds can still
+                // Infer PAT auth from the credential field so older MidnightCoder builds can still
                 // deserialize auth.json after a rollback.
                 auth_mode: None,
                 openai_api_key: None,
@@ -953,7 +956,7 @@ pub async fn login_with_access_token(
                 bedrock_api_key: None,
             }
         }
-        CodexAccessToken::AgentIdentityJwt(jwt) => {
+        MidnightCoderAccessToken::AgentIdentityJwt(jwt) => {
             let base_url = chatgpt_base_url
                 .unwrap_or(ChatGptEnvironment::default().chatgpt_base_url())
                 .trim_end_matches('/')
@@ -1114,11 +1117,11 @@ async fn enforce_login_restrictions_with_agent_identity_authapi_base_url(
 
     if let Some(expected_account_ids) = config.forced_chatgpt_workspace_id.as_deref() {
         let chatgpt_account_id = match &auth {
-            CodexAuth::ApiKey(_) | CodexAuth::BedrockApiKey(_) => return Ok(()),
-            CodexAuth::AgentIdentity(_) | CodexAuth::PersonalAccessToken(_) => {
+            MidnightCoderAuth::ApiKey(_) | MidnightCoderAuth::BedrockApiKey(_) => return Ok(()),
+            MidnightCoderAuth::AgentIdentity(_) | MidnightCoderAuth::PersonalAccessToken(_) => {
                 auth.get_account_id()
             }
-            CodexAuth::Chatgpt(_) | CodexAuth::ChatgptAuthTokens(_) => {
+            MidnightCoderAuth::Chatgpt(_) | MidnightCoderAuth::ChatgptAuthTokens(_) => {
                 let token_data = match auth.get_token_data() {
                     Ok(data) => data,
                     Err(err) => {
@@ -1219,10 +1222,10 @@ async fn load_auth(
     keyring_backend_kind: AuthKeyringBackendKind,
     agent_identity_authapi_base_url: Option<&str>,
     auth_route_config: Option<&AuthRouteConfig>,
-) -> std::io::Result<Option<CodexAuth>> {
+) -> std::io::Result<Option<MidnightCoderAuth>> {
     // API key via env var takes precedence over any other auth method.
     if enable_codex_api_key_env && let Some(api_key) = read_codex_api_key_from_env() {
-        return Ok(Some(CodexAuth::from_api_key(api_key.as_str())));
+        return Ok(Some(MidnightCoderAuth::from_api_key(api_key.as_str())));
     }
 
     // External ChatGPT auth tokens live in the in-memory (ephemeral) store. Always check this
@@ -1233,7 +1236,7 @@ async fn load_auth(
         AuthKeyringBackendKind::default(),
     );
     if let Some(auth_dot_json) = ephemeral_storage.load()? {
-        let auth = CodexAuth::from_auth_dot_json(
+        let auth = MidnightCoderAuth::from_auth_dot_json(
             codex_home,
             auth_dot_json,
             AuthCredentialsStoreMode::Ephemeral,
@@ -1243,7 +1246,7 @@ async fn load_auth(
             auth_route_config,
         )
         .await?;
-        if let CodexAuth::PersonalAccessToken(auth) = &auth {
+        if let MidnightCoderAuth::PersonalAccessToken(auth) = &auth {
             ensure_personal_access_token_workspace_allowed(forced_chatgpt_workspace_id, auth)?;
         }
         return Ok(Some(auth));
@@ -1251,13 +1254,13 @@ async fn load_auth(
 
     if let Some(access_token) = read_codex_access_token_from_env() {
         return match classify_codex_access_token(&access_token) {
-            CodexAccessToken::PersonalAccessToken(access_token) => {
+            MidnightCoderAccessToken::PersonalAccessToken(access_token) => {
                 let auth = PersonalAccessTokenAuth::load(access_token, auth_route_config).await?;
                 ensure_personal_access_token_workspace_allowed(forced_chatgpt_workspace_id, &auth)?;
-                Ok(Some(CodexAuth::PersonalAccessToken(auth)))
+                Ok(Some(MidnightCoderAuth::PersonalAccessToken(auth)))
             }
-            CodexAccessToken::AgentIdentityJwt(jwt) => {
-                CodexAuth::from_agent_identity_jwt_with_authapi_base_url(
+            MidnightCoderAccessToken::AgentIdentityJwt(jwt) => {
+                MidnightCoderAuth::from_agent_identity_jwt_with_authapi_base_url(
                     jwt,
                     chatgpt_base_url,
                     require_agent_identity_authapi_base_url(agent_identity_authapi_base_url)?,
@@ -1285,7 +1288,7 @@ async fn load_auth(
         None => return Ok(None),
     };
 
-    let auth = CodexAuth::from_auth_dot_json(
+    let auth = MidnightCoderAuth::from_auth_dot_json(
         codex_home,
         auth_dot_json,
         auth_credentials_store_mode,
@@ -1295,7 +1298,7 @@ async fn load_auth(
         auth_route_config,
     )
     .await?;
-    if let CodexAuth::PersonalAccessToken(auth) = &auth {
+    if let MidnightCoderAuth::PersonalAccessToken(auth) = &auth {
         ensure_personal_access_token_workspace_allowed(forced_chatgpt_workspace_id, auth)?;
     }
     Ok(Some(auth))
@@ -1331,7 +1334,7 @@ fn persist_tokens(
 // The caller is responsible for persisting any returned tokens.
 async fn request_chatgpt_token_refresh(
     refresh_token: String,
-    client: &CodexHttpClient,
+    client: &MidnightCoderHttpClient,
 ) -> Result<RefreshResponse, RefreshTokenError> {
     let refresh_request = RefreshRequest {
         client_id: oauth_client_id(),
@@ -1533,7 +1536,7 @@ impl AuthDotJson {
 /// Internal cached auth state.
 #[derive(Clone)]
 struct CachedAuth {
-    auth: Option<CodexAuth>,
+    auth: Option<MidnightCoderAuth>,
     /// Permanent refresh failure cached for the current auth snapshot so
     /// later refresh attempts for the same credentials fail fast without network.
     permanent_refresh_failure: Option<AuthScopedRefreshFailure>,
@@ -1541,7 +1544,7 @@ struct CachedAuth {
 
 #[derive(Clone)]
 struct AuthScopedRefreshFailure {
-    auth: CodexAuth,
+    auth: MidnightCoderAuth,
     error: RefreshTokenFailedError,
 }
 
@@ -1550,7 +1553,7 @@ impl Debug for CachedAuth {
         f.debug_struct("CachedAuth")
             .field(
                 "auth_mode",
-                &self.auth.as_ref().map(CodexAuth::api_auth_mode),
+                &self.auth.as_ref().map(MidnightCoderAuth::api_auth_mode),
             )
             .field(
                 "permanent_refresh_failure",
@@ -1624,11 +1627,13 @@ impl UnauthorizedRecoveryStepResult {
 impl UnauthorizedRecovery {
     fn new(manager: Arc<AuthManager>) -> Self {
         let cached_auth = manager.auth_cached();
-        let expected_account_id = cached_auth.as_ref().and_then(CodexAuth::get_account_id);
+        let expected_account_id = cached_auth
+            .as_ref()
+            .and_then(MidnightCoderAuth::get_account_id);
         let mode = if manager.has_external_api_key_auth()
             || cached_auth
                 .as_ref()
-                .is_some_and(CodexAuth::is_external_chatgpt_tokens)
+                .is_some_and(MidnightCoderAuth::is_external_chatgpt_tokens)
         {
             UnauthorizedRecoveryMode::External
         } else {
@@ -1655,7 +1660,7 @@ impl UnauthorizedRecovery {
             .manager
             .auth_cached()
             .as_ref()
-            .is_some_and(CodexAuth::supports_unauthorized_recovery)
+            .is_some_and(MidnightCoderAuth::supports_unauthorized_recovery)
         {
             return false;
         }
@@ -1680,7 +1685,7 @@ impl UnauthorizedRecovery {
             .manager
             .auth_cached()
             .as_ref()
-            .is_some_and(CodexAuth::is_personal_access_token_auth)
+            .is_some_and(MidnightCoderAuth::is_personal_access_token_auth)
         {
             return "not_refreshable_auth";
         }
@@ -1689,7 +1694,7 @@ impl UnauthorizedRecovery {
             .manager
             .auth_cached()
             .as_ref()
-            .is_some_and(CodexAuth::supports_unauthorized_recovery)
+            .is_some_and(MidnightCoderAuth::supports_unauthorized_recovery)
         {
             return "not_chatgpt_auth";
         }
@@ -1783,7 +1788,7 @@ impl UnauthorizedRecovery {
 
 /// Central manager providing a single source of truth for auth.json derived
 /// authentication data. It loads once (or on preference change) and then
-/// hands out cloned `CodexAuth` values so the rest of the program has a
+/// hands out cloned `MidnightCoderAuth` values so the rest of the program has a
 /// consistent snapshot.
 ///
 /// External modifications to `auth.json` will NOT be observed until
@@ -1813,7 +1818,7 @@ pub struct AuthManager {
 /// `codex_core::config::Config`, but this trait keeps `codex-login` independent
 /// from `codex-core`.
 pub trait AuthManagerConfig {
-    /// Returns the Codex home directory used for auth storage.
+    /// Returns the MidnightCoder home directory used for auth storage.
     fn codex_home(&self) -> PathBuf;
 
     /// Returns the CLI auth credential storage mode for auth loading.
@@ -1909,8 +1914,8 @@ impl AuthManager {
         }
     }
 
-    /// Create an AuthManager with a specific CodexAuth, for testing only.
-    pub fn from_auth_for_testing(auth: CodexAuth) -> Arc<Self> {
+    /// Create an AuthManager with a specific MidnightCoderAuth, for testing only.
+    pub fn from_auth_for_testing(auth: MidnightCoderAuth) -> Arc<Self> {
         let cached = CachedAuth {
             auth: Some(auth),
             permanent_refresh_failure: None,
@@ -1935,8 +1940,11 @@ impl AuthManager {
         })
     }
 
-    /// Create an AuthManager with a specific CodexAuth and codex home, for testing only.
-    pub fn from_auth_for_testing_with_home(auth: CodexAuth, codex_home: PathBuf) -> Arc<Self> {
+    /// Create an AuthManager with a specific MidnightCoderAuth and codex home, for testing only.
+    pub fn from_auth_for_testing_with_home(
+        auth: MidnightCoderAuth,
+        codex_home: PathBuf,
+    ) -> Arc<Self> {
         let cached = CachedAuth {
             auth: Some(auth),
             permanent_refresh_failure: None,
@@ -1960,10 +1968,10 @@ impl AuthManager {
         })
     }
 
-    /// Create an AuthManager with a specific CodexAuth and Agent Identity AuthAPI base URL, for testing only.
+    /// Create an AuthManager with a specific MidnightCoderAuth and Agent Identity AuthAPI base URL, for testing only.
     #[doc(hidden)]
     pub fn from_auth_for_testing_with_agent_identity_authapi_base_url(
-        auth: CodexAuth,
+        auth: MidnightCoderAuth,
         agent_identity_authapi_base_url: String,
     ) -> Arc<Self> {
         let cached = CachedAuth {
@@ -2019,7 +2027,7 @@ impl AuthManager {
     }
 
     /// Current cached auth (clone) without attempting a refresh.
-    pub fn auth_cached(&self) -> Option<CodexAuth> {
+    pub fn auth_cached(&self) -> Option<MidnightCoderAuth> {
         self.inner.read().ok().and_then(|c| c.auth.clone())
     }
 
@@ -2028,7 +2036,10 @@ impl AuthManager {
         self.auth_change_tx.subscribe()
     }
 
-    pub fn refresh_failure_for_auth(&self, auth: &CodexAuth) -> Option<RefreshTokenFailedError> {
+    pub fn refresh_failure_for_auth(
+        &self,
+        auth: &MidnightCoderAuth,
+    ) -> Option<RefreshTokenFailedError> {
         self.inner.read().ok().and_then(|cached| {
             cached
                 .permanent_refresh_failure
@@ -2042,7 +2053,7 @@ impl AuthManager {
     /// For managed ChatGPT auth that needs a proactive refresh, first performs
     /// a guarded reload and then refreshes only if the on-disk auth is unchanged.
     #[instrument(level = "trace", skip_all)]
-    pub async fn auth(&self) -> Option<CodexAuth> {
+    pub async fn auth(&self) -> Option<MidnightCoderAuth> {
         if let Some(auth) = self.resolve_external_api_key_auth().await {
             return Some(auth);
         }
@@ -2065,7 +2076,9 @@ impl AuthManager {
         let Some(auth) = self.auth().await else {
             return Ok(None);
         };
-        if policy == AgentIdentityAuthPolicy::ChatGptAuth && matches!(auth, CodexAuth::Chatgpt(_)) {
+        if policy == AgentIdentityAuthPolicy::ChatGptAuth
+            && matches!(auth, MidnightCoderAuth::Chatgpt(_))
+        {
             let _bootstrap_permit = self
                 .agent_identity_lock
                 .acquire()
@@ -2141,7 +2154,9 @@ impl AuthManager {
         };
 
         let new_auth = self.load_auth_from_storage().await;
-        let new_account_id = new_auth.as_ref().and_then(CodexAuth::get_account_id);
+        let new_account_id = new_auth
+            .as_ref()
+            .and_then(MidnightCoderAuth::get_account_id);
 
         if new_account_id.as_deref() != Some(expected_account_id) {
             let found_account_id = new_account_id.as_deref().unwrap_or("unknown");
@@ -2163,7 +2178,10 @@ impl AuthManager {
         }
     }
 
-    fn auths_equal_for_refresh(a: Option<&CodexAuth>, b: Option<&CodexAuth>) -> bool {
+    fn auths_equal_for_refresh(
+        a: Option<&MidnightCoderAuth>,
+        b: Option<&MidnightCoderAuth>,
+    ) -> bool {
         match (a, b) {
             (None, None) => true,
             (Some(a), Some(b)) => match (a.api_auth_mode(), b.api_auth_mode()) {
@@ -2173,7 +2191,7 @@ impl AuthManager {
                     a.get_current_auth_json() == b.get_current_auth_json()
                 }
                 (AuthMode::AgentIdentity, AuthMode::AgentIdentity) => match (a, b) {
-                    (CodexAuth::AgentIdentity(a), CodexAuth::AgentIdentity(b)) => {
+                    (MidnightCoderAuth::AgentIdentity(a), MidnightCoderAuth::AgentIdentity(b)) => {
                         a.record() == b.record()
                     }
                     _ => false,
@@ -2186,7 +2204,7 @@ impl AuthManager {
         }
     }
 
-    fn auths_equal(a: Option<&CodexAuth>, b: Option<&CodexAuth>) -> bool {
+    fn auths_equal(a: Option<&MidnightCoderAuth>, b: Option<&MidnightCoderAuth>) -> bool {
         match (a, b) {
             (None, None) => true,
             (Some(a), Some(b)) => a == b,
@@ -2198,7 +2216,7 @@ impl AuthManager {
     /// attempted against the auth snapshot that is still cached.
     fn record_permanent_refresh_failure_if_unchanged(
         &self,
-        attempted_auth: &CodexAuth,
+        attempted_auth: &MidnightCoderAuth,
         error: &RefreshTokenFailedError,
     ) {
         if let Ok(mut guard) = self.inner.write() {
@@ -2213,7 +2231,7 @@ impl AuthManager {
         }
     }
 
-    async fn load_auth_from_storage(&self) -> Option<CodexAuth> {
+    async fn load_auth_from_storage(&self) -> Option<MidnightCoderAuth> {
         let forced_chatgpt_workspace_id = self.forced_chatgpt_workspace_id();
         load_auth(
             &self.codex_home,
@@ -2230,7 +2248,7 @@ impl AuthManager {
         .flatten()
     }
 
-    fn set_cached_auth(&self, new_auth: Option<CodexAuth>) -> bool {
+    fn set_cached_auth(&self, new_auth: Option<MidnightCoderAuth>) -> bool {
         if let Ok(mut guard) = self.inner.write() {
             let previous = guard.auth.as_ref();
             let changed = !AuthManager::auths_equal(previous, new_auth.as_ref());
@@ -2284,7 +2302,7 @@ impl AuthManager {
     pub fn is_external_chatgpt_auth_active(&self) -> bool {
         self.auth_cached()
             .as_ref()
-            .is_some_and(CodexAuth::is_external_chatgpt_tokens)
+            .is_some_and(MidnightCoderAuth::is_external_chatgpt_tokens)
     }
 
     pub fn codex_api_key_env_enabled(&self) -> bool {
@@ -2353,7 +2371,7 @@ impl AuthManager {
         self.external_auth_mode() == Some(AuthMode::ApiKey)
     }
 
-    async fn resolve_external_api_key_auth(&self) -> Option<CodexAuth> {
+    async fn resolve_external_api_key_auth(&self) -> Option<MidnightCoderAuth> {
         if !self.has_external_api_key_auth() {
             return None;
         }
@@ -2361,7 +2379,7 @@ impl AuthManager {
         let external_auth = self.external_auth()?;
 
         match external_auth.resolve().await {
-            Ok(Some(tokens)) => Some(CodexAuth::from_api_key(&tokens.access_token)),
+            Ok(Some(tokens)) => Some(MidnightCoderAuth::from_api_key(&tokens.access_token)),
             Ok(None) => None,
             Err(err) => {
                 tracing::error!("Failed to resolve external API key auth: {err}");
@@ -2391,7 +2409,7 @@ impl AuthManager {
         }
         let expected_account_id = auth_before_reload
             .as_ref()
-            .and_then(CodexAuth::get_account_id);
+            .and_then(MidnightCoderAuth::get_account_id);
 
         match self
             .reload_if_account_id_matches(expected_account_id.as_deref())
@@ -2438,11 +2456,11 @@ impl AuthManager {
 
         let attempted_auth = auth.clone();
         let result = match auth {
-            CodexAuth::ChatgptAuthTokens(_) => {
+            MidnightCoderAuth::ChatgptAuthTokens(_) => {
                 self.refresh_external_auth(ExternalAuthRefreshReason::Unauthorized)
                     .await
             }
-            CodexAuth::Chatgpt(chatgpt_auth) => {
+            MidnightCoderAuth::Chatgpt(chatgpt_auth) => {
                 let token_data = chatgpt_auth.current_token_data().ok_or_else(|| {
                     RefreshTokenError::Transient(std::io::Error::other(
                         "Token data is not available.",
@@ -2451,10 +2469,10 @@ impl AuthManager {
                 self.refresh_and_persist_chatgpt_token(&chatgpt_auth, token_data.refresh_token)
                     .await
             }
-            CodexAuth::ApiKey(_)
-            | CodexAuth::AgentIdentity(_)
-            | CodexAuth::PersonalAccessToken(_)
-            | CodexAuth::BedrockApiKey(_) => Ok(()),
+            MidnightCoderAuth::ApiKey(_)
+            | MidnightCoderAuth::AgentIdentity(_)
+            | MidnightCoderAuth::PersonalAccessToken(_)
+            | MidnightCoderAuth::BedrockApiKey(_) => Ok(()),
         };
         if let Err(RefreshTokenError::Permanent(error)) = &result {
             self.record_permanent_refresh_failure_if_unchanged(&attempted_auth, error);
@@ -2501,7 +2519,9 @@ impl AuthManager {
         if self.has_external_api_key_auth() {
             return Some(AuthMode::ApiKey);
         }
-        self.auth_cached().as_ref().map(CodexAuth::api_auth_mode)
+        self.auth_cached()
+            .as_ref()
+            .map(MidnightCoderAuth::api_auth_mode)
     }
 
     /// Returns the effective backend auth mode for the current authentication.
@@ -2509,7 +2529,9 @@ impl AuthManager {
         if self.has_external_api_key_auth() {
             return Some(AuthMode::ApiKey);
         }
-        self.auth_cached().as_ref().map(CodexAuth::auth_mode)
+        self.auth_cached()
+            .as_ref()
+            .map(MidnightCoderAuth::auth_mode)
     }
 
     pub fn current_auth_uses_codex_backend(&self) -> bool {
@@ -2517,9 +2539,9 @@ impl AuthManager {
             .is_some_and(AuthMode::uses_codex_backend)
     }
 
-    fn should_refresh_proactively(auth: &CodexAuth) -> bool {
+    fn should_refresh_proactively(auth: &MidnightCoderAuth) -> bool {
         let chatgpt_auth = match auth {
-            CodexAuth::Chatgpt(chatgpt_auth) => chatgpt_auth,
+            MidnightCoderAuth::Chatgpt(chatgpt_auth) => chatgpt_auth,
             _ => return false,
         };
 
@@ -2554,7 +2576,7 @@ impl AuthManager {
         let previous_account_id = self
             .auth_cached()
             .as_ref()
-            .and_then(CodexAuth::get_account_id);
+            .and_then(MidnightCoderAuth::get_account_id);
         let context = ExternalAuthRefreshContext {
             reason,
             previous_account_id,

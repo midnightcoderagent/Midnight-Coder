@@ -44,7 +44,7 @@ async fn experimental_mode_plan_is_ignored_on_startup() {
         has_chatgpt_account: false,
         has_codex_backend_auth: false,
         model_catalog: test_model_catalog(&cfg),
-        feedback: codex_feedback::CodexFeedback::new(),
+        feedback: codex_feedback::MidnightCoderFeedback::new(),
         is_first_run: true,
         status_account_display: None,
         runtime_model_provider_base_url: None,
@@ -276,7 +276,7 @@ async fn plugins_popup_truncates_long_descriptions_in_list_rows() {
         .expect("expected verbose plugin row in popup");
     insta::assert_snapshot!(
         verbose_row,
-        @"  [-] Verbose Plugin  Available · OpenAI Curated · This description…"
+        @"  [-] Verbose Plugin  Available · MidnightCoder Curated · This desc…"
     );
     assert!(
         !popup
@@ -1240,7 +1240,7 @@ async fn plugins_popup_remote_section_fallback_states_snapshot() {
         ])),
     );
     let curated_loading_popup =
-        select_tab_containing(&mut chat, "Loading OpenAI Curated plugins...");
+        select_tab_containing(&mut chat, "Loading MidnightCoder Curated plugins...");
     let workspace_loading_popup = select_tab_containing(&mut chat, "Loading Workspace plugins.");
     let shared_loading_popup = select_tab_containing(&mut chat, "Loading Shared with me plugins.");
     let _ = select_tab_containing(&mut chat, "Loading Workspace plugins.");
@@ -1275,8 +1275,10 @@ async fn plugins_popup_remote_section_fallback_states_snapshot() {
             plugins_test_curated_marketplace(Vec::new()),
         ])),
     );
-    let remote_curated_empty_popup =
-        select_tab_containing(&mut remote_chat, "No OpenAI Curated plugins available");
+    let remote_curated_empty_popup = select_tab_containing(
+        &mut remote_chat,
+        "No MidnightCoder Curated plugins available",
+    );
 
     insta::assert_snapshot!(
         [
@@ -1287,22 +1289,22 @@ async fn plugins_popup_remote_section_fallback_states_snapshot() {
             remote_section_state(&remote_curated_empty_popup),
         ]
         .join("\n\n"),
-        @r###"
-        OpenAI Curated marketplace.
-        Loading OpenAI Curated plugins...  This updates when OpenAI Curated plugins finish loading.
+        @"
+    MidnightCoder Curated marketplace.
+    Loading MidnightCoder Curated plugins...  This updates when MidnightCoder Curated plugins finis…
 
-        Loading Workspace plugins.
-        Loading Workspace plugins...  This updates when workspace plugins finish loading.
+    Loading Workspace plugins.
+    Loading Workspace plugins...  This updates when workspace plugins finish loading.
 
-        Loading Shared with me plugins.
-        Loading Shared with me plugins...  This updates when shared plugins finish loading.
+    Loading Shared with me plugins.
+    Loading Shared with me plugins...  This updates when shared plugins finish loading.
 
-        Workspace unavailable.
-        Workspace unavailable  Sign in to ChatGPT to load workspace plugins.
+    Workspace unavailable.
+    Workspace unavailable  Sign in to ChatGPT to load workspace plugins.
 
-        OpenAI Curated marketplace.
-        No OpenAI Curated plugins available  No OpenAI Curated plugins available.
-        "###
+    MidnightCoder Curated marketplace.
+    No MidnightCoder Curated plugins available  No MidnightCoder Curated plugins available.
+    "
     );
 }
 
@@ -1939,12 +1941,12 @@ async fn plugins_popup_openai_curated_tab_omits_marketplace_in_rows() {
 
     let popup = render_bottom_popup(&chat, /*width*/ 100);
     assert!(
-        popup.contains("OpenAI Curated marketplace."),
-        "expected OpenAI Curated tab header, got:\n{popup}"
+        popup.contains("MidnightCoder Curated marketplace."),
+        "expected MidnightCoder Curated tab header, got:\n{popup}"
     );
     assert!(
         popup.contains("Calendar") && !popup.contains("Repo Plugin"),
-        "expected OpenAI Curated tab to show only official marketplace plugins, got:\n{popup}"
+        "expected MidnightCoder Curated tab to show only official marketplace plugins, got:\n{popup}"
     );
     assert!(
         !popup.contains("ChatGPT Marketplace ·"),
@@ -2601,7 +2603,7 @@ async fn apps_popup_keeps_existing_full_snapshot_while_partial_refresh_loads() {
                 },
                 AppInfo {
                     id: "connector_openai_hidden".to_string(),
-                    name: "Hidden OpenAI".to_string(),
+                    name: "Hidden MidnightCoder".to_string(),
                     description: Some("Should be filtered".to_string()),
                     logo_url: None,
                     logo_url_dark: None,
@@ -2632,7 +2634,7 @@ async fn apps_popup_keeps_existing_full_snapshot_while_partial_refresh_loads() {
         "expected popup to keep the last full snapshot while partial refresh loads, got:\n{popup}"
     );
     assert!(
-        !popup.contains("Hidden OpenAI"),
+        !popup.contains("Hidden MidnightCoder"),
         "expected popup to ignore partial refresh rows until the full list arrives, got:\n{popup}"
     );
 }
@@ -3158,7 +3160,7 @@ async fn server_overloaded_error_does_not_switch_models() {
     handle_error(
         &mut chat,
         "server overloaded",
-        Some(CodexErrorInfo::ServerOverloaded),
+        Some(MidnightCoderErrorInfo::ServerOverloaded),
     );
 
     while let Ok(event) = rx.try_recv() {

@@ -45,8 +45,12 @@ policy:
     .expect("metadata");
 
     let root_uri = PathUri::from_host_native_path(root.path()).expect("root URI");
-    let outcome =
-        load_environment_skills_from_root(LOCAL_FS.as_ref(), &root_uri, Some(Product::Codex)).await;
+    let outcome = load_environment_skills_from_root(
+        LOCAL_FS.as_ref(),
+        &root_uri,
+        Some(Product::MidnightCoder),
+    )
+    .await;
 
     assert_eq!(
         outcome.skills,
@@ -67,7 +71,7 @@ policy:
             }),
             policy: Some(SkillPolicy {
                 allow_implicit_invocation: Some(false),
-                products: vec![Product::Codex],
+                products: vec![Product::MidnightCoder],
             }),
         }]
     );

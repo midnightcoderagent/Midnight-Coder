@@ -3325,7 +3325,7 @@ async fn permissions_profiles_allow_unknown_special_paths() -> std::io::Result<(
     );
     assert!(
         config.startup_warnings.iter().any(|warning| warning.contains(
-            "Configured filesystem path `:future_special_path` is not recognized by this version of Codex and will be ignored."
+            "Configured filesystem path `:future_special_path` is not recognized by this version of MidnightCoder and will be ignored."
         )),
         "{:?}",
         config.startup_warnings
@@ -3365,7 +3365,7 @@ async fn permissions_profiles_allow_unknown_special_paths_with_nested_entries()
     );
     assert!(
         config.startup_warnings.iter().any(|warning| warning.contains(
-            "Configured filesystem path `:future_special_path` with nested entry `docs` is not recognized by this version of Codex and will be ignored."
+            "Configured filesystem path `:future_special_path` with nested entry `docs` is not recognized by this version of MidnightCoder and will be ignored."
         )),
         "{:?}",
         config.startup_warnings
@@ -3396,7 +3396,7 @@ async fn permissions_profiles_allow_missing_filesystem_with_warning() -> std::io
     );
     assert!(
         config.startup_warnings.iter().any(|warning| warning.contains(
-            "Permissions profile `dev` does not define any recognized filesystem entries for this version of Codex."
+            "Permissions profile `dev` does not define any recognized filesystem entries for this version of MidnightCoder."
         )),
         "{:?}",
         config.startup_warnings
@@ -3424,7 +3424,7 @@ async fn permissions_profiles_allow_empty_filesystem_with_warning() -> std::io::
     );
     assert!(
         config.startup_warnings.iter().any(|warning| warning.contains(
-            "Permissions profile `dev` does not define any recognized filesystem entries for this version of Codex."
+            "Permissions profile `dev` does not define any recognized filesystem entries for this version of MidnightCoder."
         )),
         "{:?}",
         config.startup_warnings
@@ -8431,7 +8431,7 @@ approval_policy = "untrusted"
 enabled = true
 
 [model_providers.openai-custom]
-name = "OpenAI custom"
+name = "MidnightCoder custom"
 base_url = "https://api.openai.com/v1"
 env_key = "OPENAI_API_KEY"
 wire_api = "responses"
@@ -9272,6 +9272,16 @@ fn test_resolve_oss_provider_explicit_override() {
 }
 
 #[test]
+fn test_resolve_oss_provider_maps_llama_alias_to_ollama() {
+    let config_toml = ConfigToml {
+        oss_provider: Some("llama".to_string()),
+        ..Default::default()
+    };
+    let result = resolve_oss_provider(/*explicit_provider*/ None, &config_toml);
+    assert_eq!(result, Some("ollama".to_string()));
+}
+
+#[test]
 fn test_resolve_oss_provider_from_global_config() {
     let config_toml = ConfigToml {
         oss_provider: Some("global-provider".to_string()),
@@ -9283,10 +9293,10 @@ fn test_resolve_oss_provider_from_global_config() {
 }
 
 #[test]
-fn test_resolve_oss_provider_none_when_not_configured() {
+fn test_resolve_oss_provider_defaults_to_ollama_when_not_configured() {
     let config_toml = ConfigToml::default();
     let result = resolve_oss_provider(/*explicit_provider*/ None, &config_toml);
-    assert_eq!(result, None);
+    assert_eq!(result, Some("ollama".to_string()));
 }
 
 #[test]
@@ -9602,7 +9612,7 @@ sandbox_mode = "danger-full-access"
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
     assert_eq!(
         err.to_string(),
-        "`approval_policy = \"never\"` cannot be used because requirements do not allow `sandbox_mode = \"danger-full-access\"`; Codex would fall back to read-only permissions with approvals disabled. Choose an `approval_policy` based on what you need, such as `on-request`, or choose an allowed sandbox mode."
+        "`approval_policy = \"never\"` cannot be used because requirements do not allow `sandbox_mode = \"danger-full-access\"`; MidnightCoder would fall back to read-only permissions with approvals disabled. Choose an `approval_policy` based on what you need, such as `on-request`, or choose an allowed sandbox mode."
     );
     Ok(())
 }
@@ -9636,7 +9646,7 @@ default_permissions = "dev"
     assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
     assert_eq!(
         err.to_string(),
-        "`approval_policy = \"never\"` cannot be used because requirements do not allow `sandbox_mode = \"danger-full-access\"`; Codex would fall back to read-only permissions with approvals disabled. Choose an `approval_policy` based on what you need, such as `on-request`, or choose an allowed sandbox mode."
+        "`approval_policy = \"never\"` cannot be used because requirements do not allow `sandbox_mode = \"danger-full-access\"`; MidnightCoder would fall back to read-only permissions with approvals disabled. Choose an `approval_policy` based on what you need, such as `on-request`, or choose an allowed sandbox mode."
     );
     Ok(())
 }

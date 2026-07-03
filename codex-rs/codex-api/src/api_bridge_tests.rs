@@ -5,7 +5,7 @@ use pretty_assertions::assert_eq;
 #[test]
 fn map_api_error_maps_server_overloaded() {
     let err = map_api_error(ApiError::ServerOverloaded);
-    assert!(matches!(err, CodexErr::ServerOverloaded));
+    assert!(matches!(err, MidnightCoderErr::ServerOverloaded));
 }
 
 #[test]
@@ -23,7 +23,7 @@ fn map_api_error_maps_server_overloaded_from_503_body() {
         body: Some(body),
     }));
 
-    assert!(matches!(err, CodexErr::ServerOverloaded));
+    assert!(matches!(err, MidnightCoderErr::ServerOverloaded));
 }
 
 #[test]
@@ -39,8 +39,8 @@ fn map_api_error_maps_cloudflare_blocked_response_to_user_message() {
         ),
     }));
 
-    let CodexErr::UnexpectedStatus(err) = err else {
-        panic!("expected CodexErr::UnexpectedStatus, got {err:?}");
+    let MidnightCoderErr::UnexpectedStatus(err) = err else {
+        panic!("expected MidnightCoderErr::UnexpectedStatus, got {err:?}");
     };
     assert_eq!(
         err.user_message.as_deref(),
@@ -72,8 +72,8 @@ fn map_api_error_maps_cyber_policy_from_400_body() {
         body: Some(body),
     }));
 
-    let CodexErr::CyberPolicy { message } = err else {
-        panic!("expected CodexErr::CyberPolicy, got {err:?}");
+    let MidnightCoderErr::CyberPolicy { message } = err else {
+        panic!("expected MidnightCoderErr::CyberPolicy, got {err:?}");
     };
     assert_eq!(
         message,
@@ -100,8 +100,8 @@ fn map_api_error_maps_wrapped_websocket_cyber_policy_from_400_body() {
         body: Some(body),
     }));
 
-    let CodexErr::CyberPolicy { message } = err else {
-        panic!("expected CodexErr::CyberPolicy, got {err:?}");
+    let MidnightCoderErr::CyberPolicy { message } = err else {
+        panic!("expected MidnightCoderErr::CyberPolicy, got {err:?}");
     };
     assert_eq!(message, "This websocket request was flagged.");
 }
@@ -121,8 +121,8 @@ fn map_api_error_uses_cyber_policy_fallback_for_missing_message() {
         body: Some(body),
     }));
 
-    let CodexErr::CyberPolicy { message } = err else {
-        panic!("expected CodexErr::CyberPolicy, got {err:?}");
+    let MidnightCoderErr::CyberPolicy { message } = err else {
+        panic!("expected MidnightCoderErr::CyberPolicy, got {err:?}");
     };
     assert_eq!(
         message,
@@ -146,8 +146,8 @@ fn map_api_error_keeps_unknown_400_errors_generic() {
         body: Some(body.clone()),
     }));
 
-    let CodexErr::InvalidRequest(message) = err else {
-        panic!("expected CodexErr::InvalidRequest, got {err:?}");
+    let MidnightCoderErr::InvalidRequest(message) = err else {
+        panic!("expected MidnightCoderErr::InvalidRequest, got {err:?}");
     };
     assert_eq!(message, body);
 }
@@ -177,8 +177,8 @@ fn map_api_error_maps_usage_limit_limit_name_header() {
         body: Some(body),
     }));
 
-    let CodexErr::UsageLimitReached(usage_limit) = err else {
-        panic!("expected CodexErr::UsageLimitReached, got {err:?}");
+    let MidnightCoderErr::UsageLimitReached(usage_limit) = err else {
+        panic!("expected MidnightCoderErr::UsageLimitReached, got {err:?}");
     };
     assert_eq!(
         usage_limit
@@ -210,8 +210,8 @@ fn map_api_error_does_not_fallback_limit_name_to_limit_id() {
         body: Some(body),
     }));
 
-    let CodexErr::UsageLimitReached(usage_limit) = err else {
-        panic!("expected CodexErr::UsageLimitReached, got {err:?}");
+    let MidnightCoderErr::UsageLimitReached(usage_limit) = err else {
+        panic!("expected MidnightCoderErr::UsageLimitReached, got {err:?}");
     };
     assert_eq!(
         usage_limit
@@ -246,8 +246,8 @@ fn map_api_error_ignores_unparseable_rate_limit_reached_type_headers() {
             body: Some(body),
         }));
 
-        let CodexErr::UsageLimitReached(usage_limit) = err else {
-            panic!("expected CodexErr::UsageLimitReached, got {err:?}");
+        let MidnightCoderErr::UsageLimitReached(usage_limit) = err else {
+            panic!("expected MidnightCoderErr::UsageLimitReached, got {err:?}");
         };
         assert_eq!(usage_limit.rate_limit_reached_type, None);
     }
@@ -276,8 +276,8 @@ fn map_api_error_extracts_identity_auth_details_from_headers() {
         body: Some(r#"{"detail":"Unauthorized"}"#.to_string()),
     }));
 
-    let CodexErr::UnexpectedStatus(err) = err else {
-        panic!("expected CodexErr::UnexpectedStatus, got {err:?}");
+    let MidnightCoderErr::UnexpectedStatus(err) = err else {
+        panic!("expected MidnightCoderErr::UnexpectedStatus, got {err:?}");
     };
     assert_eq!(err.request_id.as_deref(), Some("req-401"));
     assert_eq!(err.cf_ray.as_deref(), Some("ray-401"));

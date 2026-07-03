@@ -9,12 +9,12 @@ use crate::facts::AnalyticsJsonRpcError;
 use crate::facts::AppInvocation;
 use crate::facts::AppMentionedInput;
 use crate::facts::AppUsedInput;
-use crate::facts::CodexGoalEvent;
 use crate::facts::CustomAnalyticsFact;
 use crate::facts::ExternalAgentConfigImportCompletedInput;
 use crate::facts::ExternalAgentConfigImportFailureInput;
 use crate::facts::HookRunFact;
 use crate::facts::HookRunInput;
+use crate::facts::MidnightCoderGoalEvent;
 use crate::facts::PluginInstallFailedInput;
 use crate::facts::PluginInstallRequested;
 use crate::facts::PluginInstallRequestedInput;
@@ -24,7 +24,7 @@ use crate::facts::SkillInvocation;
 use crate::facts::SkillInvokedInput;
 use crate::facts::SubAgentThreadStartedInput;
 use crate::facts::TrackEventsContext;
-use crate::facts::TurnCodexErrorFact;
+use crate::facts::TurnMidnightCoderErrorFact;
 use crate::facts::TurnProfileFact;
 use crate::facts::TurnResolvedConfigFact;
 use crate::facts::TurnTokenUsageFact;
@@ -38,7 +38,7 @@ use codex_app_server_protocol::ServerNotification;
 use codex_app_server_protocol::ServerRequest;
 use codex_app_server_protocol::ServerResponse;
 use codex_login::AuthManager;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_login::default_client::create_client;
 use codex_plugin::PluginId;
 use codex_plugin::PluginTelemetryMetadata;
@@ -325,13 +325,13 @@ impl AnalyticsEventsClient {
         ));
     }
 
-    pub fn track_compaction(&self, event: crate::facts::CodexCompactionEvent) {
+    pub fn track_compaction(&self, event: crate::facts::MidnightCoderCompactionEvent) {
         self.record_fact(AnalyticsFact::Custom(CustomAnalyticsFact::Compaction(
             Box::new(event),
         )));
     }
 
-    pub fn track_goal_event(&self, event: CodexGoalEvent) {
+    pub fn track_goal_event(&self, event: MidnightCoderGoalEvent) {
         self.record_fact(AnalyticsFact::Custom(CustomAnalyticsFact::Goal(Box::new(
             event,
         ))));
@@ -355,10 +355,10 @@ impl AnalyticsEventsClient {
         )));
     }
 
-    pub fn track_turn_codex_error(&self, fact: TurnCodexErrorFact) {
-        self.record_fact(AnalyticsFact::Custom(CustomAnalyticsFact::TurnCodexError(
-            Box::new(fact),
-        )));
+    pub fn track_turn_codex_error(&self, fact: TurnMidnightCoderErrorFact) {
+        self.record_fact(AnalyticsFact::Custom(
+            CustomAnalyticsFact::TurnMidnightCoderError(Box::new(fact)),
+        ));
     }
 
     pub fn track_plugin_installed(&self, plugin: PluginTelemetryMetadata) {
@@ -590,7 +590,7 @@ fn track_event_request_batches(events: Vec<TrackEventRequest>) -> Vec<Vec<TrackE
 }
 
 async fn send_track_events_request(
-    auth: &CodexAuth,
+    auth: &MidnightCoderAuth,
     destination: &AnalyticsEventsDestination,
     events: Vec<TrackEventRequest>,
 ) {

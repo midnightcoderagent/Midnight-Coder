@@ -1,5 +1,5 @@
 use crate::config_manager::ConfigManager;
-use codex_core::CodexThread;
+use codex_core::MidnightCoderThread;
 use codex_core::ThreadManager;
 use codex_protocol::ThreadId;
 use codex_protocol::protocol::McpServerRefreshConfig;
@@ -56,7 +56,7 @@ pub(crate) async fn queue_best_effort_refresh(
 }
 
 async fn build_refresh_config(
-    thread: &CodexThread,
+    thread: &MidnightCoderThread,
     config_manager: &ConfigManager,
 ) -> io::Result<McpServerRefreshConfig> {
     let thread_config = thread.config().await;
@@ -78,7 +78,7 @@ async fn build_refresh_config(
 
 async fn queue_refresh(
     thread_id: ThreadId,
-    thread: Arc<CodexThread>,
+    thread: Arc<MidnightCoderThread>,
     config: McpServerRefreshConfig,
 ) -> io::Result<()> {
     thread
@@ -112,9 +112,9 @@ mod tests {
     use codex_core::thread_store_from_config;
     use codex_exec_server::EnvironmentManager;
     use codex_extension_api::NoopExtensionEventSink;
-    use codex_home::CodexHomeUserInstructionsProvider;
+    use codex_home::MidnightCoderHomeUserInstructionsProvider;
     use codex_login::AuthManager;
-    use codex_login::CodexAuth;
+    use codex_login::MidnightCoderAuth;
     use codex_protocol::protocol::SessionSource;
     use codex_utils_absolute_path::AbsolutePathBuf;
     use pretty_assertions::assert_eq;
@@ -210,7 +210,8 @@ mod tests {
             )
             .await?;
 
-        let auth_manager = AuthManager::from_auth_for_testing(CodexAuth::from_api_key("dummy"));
+        let auth_manager =
+            AuthManager::from_auth_for_testing(MidnightCoderAuth::from_api_key("dummy"));
         let state_db = init_state_db(&good_config)
             .await
             .expect("refresh tests require state db");
@@ -242,7 +243,7 @@ mod tests {
                         thread_store: Arc::clone(&thread_store),
                     },
                 ),
-                Arc::new(CodexHomeUserInstructionsProvider::new(
+                Arc::new(MidnightCoderHomeUserInstructionsProvider::new(
                     good_config.codex_home.clone(),
                 )),
                 /*analytics_events_client*/ None,

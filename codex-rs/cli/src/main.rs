@@ -77,9 +77,9 @@ use codex_core::config::resolve_profile_v2_config_path;
 use codex_features::FEATURES;
 use codex_features::Stage;
 use codex_features::is_known_feature_key;
-use codex_home::CodexHomeUserInstructionsProvider;
+use codex_home::MidnightCoderHomeUserInstructionsProvider;
 use codex_login::AuthManager;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_login::read_codex_access_token_from_env;
 use codex_memories_write::clear_memory_roots_contents;
 use codex_models_manager::bundled_models_response;
@@ -88,7 +88,7 @@ use codex_protocol::protocol::AskForApproval;
 use codex_protocol::user_input::UserInput;
 use codex_terminal_detection::TerminalName;
 
-/// Codex CLI
+/// MidnightCoder CLI
 ///
 /// If no subcommand is specified, options will be forwarded to the interactive CLI.
 #[derive(Debug, Parser)]
@@ -99,9 +99,9 @@ use codex_terminal_detection::TerminalName;
     subcommand_negates_reqs = true,
     // The executable is sometimes invoked via a platform‑specific name like
     // `codex-x86_64-unknown-linux-musl`, but the help output should always use
-    // the generic `codex` command name that users run.
-    bin_name = "codex",
-    override_usage = "codex [OPTIONS] [PROMPT]\n       codex [OPTIONS] <COMMAND> [ARGS]"
+    // the generic `midnight-coder` command name that users run.
+    bin_name = "midnight-coder",
+    override_usage = "midnight-coder [OPTIONS] [PROMPT]\n       midnight-coder [OPTIONS] <COMMAND> [ARGS]"
 )]
 struct MultitoolCli {
     #[clap(flatten)]
@@ -122,7 +122,7 @@ struct MultitoolCli {
 
 #[derive(Debug, clap::Subcommand)]
 enum Subcommand {
-    /// Run Codex non-interactively.
+    /// Run MidnightCoder non-interactively.
     #[clap(visible_alias = "e")]
     Exec(ExecCli),
 
@@ -135,13 +135,13 @@ enum Subcommand {
     /// Remove stored authentication credentials.
     Logout(LogoutCommand),
 
-    /// Manage external MCP servers for Codex.
+    /// Manage external MCP servers for MidnightCoder.
     Mcp(McpCli),
 
-    /// Manage Codex plugins.
+    /// Manage MidnightCoder plugins.
     Plugin(PluginCli),
 
-    /// Start Codex as an MCP server (stdio).
+    /// Start MidnightCoder as an MCP server (stdio).
     McpServer(McpServerCommand),
 
     /// [experimental] Run the app server or related tooling.
@@ -150,20 +150,20 @@ enum Subcommand {
     /// [experimental] Manage the app-server daemon with remote control enabled.
     RemoteControl(RemoteControlCommand),
 
-    /// Launch the Codex desktop app (opens the app installer if missing).
+    /// Launch the MidnightCoder desktop app (opens the app installer if missing).
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     App(app_cmd::AppCommand),
 
     /// Generate shell completion scripts.
     Completion(CompletionCommand),
 
-    /// Update Codex to the latest version.
+    /// Update MidnightCoder to the latest version.
     Update,
 
-    /// Diagnose local Codex installation, config, auth, and runtime health.
+    /// Diagnose local MidnightCoder installation, config, auth, and runtime health.
     Doctor(DoctorCommand),
 
-    /// Run commands within a Codex-provided sandbox.
+    /// Run commands within a MidnightCoder-provided sandbox.
     Sandbox(HostSandboxArgs),
 
     /// Debugging tools.
@@ -173,7 +173,7 @@ enum Subcommand {
     #[clap(hide = true)]
     Execpolicy(ExecpolicyCommand),
 
-    /// Apply the latest diff produced by Codex agent as a `git apply` to your local working tree.
+    /// Apply the latest diff produced by MidnightCoder as a `git apply` to your local working tree.
     #[clap(visible_alias = "a")]
     Apply(ApplyCommand),
 
@@ -192,7 +192,7 @@ enum Subcommand {
     /// Fork a previous interactive session (picker by default; use --last to fork the most recent).
     Fork(ForkCommand),
 
-    /// [EXPERIMENTAL] Browse tasks from Codex Cloud and apply changes locally.
+    /// [EXPERIMENTAL] Browse tasks from MidnightCoder Cloud and apply changes locally.
     #[clap(name = "cloud", alias = "cloud-tasks")]
     Cloud(CloudTasksCli),
 
@@ -282,7 +282,7 @@ struct DebugModelsCommand {
 
 #[derive(Debug, Parser)]
 struct ReviewCommand {
-    /// Error out when config.toml contains fields that are not recognized by this version of Codex.
+    /// Error out when config.toml contains fields that are not recognized by this version of MidnightCoder.
     #[arg(long = "strict-config", default_value_t = false)]
     strict_config: bool,
 
@@ -292,7 +292,7 @@ struct ReviewCommand {
 
 #[derive(Debug, Parser)]
 struct McpServerCommand {
-    /// Error out when config.toml contains fields that are not recognized by this version of Codex.
+    /// Error out when config.toml contains fields that are not recognized by this version of MidnightCoder.
     #[arg(long = "strict-config", default_value_t = false)]
     strict_config: bool,
 }
@@ -352,7 +352,7 @@ struct SessionArchiveConfigOverrides {
     #[clap(flatten)]
     shared: SharedCliOptions,
 
-    /// Error out when config.toml contains fields that are not recognized by this version of Codex.
+    /// Error out when config.toml contains fields that are not recognized by this version of MidnightCoder.
     #[arg(long = "strict-config", default_value_t = false)]
     strict_config: bool,
 
@@ -431,7 +431,7 @@ type HostSandboxArgs = UnsupportedSandboxArgs;
 #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 #[derive(Debug, Parser)]
 struct UnsupportedSandboxArgs {
-    /// Layer $CODEX_HOME/<name>.config.toml on top of the base user config.
+    /// Layer $MIDCODER_HOME/<name>.config.toml on top of the base user config.
     #[arg(long = "profile", short = 'p')]
     pub config_profile: Option<ProfileV2Name>,
 
@@ -517,7 +517,7 @@ struct AppServerCommand {
     #[command(subcommand)]
     subcommand: Option<AppServerSubcommand>,
 
-    /// Error out when config.toml contains fields that are not recognized by this version of Codex.
+    /// Error out when config.toml contains fields that are not recognized by this version of MidnightCoder.
     #[arg(long = "strict-config", default_value_t = false)]
     strict_config: bool,
 
@@ -562,7 +562,7 @@ struct AppServerCommand {
 
 #[derive(Debug, Parser)]
 struct ExecServerCommand {
-    /// Error out when config.toml contains fields that are not recognized by this version of Codex.
+    /// Error out when config.toml contains fields that are not recognized by this version of MidnightCoder.
     #[arg(long = "strict-config", default_value_t = false)]
     strict_config: bool,
 
@@ -602,7 +602,7 @@ enum AppServerSubcommand {
     /// [experimental] Generate JSON Schema for the app server protocol.
     GenerateJsonSchema(GenerateJsonSchemaCommand),
 
-    /// [internal] Generate internal JSON Schema artifacts for Codex tooling.
+    /// [internal] Generate internal JSON Schema artifacts for MidnightCoder tooling.
     #[clap(hide = true)]
     GenerateInternalJsonSchema(GenerateInternalJsonSchemaCommand),
 }
@@ -757,7 +757,7 @@ fn handle_app_exit(exit_info: AppExitInfo) -> anyhow::Result<()> {
 fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
     println!();
     let cmd_str = action.command_str();
-    println!("Updating Codex via `{cmd_str}`...");
+    println!("Updating MidnightCoder via `{cmd_str}`...");
 
     let status = {
         #[cfg(windows)]
@@ -792,7 +792,7 @@ fn run_update_action(action: UpdateAction) -> anyhow::Result<()> {
     if !status.success() {
         anyhow::bail!("`{cmd_str}` failed with status {status}");
     }
-    println!("\n🎉 Update ran successfully! Please restart Codex.");
+    println!("\n🎉 Update ran successfully! Please restart MidnightCoder.");
     Ok(())
 }
 
@@ -800,7 +800,7 @@ fn run_update_command() -> anyhow::Result<()> {
     #[cfg(debug_assertions)]
     {
         anyhow::bail!(
-            "`codex update` is not available in debug builds. Install a release build of Codex to use this command."
+            "`codex update` is not available in debug builds. Install a release build of MidnightCoder to use this command."
         );
     }
 
@@ -808,7 +808,7 @@ fn run_update_command() -> anyhow::Result<()> {
     {
         let Some(action) = codex_tui::get_update_action() else {
             anyhow::bail!(
-                "Could not detect the Codex installation method. Please update manually: https://developers.openai.com/codex/cli/"
+                "Could not detect the MidnightCoder installation method. Please update manually: https://developers.openai.com/codex/cli/"
             );
         };
         run_update_action(action)
@@ -1683,7 +1683,7 @@ async fn run_exec_server_command(
     let codex_self_exe = arg0_paths
         .codex_self_exe
         .clone()
-        .ok_or_else(|| anyhow::anyhow!("Codex executable path is not configured"))?;
+        .ok_or_else(|| anyhow::anyhow!("MidnightCoder executable path is not configured"))?;
     let runtime_paths = codex_exec_server::ExecServerRuntimePaths::new(
         codex_self_exe,
         arg0_paths.codex_linux_sandbox_exe.clone(),
@@ -1740,7 +1740,7 @@ async fn load_exec_server_remote_auth_provider(
             anyhow::anyhow!("CODEX_ACCESS_TOKEN is required when --use-agent-identity-auth is set")
         })?;
         let auth_route_config = config.auth_route_config();
-        let auth = CodexAuth::from_agent_identity_jwt(
+        let auth = MidnightCoderAuth::from_agent_identity_jwt(
             &agent_identity_jwt,
             Some(&config.chatgpt_base_url),
             auth_route_config.as_ref(),
@@ -1768,7 +1768,7 @@ async fn load_exec_server_remote_auth_provider(
     Ok(codex_model_provider::auth_provider_from_auth(&auth))
 }
 
-fn is_supported_exec_server_remote_auth(auth: &CodexAuth) -> bool {
+fn is_supported_exec_server_remote_auth(auth: &MidnightCoderAuth) -> bool {
     auth.is_chatgpt_auth() || auth.is_api_key_auth()
 }
 
@@ -1823,7 +1823,7 @@ async fn load_exec_server_config(
 async fn load_exec_server_remote_auth(
     config: &codex_core::config::Config,
     missing_auth_error: &'static str,
-) -> anyhow::Result<codex_login::CodexAuth> {
+) -> anyhow::Result<codex_login::MidnightCoderAuth> {
     let auth_manager =
         AuthManager::shared_from_config(config, /*enable_codex_api_key_env*/ true).await;
 
@@ -1970,7 +1970,7 @@ async fn run_debug_prompt_input_command(
         });
     }
 
-    let user_instructions_provider = Arc::new(CodexHomeUserInstructionsProvider::new(
+    let user_instructions_provider = Arc::new(MidnightCoderHomeUserInstructionsProvider::new(
         config.codex_home.clone(),
     ));
     let prompt_input = codex_core::build_prompt_input(
@@ -2250,7 +2250,7 @@ async fn run_interactive_tui(
         }
 
         eprintln!(
-            "WARNING: TERM is set to \"dumb\". Codex's interactive TUI may not work in this terminal."
+            "WARNING: TERM is set to \"dumb\". MidnightCoder's interactive TUI may not work in this terminal."
         );
         if !confirm("Continue anyway? [y/N]: ")? {
             return Ok(AppExitInfo::fatal(
@@ -2302,7 +2302,7 @@ async fn run_interactive_tui(
             Err(backup_err) => {
                 local_state_db::print_diagnostic_guidance(startup_error);
                 return Ok(AppExitInfo::fatal(format!(
-                    "failed to move damaged Codex local database files into a backup folder automatically: {backup_err}"
+                    "failed to move damaged MidnightCoder local database files into a backup folder automatically: {backup_err}"
                 )));
             }
         }
@@ -2500,7 +2500,7 @@ mod tests {
 
     #[test]
     fn exec_server_remote_auth_accepts_api_key_auth() {
-        let auth = CodexAuth::from_api_key("sk-test");
+        let auth = MidnightCoderAuth::from_api_key("sk-test");
 
         assert!(is_supported_exec_server_remote_auth(&auth));
     }
@@ -2535,7 +2535,7 @@ mod tests {
             "http://service.openai.org/api",
         ] {
             let error = validate_api_key_remote_host(base_url)
-                .expect_err("reject plaintext OpenAI destination");
+                .expect_err("reject plaintext MidnightCoder destination");
 
             assert_eq!(
                 error.to_string(),

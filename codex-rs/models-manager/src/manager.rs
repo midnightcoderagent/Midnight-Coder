@@ -25,7 +25,7 @@ use tracing::info;
 const MODEL_CACHE_FILE: &str = "models_cache.json";
 const DEFAULT_MODEL_CACHE_TTL: Duration = Duration::from_secs(300);
 
-/// Remote endpoint used by the OpenAI-compatible model manager.
+/// Remote endpoint used by the MidnightCoder-compatible model manager.
 ///
 /// Implementations own provider-specific auth and transport details. The model
 /// manager owns refresh policy, cache behavior, and catalog merging; it calls
@@ -34,7 +34,17 @@ pub trait ModelsEndpointClient: fmt::Debug + Send + Sync {
     /// Returns whether this provider can authenticate command-scoped requests.
     fn has_command_auth(&self) -> bool;
 
-    /// Returns whether the currently resolved auth can use Codex backend-only models.
+    /// Returns whether this provider exposes its own model catalog without auth.
+    fn has_provider_catalog(&self) -> bool {
+        false
+    }
+
+    /// Returns whether models from this provider should replace the bundled catalog.
+    fn provider_catalog_is_authoritative(&self) -> bool {
+        false
+    }
+
+    /// Returns whether the currently resolved auth can use MidnightCoder backend-only models.
     fn uses_codex_backend(&self) -> ModelsEndpointFuture<'_, bool>;
 
     /// Fetches the latest remote model catalog and optional ETag.
@@ -196,7 +206,7 @@ pub type ModelsManagerFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a
 /// Shared model manager handle used across runtime services.
 pub type SharedModelsManager = Arc<dyn ModelsManager>;
 
-/// OpenAI-compatible model manager backed by bundled models, cache, and `/models`.
+/// MidnightCoder-compatible model manager backed by bundled models, cache, and `/models`.
 #[derive(Debug)]
 pub struct OpenAiModelsManager {
     remote_models: RwLock<Vec<ModelInfo>>,
@@ -214,7 +224,7 @@ pub struct StaticModelsManager {
 }
 
 impl OpenAiModelsManager {
-    /// Construct an OpenAI-compatible remote model manager.
+    /// Construct an MidnightCoder-compatible remote model manager.
     pub fn new(
         codex_home: PathBuf,
         endpoint_client: Arc<dyn ModelsEndpointClient>,
@@ -256,6 +266,42 @@ impl ModelsManager for OpenAiModelsManager {
 
     fn get_remote_models(&self) -> ModelsManagerFuture<'_, Vec<ModelInfo>> {
         Box::pin(async move { self.remote_models.read().await.clone() })
+    }
+
+    fn get_model_info<'a>(
+        &'a self,
+        model: &'a str,
+        config: &'a ModelsManagerConfig,
+    ) -> ModelsManagerFuture<'a, ModelInfo> {
+        Box::pin(
+            async move {
+                let mut remote_models = self.get_remote_models().await;
+                if self.endpoint_client.provider_catalog_is_authoritative()
+                    && find_model_by_longest_prefix(model, &remote_models)
+                        .or_else(|| find_model_by_namespaced_suffix(model, &remote_models))
+                        .is_none()
+                {
+                    if let Err(err) = self
+                        .refresh_available_models(RefreshStrategy::OnlineIfUncached)
+                        .await
+                    {
+                        error!("failed to refresh provider model catalog: {err}");
+                    }
+                    remote_models = self.get_remote_models().await;
+                }
+
+                let mut model_info =
+                    construct_model_info_from_candidates(model, &remote_models, config);
+                if self.endpoint_client.provider_catalog_is_authoritative()
+                    && model_info.used_fallback_model_metadata
+                {
+                    model_info.tool_mode = None;
+                    model_info.experimental_supported_tools.clear();
+                }
+                model_info
+            }
+            .instrument(tracing::info_span!("get_model_info", model = model)),
+        )
     }
 
     fn try_get_remote_models(&self) -> Result<Vec<ModelInfo>, TryLockError> {
@@ -310,6 +356,12 @@ impl OpenAiModelsManager {
             return Ok(());
         }
 
+        if self.endpoint_client.has_provider_catalog()
+            && !matches!(refresh_strategy, RefreshStrategy::Offline)
+        {
+            return self.fetch_and_update_models().await;
+        }
+
         match refresh_strategy {
             RefreshStrategy::Offline => {
                 // Only try to load from cache, never fetch
@@ -344,7 +396,9 @@ impl OpenAiModelsManager {
     }
 
     async fn should_refresh_models(&self) -> bool {
-        self.endpoint_client.uses_codex_backend().await || self.endpoint_client.has_command_auth()
+        self.endpoint_client.uses_codex_backend().await
+            || self.endpoint_client.has_command_auth()
+            || self.endpoint_client.has_provider_catalog()
     }
 
     async fn get_etag(&self) -> Option<String> {
@@ -355,15 +409,17 @@ impl OpenAiModelsManager {
     async fn apply_remote_models(&self, models: Vec<ModelInfo>) {
         // Use the remote models list as the source of truth if it contains at least one
         // non-hidden model and the user is using ChatGPT auth.
-        let should_use_remote_models_only = !models.is_empty()
+        let has_listed_models = !models.is_empty()
             && models
                 .iter()
-                .any(|model| model.visibility == ModelVisibility::List)
-            && self.auth_manager.as_ref().is_some_and(|auth_manager| {
-                auth_manager
-                    .auth_mode()
-                    .is_some_and(AuthMode::has_chatgpt_account)
-            });
+                .any(|model| model.visibility == ModelVisibility::List);
+        let should_use_remote_models_only = has_listed_models
+            && (self.endpoint_client.provider_catalog_is_authoritative()
+                || self.auth_manager.as_ref().is_some_and(|auth_manager| {
+                    auth_manager
+                        .auth_mode()
+                        .is_some_and(AuthMode::has_chatgpt_account)
+                }));
         if should_use_remote_models_only {
             *self.remote_models.write().await = models;
             return;

@@ -9,7 +9,7 @@ from typing import AsyncIterator, Callable, ParamSpec, TypeVar
 from pydantic import BaseModel
 
 from ._goal import _GoalOperationState
-from .client import CodexClient, CodexConfig
+from .client import MidnightCoderClient, MidnightCoderConfig
 from .generated.v2_all import (
     AccountLoginCompletedNotification,
     AgentMessageDeltaNotification,
@@ -49,20 +49,20 @@ ParamsT = ParamSpec("ParamsT")
 ReturnT = TypeVar("ReturnT")
 
 
-class AsyncCodexClient:
-    """Async wrapper around CodexClient using thread offloading."""
+class AsyncMidnightCoderClient:
+    """Async wrapper around MidnightCoderClient using thread offloading."""
 
-    def __init__(self, config: CodexConfig | None = None) -> None:
+    def __init__(self, config: MidnightCoderConfig | None = None) -> None:
         """Create the wrapped sync client that owns the transport process."""
-        self._sync = CodexClient(config=config)
+        self._sync = MidnightCoderClient(config=config)
 
-    async def __aenter__(self) -> "AsyncCodexClient":
-        """Start the Codex process when entering an async context."""
+    async def __aenter__(self) -> "AsyncMidnightCoderClient":
+        """Start the MidnightCoder process when entering an async context."""
         await self.start()
         return self
 
     async def __aexit__(self, _exc_type, _exc, _tb) -> None:
-        """Close the Codex process when leaving an async context."""
+        """Close the MidnightCoder process when leaving an async context."""
         await self.close()
 
     async def _call_sync(
@@ -94,7 +94,7 @@ class AsyncCodexClient:
         await self._call_sync(self._sync.close)
 
     async def initialize(self) -> InitializeResponse:
-        """Initialize the Codex session."""
+        """Initialize the MidnightCoder session."""
         return await self._call_sync(self._sync.initialize)
 
     def register_turn_notifications(self, turn_id: str) -> None:

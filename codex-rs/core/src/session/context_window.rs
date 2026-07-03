@@ -26,22 +26,27 @@ pub(crate) async fn context_window_token_status(
     turn_context: &TurnContext,
 ) -> ContextWindowTokenStatus {
     let active_context_tokens = sess.get_total_token_usage().await;
+    let auto_compaction_is_disabled =
+        auto_compaction_disabled(turn_context.config.model_auto_compact_token_limit);
 
     let (auto_compact_scope_tokens, auto_compact_scope_limit, body_window) =
         match turn_context.config.model_auto_compact_token_limit_scope {
             AutoCompactTokenLimitScope::Total => (
                 active_context_tokens,
-                turn_context.model_info.auto_compact_token_limit(),
+                resolved_auto_compact_token_limit(
+                    turn_context.config.model_auto_compact_token_limit,
+                    turn_context.model_info.auto_compact_token_limit(),
+                ),
                 None,
             ),
             AutoCompactTokenLimitScope::BodyAfterPrefix => {
                 let window = sess.auto_compact_window_snapshot().await;
                 let baseline = window.prefill_input_tokens.unwrap_or(active_context_tokens);
 
-                let scope_limit = turn_context
-                    .config
-                    .model_auto_compact_token_limit
-                    .or_else(|| turn_context.model_info.auto_compact_token_limit());
+                let scope_limit = resolved_auto_compact_token_limit(
+                    turn_context.config.model_auto_compact_token_limit,
+                    turn_context.model_info.auto_compact_token_limit(),
+                );
                 let full_context_window_limit = turn_context.model_context_window();
 
                 (
@@ -66,17 +71,23 @@ pub(crate) async fn context_window_token_status(
         full_context_window_limit.is_some_and(|full_context_window_limit| {
             active_context_tokens >= full_context_window_limit
         });
-    let token_limit_reached = auto_compact_scope_limit
-        .is_some_and(|limit| auto_compact_scope_tokens >= limit)
-        || full_context_window_limit_reached;
+    let token_limit_reached = !auto_compaction_is_disabled
+        && (auto_compact_scope_limit.is_some_and(|limit| auto_compact_scope_tokens >= limit)
+            || full_context_window_limit_reached);
 
     let auto_compact_scope_remaining = auto_compact_scope_limit
         .map(|limit| limit.saturating_sub(auto_compact_scope_tokens).max(0));
     let full_context_remaining =
         full_context_window_limit.map(|limit| limit.saturating_sub(active_context_tokens).max(0));
-    let tokens_until_compaction = match (auto_compact_scope_remaining, full_context_remaining) {
-        (Some(scope_remaining), Some(full_remaining)) => Some(scope_remaining.min(full_remaining)),
-        (scope_remaining, full_remaining) => scope_remaining.or(full_remaining),
+    let tokens_until_compaction = if auto_compaction_is_disabled {
+        None
+    } else {
+        match (auto_compact_scope_remaining, full_context_remaining) {
+            (Some(scope_remaining), Some(full_remaining)) => {
+                Some(scope_remaining.min(full_remaining))
+            }
+            (scope_remaining, full_remaining) => scope_remaining.or(full_remaining),
+        }
     };
 
     ContextWindowTokenStatus {
@@ -89,4 +100,19 @@ pub(crate) async fn context_window_token_status(
         full_context_window_limit_reached,
         token_limit_reached,
     }
+}
+
+pub(super) fn resolved_auto_compact_token_limit(
+    configured_limit: Option<i64>,
+    model_default_limit: Option<i64>,
+) -> Option<i64> {
+    match configured_limit {
+        Some(limit) if limit <= 0 => None,
+        Some(limit) => Some(limit),
+        None => model_default_limit,
+    }
+}
+
+fn auto_compaction_disabled(configured_limit: Option<i64>) -> bool {
+    configured_limit.is_some_and(|limit| limit <= 0)
 }

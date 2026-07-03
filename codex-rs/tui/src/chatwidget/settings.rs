@@ -199,6 +199,11 @@ impl ChatWidget {
         self.model_catalog.clone()
     }
 
+    pub(crate) fn set_model_catalog(&mut self, model_catalog: Vec<ModelPreset>) {
+        self.model_catalog = std::sync::Arc::new(ModelCatalog::new(model_catalog));
+        self.refresh_model_dependent_surfaces();
+    }
+
     pub(crate) fn current_plan_type(&self) -> Option<PlanType> {
         self.plan_type
     }
@@ -253,6 +258,41 @@ impl ChatWidget {
     /// Set the syntax theme override in the widget's config copy.
     pub(crate) fn set_tui_theme(&mut self, theme: Option<String>) {
         self.config.tui_theme = theme;
+    }
+
+    /// Set the compaction model in the widget's config copy.
+    pub(crate) fn set_mini_model(&mut self, model: Option<String>) {
+        self.config.mini_model = model;
+    }
+
+    /// Set the model provider in the widget's config copy.
+    pub(crate) fn set_model_provider(
+        &mut self,
+        provider_id: String,
+        provider: codex_model_provider_info::ModelProviderInfo,
+    ) {
+        self.runtime_model_provider_base_url = provider.base_url.clone();
+        self.config.model_provider_id = provider_id;
+        self.config.model_provider = provider;
+        self.refresh_status_surfaces();
+    }
+
+    /// Set the compaction strategy in the widget's config copy.
+    pub(crate) fn set_resume_type(&mut self, resume_type: Option<String>) {
+        self.config.resume_type = resume_type;
+    }
+
+    /// Set context window and matching auto-compaction threshold in the widget's config copy.
+    pub(crate) fn set_context_window_limit(&mut self, tokens: Option<i64>) {
+        self.config.model_context_window = tokens;
+        self.config.model_auto_compact_token_limit = tokens;
+        self.refresh_status_surfaces();
+    }
+
+    /// Set only the auto-compaction threshold in the widget's config copy.
+    pub(crate) fn set_auto_compact_token_limit(&mut self, tokens: Option<i64>) {
+        self.config.model_auto_compact_token_limit = tokens;
+        self.refresh_status_surfaces();
     }
 
     /// Set the model in the widget's config copy and stored collaboration mode.

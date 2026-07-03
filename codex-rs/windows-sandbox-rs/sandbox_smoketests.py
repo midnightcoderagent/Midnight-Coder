@@ -1,5 +1,5 @@
 # sandbox_smoketests.py
-# Run a suite of smoke tests against the Windows sandbox via the Codex CLI
+# Run a suite of smoke tests against the Windows sandbox via the MidnightCoder
 # Requires: Python 3.8+ on Windows. No pip requirements.
 
 import os
@@ -15,10 +15,10 @@ from typing import List, Optional, Tuple
 from urllib.parse import urlsplit
 
 def _resolve_codex_cmd() -> List[str]:
-    """Resolve the Codex CLI to invoke `codex sandbox windows`.
+    """Resolve the MidnightCoder to invoke `codex sandbox windows`.
 
     Prefer local builds (debug first), then fall back to PATH.
-    Returns the argv prefix to run Codex.
+    Returns the argv prefix to run MidnightCoder.
     """
     root = Path(__file__).parent
     ws_root = root.parent
@@ -43,7 +43,7 @@ def _resolve_codex_cmd() -> List[str]:
         return ["codex"]
 
     raise FileNotFoundError(
-        "Codex CLI not found. Build it first, e.g.\n"
+        "MidnightCoder not found. Build it first, e.g.\n"
         "  cargo build -p codex-cli --release\n"
         "or for debug:\n"
         "  cargo build -p codex-cli\n"

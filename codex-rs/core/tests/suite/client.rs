@@ -11,10 +11,11 @@ use codex_extension_api::empty_extension_registry;
 use codex_features::Feature;
 use codex_login::AuthKeyringBackendKind;
 use codex_login::AuthManager;
-use codex_login::CodexAuth;
+use codex_login::MidnightCoderAuth;
 use codex_login::auth::AgentIdentityAuthPolicy;
 use codex_login::default_client::originator;
 use codex_model_provider_info::ModelProviderInfo;
+use codex_model_provider_info::OLLAMA_OSS_PROVIDER_ID;
 use codex_model_provider_info::WireApi;
 use codex_model_provider_info::built_in_model_providers;
 use codex_models_manager::bundled_models_response;
@@ -27,7 +28,7 @@ use codex_protocol::config_types::ModelProviderAuthInfo;
 use codex_protocol::config_types::ReasoningSummary;
 use codex_protocol::config_types::Settings;
 use codex_protocol::config_types::Verbosity;
-use codex_protocol::error::CodexErr;
+use codex_protocol::error::MidnightCoderErr;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::DEFAULT_IMAGE_DETAIL;
 use codex_protocol::models::FunctionCallOutputContentItem;
@@ -51,7 +52,7 @@ use codex_protocol::protocol::SessionMetaLine;
 use codex_protocol::protocol::SessionSource;
 use codex_protocol::user_input::UserInput;
 use core_test_support::PathBufExt;
-use core_test_support::TestCodexResponsesRequestKind;
+use core_test_support::TestMidnightCoderResponsesRequestKind;
 use core_test_support::apps_test_server::AppsTestServer;
 use core_test_support::load_default_config_for_test;
 use core_test_support::responses::ResponsesRequest;
@@ -70,7 +71,7 @@ use core_test_support::responses::sse_failed;
 use core_test_support::responses::strip_metadata_from_json;
 use core_test_support::responses_metadata as test_responses_metadata;
 use core_test_support::skip_if_no_network;
-use core_test_support::test_codex::TestCodex;
+use core_test_support::test_codex::TestMidnightCoder;
 use core_test_support::test_codex::local_selections;
 use core_test_support::test_codex::test_codex;
 use core_test_support::wait_for_event;
@@ -101,7 +102,7 @@ const TEST_INSTALLATION_ID: &str = "11111111-1111-4111-8111-111111111111";
 fn test_turn_responses_metadata(
     _client: &ModelClient,
     thread_id: ThreadId,
-) -> codex_core::CodexResponsesMetadata {
+) -> codex_core::MidnightCoderResponsesMetadata {
     let thread_id = thread_id.to_string();
     test_responses_metadata(
         TEST_INSTALLATION_ID,
@@ -111,7 +112,7 @@ fn test_turn_responses_metadata(
         TEST_WINDOW_ID.to_string(),
         &SessionSource::Exec,
         /*parent_thread_id*/ None,
-        TestCodexResponsesRequestKind::Turn,
+        TestMidnightCoderResponsesRequestKind::Turn,
     )
 }
 
@@ -385,7 +386,7 @@ async fn response_item_ids_are_sent_for_all_remote_v2_compaction_requests() -> a
     )
     .await;
     let test = test_codex()
-        .with_auth(CodexAuth::create_dummy_chatgpt_auth_for_testing())
+        .with_auth(MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing())
         .with_config(|config| {
             let _ = config.features.enable(Feature::ItemIds);
             let _ = config.features.enable(Feature::RemoteCompactionV2);
@@ -666,7 +667,7 @@ async fn resume_includes_initial_messages_and_sends_prior_items() {
     )
     .await;
 
-    // Configure Codex to resume from our file
+    // Configure MidnightCoder to resume from our file
     let codex_home = Arc::new(TempDir::new().unwrap());
     let mut builder = test_codex()
         .with_home(codex_home.clone())
@@ -1063,7 +1064,7 @@ async fn includes_session_id_thread_id_and_model_headers_in_request() {
     )
     .await;
 
-    let mut builder = test_codex().with_auth(CodexAuth::from_api_key("Test API Key"));
+    let mut builder = test_codex().with_auth(MidnightCoderAuth::from_api_key("Test API Key"));
     let test = builder
         .build(&server)
         .await
@@ -1218,9 +1219,9 @@ async fn send_provider_auth_request(server: &MockServer, auth: ModelProviderAuth
         SessionSource::Exec,
     );
     let client = ModelClient::new(
-        Some(AuthManager::from_auth_for_testing(CodexAuth::from_api_key(
-            "unused-api-key",
-        ))),
+        Some(AuthManager::from_auth_for_testing(
+            MidnightCoderAuth::from_api_key("unused-api-key"),
+        )),
         AgentIdentityAuthPolicy::JwtOnly,
         thread_id,
         provider,
@@ -1254,6 +1255,7 @@ async fn send_provider_auth_request(server: &MockServer, auth: ModelProviderAuth
             effort,
             summary.unwrap_or(ReasoningSummary::Auto),
             /*service_tier*/ None,
+            /*provider_request_options*/ None,
             &responses_metadata,
             &codex_rollout_trace::InferenceTraceContext::disabled(),
         )
@@ -1279,7 +1281,7 @@ async fn includes_base_instructions_override_in_request() {
     .await;
 
     let mut builder = test_codex()
-        .with_auth(CodexAuth::from_api_key("Test API Key"))
+        .with_auth(MidnightCoderAuth::from_api_key("Test API Key"))
         .with_config(|config| {
             config.base_instructions = Some("test instructions".to_string());
         });
@@ -1313,6 +1315,78 @@ async fn includes_base_instructions_override_in_request() {
             .as_str()
             .unwrap()
             .contains("test instructions")
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ollama_provider_sends_configured_context_window_to_responses_api() {
+    skip_if_no_network!();
+
+    let server = MockServer::start().await;
+    let resp_mock = mount_sse_once(
+        &server,
+        sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
+    )
+    .await;
+
+    let mut model_provider =
+        built_in_model_providers(/*openai_base_url*/ None)[OLLAMA_OSS_PROVIDER_ID].clone();
+    model_provider.name = "Ollama Remote".to_string();
+    model_provider.base_url = Some(format!("{}/v1", server.uri()));
+    model_provider.supports_websockets = false;
+    model_provider.wire_api = WireApi::Responses;
+
+    let mut builder = test_codex()
+        .with_auth(MidnightCoderAuth::from_api_key("Test API Key"))
+        .with_config(move |config| {
+            config.model = Some("Qwen3-Coder-30B-A3B-Instruct-UD-TQ1_0:latest".to_string());
+            config.model_provider_id = "ollama-remote".to_string();
+            config.model_provider = model_provider;
+            config.ollama_num_ctx = Some(4096);
+        });
+    let codex = builder
+        .build(&server)
+        .await
+        .expect("create new conversation")
+        .codex;
+
+    codex
+        .submit(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: "hello".into(),
+                text_elements: Vec::new(),
+            }],
+            final_output_json_schema: None,
+            responsesapi_client_metadata: None,
+            additional_context: Default::default(),
+            thread_settings: Default::default(),
+        })
+        .await
+        .unwrap();
+
+    wait_for_event(&codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
+
+    let request_body = resp_mock.single_request().body_json();
+    assert_eq!(
+        request_body["options"],
+        json!({
+            "num_ctx": 4096
+        })
+    );
+    assert!(
+        request_body["instructions"]
+            .as_str()
+            .is_some_and(|instructions| instructions.starts_with("You are MidnightCoder")),
+        "expected compact Ollama instructions, got {:?}",
+        request_body["instructions"]
+    );
+    assert_eq!(request_body["parallel_tool_calls"], json!(false));
+    assert!(
+        request_body["tools"]
+            .as_array()
+            .is_some_and(|tools| tools.iter().all(|tool| tool["type"] == "function")),
+        "expected Ollama-compatible function tools, got {:?}",
+        request_body["tools"]
     );
 }
 
@@ -1443,7 +1517,7 @@ async fn prefers_apikey_when_config_prefers_apikey_even_with_chatgpt_tokens() {
     let mut config = load_default_config_for_test(&codex_home).await;
     config.model_provider = model_provider;
 
-    let auth = CodexAuth::from_auth_storage(
+    let auth = MidnightCoderAuth::from_auth_storage(
         codex_home.path(),
         AuthCredentialsStoreMode::File,
         /*chatgpt_base_url*/ None,
@@ -1451,8 +1525,8 @@ async fn prefers_apikey_when_config_prefers_apikey_even_with_chatgpt_tokens() {
         /*auth_route_config*/ None,
     )
     .await
-    .expect("Failed to load CodexAuth")
-    .expect("No CodexAuth found in codex_home");
+    .expect("Failed to load MidnightCoderAuth")
+    .expect("No MidnightCoderAuth found in codex_home");
     let auth_manager = codex_core::test_support::auth_manager_from_auth(auth);
     let installation_id = resolve_installation_id(&config.codex_home)
         .await
@@ -1505,7 +1579,7 @@ async fn includes_user_instructions_message_in_request() {
     .await;
 
     let mut builder = test_codex()
-        .with_auth(CodexAuth::from_api_key("Test API Key"))
+        .with_auth(MidnightCoderAuth::from_api_key("Test API Key"))
         .with_pre_build_hook(|home| {
             std::fs::write(home.join("AGENTS.md"), "be nice").expect("write global instructions");
         });
@@ -1652,7 +1726,7 @@ async fn omits_apps_guidance_for_api_key_auth_even_when_feature_enabled() {
     .await;
 
     let mut builder = test_codex()
-        .with_auth(CodexAuth::from_api_key("Test API Key"))
+        .with_auth(MidnightCoderAuth::from_api_key("Test API Key"))
         .with_config(move |config| {
             config
                 .features
@@ -1931,7 +2005,7 @@ async fn skills_append_to_developer_message() {
     let codex_home_path = codex_home.path().to_path_buf();
     let mut builder = test_codex()
         .with_home(codex_home.clone())
-        .with_auth(CodexAuth::from_api_key("Test API Key"))
+        .with_auth(MidnightCoderAuth::from_api_key("Test API Key"))
         .with_config(move |config| {
             config.cwd = codex_home_path.abs();
         });
@@ -2008,7 +2082,7 @@ async fn skills_use_aliases_in_developer_message_under_budget_pressure() {
     let codex_home_path = codex_home.path().to_path_buf();
     let mut builder = test_codex()
         .with_home(codex_home.clone())
-        .with_auth(CodexAuth::from_api_key("Test API Key"))
+        .with_auth(MidnightCoderAuth::from_api_key("Test API Key"))
         .with_config(move |config| {
             config.cwd = codex_home_path.abs();
             let user_config_path = codex_home_path.join("config.toml").abs();
@@ -2077,7 +2151,7 @@ async fn includes_configured_effort_in_request() -> anyhow::Result<()> {
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestCodex { codex, .. } = test_codex()
+    let TestMidnightCoder { codex, .. } = test_codex()
         .with_model("gpt-5.4")
         .with_config(|config| {
             config.model_reasoning_effort = Some(ReasoningEffort::Medium);
@@ -2125,7 +2199,7 @@ async fn includes_no_effort_in_request() -> anyhow::Result<()> {
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestCodex { codex, .. } = test_codex().with_model("gpt-5.4").build(&server).await?;
+    let TestMidnightCoder { codex, .. } = test_codex().with_model("gpt-5.4").build(&server).await?;
 
     codex
         .submit(Op::UserInput {
@@ -2168,7 +2242,7 @@ async fn includes_default_reasoning_effort_in_request_when_defined_by_model_info
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestCodex { codex, .. } = test_codex().with_model("gpt-5.4").build(&server).await?;
+    let TestMidnightCoder { codex, .. } = test_codex().with_model("gpt-5.4").build(&server).await?;
 
     codex
         .submit(Op::UserInput {
@@ -2210,7 +2284,8 @@ async fn user_turn_collaboration_mode_overrides_model_and_effort() -> anyhow::Re
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestCodex { codex, config, .. } = test_codex().with_model("gpt-5.4").build(&server).await?;
+    let TestMidnightCoder { codex, config, .. } =
+        test_codex().with_model("gpt-5.4").build(&server).await?;
 
     let collaboration_mode = CollaborationMode {
         mode: ModeKind::Default,
@@ -2270,7 +2345,7 @@ async fn configured_reasoning_summary_is_sent() -> anyhow::Result<()> {
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestCodex { codex, .. } = test_codex()
+    let TestMidnightCoder { codex, .. } = test_codex()
         .with_config(|config| {
             config.model_reasoning_summary = Some(ReasoningSummary::Concise);
         })
@@ -2325,7 +2400,7 @@ async fn responses_lite_sets_all_turns_context_and_disables_parallel_tool_calls(
     )
     .await;
 
-    let TestCodex { codex, .. } = test_codex()
+    let TestMidnightCoder { codex, .. } = test_codex()
         .with_model_info_override("gpt-5.4", |model_info| {
             model_info.use_responses_lite = true;
             model_info.supports_parallel_tool_calls = true;
@@ -2382,7 +2457,7 @@ async fn user_turn_explicit_reasoning_summary_overrides_model_catalog_default() 
     model.supports_reasoning_summaries = true;
     model.default_reasoning_summary = ReasoningSummary::Detailed;
 
-    let TestCodex {
+    let TestMidnightCoder {
         codex,
         config,
         session_configured,
@@ -2448,7 +2523,7 @@ async fn reasoning_summary_is_omitted_when_disabled() -> anyhow::Result<()> {
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestCodex { codex, .. } = test_codex()
+    let TestMidnightCoder { codex, .. } = test_codex()
         .with_config(|config| {
             config.model_reasoning_summary = Some(ReasoningSummary::None);
         })
@@ -2504,7 +2579,7 @@ async fn reasoning_summary_none_overrides_model_catalog_default() -> anyhow::Res
     model.supports_reasoning_summaries = true;
     model.default_reasoning_summary = ReasoningSummary::Detailed;
 
-    let TestCodex { codex, .. } = test_codex()
+    let TestMidnightCoder { codex, .. } = test_codex()
         .with_model("gpt-5.4")
         .with_config(move |config| {
             config.model_reasoning_summary = Some(ReasoningSummary::None);
@@ -2550,7 +2625,7 @@ async fn includes_default_verbosity_in_request() -> anyhow::Result<()> {
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestCodex { codex, .. } = test_codex().with_model("gpt-5.4").build(&server).await?;
+    let TestMidnightCoder { codex, .. } = test_codex().with_model("gpt-5.4").build(&server).await?;
 
     codex
         .submit(Op::UserInput {
@@ -2592,7 +2667,7 @@ async fn configured_verbosity_not_sent_for_models_without_support() -> anyhow::R
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestCodex { codex, .. } = test_codex()
+    let TestMidnightCoder { codex, .. } = test_codex()
         .with_model("test-no-verbosity")
         .with_config(|config| {
             config.model_verbosity = Some(Verbosity::High);
@@ -2639,7 +2714,7 @@ async fn configured_verbosity_is_sent() -> anyhow::Result<()> {
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
     )
     .await;
-    let TestCodex { codex, .. } = test_codex()
+    let TestMidnightCoder { codex, .. } = test_codex()
         .with_model("gpt-5.4")
         .with_config(|config| {
             config.model_verbosity = Some(Verbosity::High);
@@ -2688,7 +2763,7 @@ async fn includes_developer_instructions_message_in_request() {
     )
     .await;
     let mut builder = test_codex()
-        .with_auth(CodexAuth::from_api_key("Test API Key"))
+        .with_auth(MidnightCoderAuth::from_api_key("Test API Key"))
         .with_pre_build_hook(|home| {
             std::fs::write(home.join("AGENTS.md"), "be nice").expect("write global instructions");
         })
@@ -2818,8 +2893,9 @@ async fn azure_responses_request_includes_store_and_reasoning_ids() {
     let model_info =
         codex_core::test_support::construct_model_info_offline(model.as_str(), &config);
     let thread_id = ThreadId::new();
-    let auth_manager =
-        codex_core::test_support::auth_manager_from_auth(CodexAuth::from_api_key("Test API Key"));
+    let auth_manager = codex_core::test_support::auth_manager_from_auth(
+        MidnightCoderAuth::from_api_key("Test API Key"),
+    );
     let session_telemetry = SessionTelemetry::new(
         thread_id,
         model.as_str(),
@@ -2931,6 +3007,7 @@ async fn azure_responses_request_includes_store_and_reasoning_ids() {
             effort,
             summary.unwrap_or(ReasoningSummary::Auto),
             /*service_tier*/ None,
+            /*provider_request_options*/ None,
             &responses_metadata,
             &codex_rollout_trace::InferenceTraceContext::disabled(),
         )
@@ -2999,7 +3076,7 @@ async fn token_count_includes_rate_limits_snapshot() {
     provider.supports_websockets = false;
 
     let mut builder = test_codex()
-        .with_auth(CodexAuth::from_api_key("test"))
+        .with_auth(MidnightCoderAuth::from_api_key("test"))
         .with_config(move |config| {
             config.model_provider = provider;
         });
@@ -3219,7 +3296,7 @@ async fn context_window_error_sets_total_tokens_to_model_window() -> anyhow::Res
     )
     .await;
 
-    let TestCodex { codex, .. } = test_codex()
+    let TestMidnightCoder { codex, .. } = test_codex()
         .with_config(|config| {
             config.model = Some("gpt-5.4".to_string());
             config.model_context_window = Some(272_000);
@@ -3282,7 +3359,7 @@ async fn context_window_error_sets_total_tokens_to_model_window() -> anyhow::Res
     );
 
     let error_event = wait_for_event(&codex, |ev| matches!(ev, EventMsg::Error(_))).await;
-    let expected_context_window_message = CodexErr::ContextWindowExceeded.to_string();
+    let expected_context_window_message = MidnightCoderErr::ContextWindowExceeded.to_string();
     assert!(
         matches!(
             error_event,
@@ -3321,7 +3398,7 @@ async fn incomplete_response_emits_content_filter_error_message() -> anyhow::Res
 
     let responses_mock = mount_sse_once(&server, incomplete_response).await;
 
-    let TestCodex { codex, .. } = test_codex()
+    let TestMidnightCoder { codex, .. } = test_codex()
         .with_config(|config| {
             config.model_provider.stream_max_retries = Some(0);
         })
@@ -3544,8 +3621,8 @@ async fn env_var_overrides_loaded_auth() {
     wait_for_event(&codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
 }
 
-fn create_dummy_codex_auth() -> CodexAuth {
-    CodexAuth::create_dummy_chatgpt_auth_for_testing()
+fn create_dummy_codex_auth() -> MidnightCoderAuth {
+    MidnightCoderAuth::create_dummy_chatgpt_auth_for_testing()
 }
 
 /// Scenario:
@@ -3556,7 +3633,7 @@ fn create_dummy_codex_auth() -> CodexAuth {
 /// We assert that the `input` sent on each turn contains the expected conversation history
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn history_dedupes_streamed_and_final_messages_across_turns() {
-    // Skip under Codex sandbox network restrictions (mirrors other tests).
+    // Skip under MidnightCoder sandbox network restrictions (mirrors other tests).
     skip_if_no_network!();
 
     // Mock server that will receive three sequential requests and return the same SSE stream
@@ -3576,7 +3653,7 @@ async fn history_dedupes_streamed_and_final_messages_across_turns() {
 
     let request_log = mount_sse_sequence(&server, vec![sse1.clone(), sse1.clone(), sse1]).await;
 
-    let mut builder = test_codex().with_auth(CodexAuth::from_api_key("Test API Key"));
+    let mut builder = test_codex().with_auth(MidnightCoderAuth::from_api_key("Test API Key"));
     let codex = builder
         .build(&server)
         .await

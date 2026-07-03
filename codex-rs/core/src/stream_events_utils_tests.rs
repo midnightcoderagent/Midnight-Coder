@@ -15,7 +15,7 @@ use crate::tools::parallel::ToolCallRuntime;
 use crate::turn_diff_tracker::TurnDiffTracker;
 use codex_extension_api::ExtensionData;
 use codex_extension_api::TurnItemContributor;
-use codex_protocol::error::CodexErr;
+use codex_protocol::error::MidnightCoderErr;
 use codex_protocol::items::AgentMessageContent;
 use codex_protocol::items::TurnItem;
 use codex_protocol::memory_citation::MemoryCitation;
@@ -45,6 +45,28 @@ fn assistant_output_text_with_phase(text: &str, phase: Option<MessagePhase>) -> 
         phase,
         internal_chat_message_metadata_passthrough: None,
     }
+}
+
+#[test]
+fn ollama_text_tool_call_is_converted_to_function_call() {
+    let item = assistant_output_text(
+        "<function=exec_command>\n<parameter=cmd>\nmkdir MDCoderToolProbe\n</parameter>\n</function>\n</tool_call>",
+    );
+
+    let converted =
+        crate::stream_events_utils::ollama_text_tool_call_from_item(&item).expect("tool call");
+
+    assert_eq!(
+        converted,
+        ResponseItem::FunctionCall {
+            id: None,
+            name: "exec_command".to_string(),
+            namespace: None,
+            arguments: r#"{"cmd":"mkdir MDCoderToolProbe"}"#.to_string(),
+            call_id: "ollama-text-tool-call-exec_command".to_string(),
+            internal_chat_message_metadata_passthrough: None,
+        }
+    );
 }
 
 #[test]
@@ -456,7 +478,7 @@ async fn save_image_generation_result_rejects_data_url_payload() {
     let err = save_image_generation_result(&codex_home, "session-1", "ig_456", result)
         .await
         .expect_err("data url payload should error");
-    assert!(matches!(err, CodexErr::InvalidRequest(_)));
+    assert!(matches!(err, MidnightCoderErr::InvalidRequest(_)));
 }
 
 #[tokio::test]
@@ -504,7 +526,7 @@ async fn save_image_generation_result_rejects_non_standard_base64() {
     let err = save_image_generation_result(&codex_home, "session-1", "ig_urlsafe", "_-8")
         .await
         .expect_err("non-standard base64 should error");
-    assert!(matches!(err, CodexErr::InvalidRequest(_)));
+    assert!(matches!(err, MidnightCoderErr::InvalidRequest(_)));
 }
 
 #[tokio::test]
@@ -519,5 +541,5 @@ async fn save_image_generation_result_rejects_non_base64_data_urls() {
     )
     .await
     .expect_err("non-base64 data url should error");
-    assert!(matches!(err, CodexErr::InvalidRequest(_)));
+    assert!(matches!(err, MidnightCoderErr::InvalidRequest(_)));
 }

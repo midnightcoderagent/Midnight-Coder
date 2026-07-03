@@ -107,6 +107,7 @@ mod color;
 mod config_update;
 pub(crate) mod custom_terminal;
 mod pets;
+mod provider_config;
 pub use custom_terminal::Terminal;
 mod auto_review_denials;
 mod cwd_prompt;
@@ -238,7 +239,7 @@ async fn start_embedded_app_server(
     loader_overrides: LoaderOverrides,
     strict_config: bool,
     cloud_config_bundle: CloudConfigBundleLoader,
-    feedback: codex_feedback::CodexFeedback,
+    feedback: codex_feedback::MidnightCoderFeedback,
     log_db: Option<log_db::LogDbLayer>,
     state_db: Option<StateDbHandle>,
     environment_manager: Arc<EnvironmentManager>,
@@ -453,7 +454,7 @@ async fn start_app_server(
     loader_overrides: LoaderOverrides,
     strict_config: bool,
     cloud_config_bundle: CloudConfigBundleLoader,
-    feedback: codex_feedback::CodexFeedback,
+    feedback: codex_feedback::MidnightCoderFeedback,
     log_db: Option<log_db::LogDbLayer>,
     state_db: Option<StateDbHandle>,
     environment_manager: Arc<EnvironmentManager>,
@@ -493,7 +494,7 @@ pub(crate) async fn start_app_server_for_picker(
         LoaderOverrides::default(),
         /*strict_config*/ false,
         CloudConfigBundleLoader::default(),
-        codex_feedback::CodexFeedback::new(),
+        codex_feedback::MidnightCoderFeedback::new(),
         /*log_db*/ None,
         state_db,
         environment_manager,
@@ -527,7 +528,7 @@ async fn start_embedded_app_server_with<F, Fut>(
     loader_overrides: LoaderOverrides,
     strict_config: bool,
     cloud_config_bundle: CloudConfigBundleLoader,
-    feedback: codex_feedback::CodexFeedback,
+    feedback: codex_feedback::MidnightCoderFeedback,
     log_db: Option<log_db::LogDbLayer>,
     state_db: Option<StateDbHandle>,
     environment_manager: Arc<EnvironmentManager>,
@@ -989,7 +990,8 @@ pub async fn run_main(
     };
 
     let mut manually_selected_oss_provider = None;
-    let model_provider_override = if cli.oss {
+    let use_local_provider = cli.oss;
+    let model_provider_override = if use_local_provider {
         let bootstrap_config_with_cloud_config;
         let config_toml_for_oss = if cli.oss_provider.is_none() {
             // The first load intentionally skips cloud config so we can read
@@ -1031,10 +1033,10 @@ pub async fn run_main(
         None
     };
 
-    // When using `--oss`, let the bootstrapper pick the model based on selected provider
+    // Let the bootstrapper pick the model based on the local provider.
     let model = if let Some(model) = &cli.model {
         Some(model.clone())
-    } else if cli.oss {
+    } else if use_local_provider {
         // Use the provider from model_provider_override
         model_provider_override
             .as_ref()
@@ -1055,7 +1057,7 @@ pub async fn run_main(
         codex_self_exe: arg0_paths.codex_self_exe.clone(),
         codex_linux_sandbox_exe: arg0_paths.codex_linux_sandbox_exe.clone(),
         main_execve_wrapper_exe: arg0_paths.main_execve_wrapper_exe.clone(),
-        show_raw_agent_reasoning: cli.oss.then_some(true),
+        show_raw_agent_reasoning: use_local_provider.then_some(true),
         bypass_hook_trust: cli.bypass_hook_trust.then_some(true),
         additional_writable_roots: additional_dirs,
         ..Default::default()
@@ -1220,19 +1222,18 @@ pub async fn run_main(
         (None, None)
     };
 
-    let feedback = codex_feedback::CodexFeedback::new();
+    let feedback = codex_feedback::MidnightCoderFeedback::new();
     let feedback_layer = feedback.logger_layer();
     let feedback_metadata_layer = feedback.metadata_layer();
 
-    if cli.oss && model_provider_override.is_some() {
-        // We're in the oss section, so provider_id should be Some
-        // Let's handle None case gracefully though just in case
+    if model_provider_override.is_some() {
+        // Local provider mode should always resolve a provider id.
         let provider_id = match model_provider_override.as_ref() {
             Some(id) => id,
             None => {
-                error!("OSS provider unexpectedly not set when oss flag is used");
+                error!("local provider unexpectedly not set");
                 return Err(std::io::Error::other(
-                    "OSS provider not set but oss flag was used",
+                    "local provider mode did not resolve a provider",
                 ));
             }
         };
@@ -1291,7 +1292,7 @@ async fn run_ratatui_app(
     overrides: ConfigOverrides,
     cli_kv_overrides: Vec<(String, toml::Value)>,
     mut cloud_config_bundle: CloudConfigBundleLoader,
-    feedback: codex_feedback::CodexFeedback,
+    feedback: codex_feedback::MidnightCoderFeedback,
     log_db: Option<log_db::LogDbLayer>,
     state_db: Option<StateDbHandle>,
     environment_manager: Arc<EnvironmentManager>,
@@ -2000,8 +2001,8 @@ fn should_show_onboarding(
 }
 
 fn should_show_login_screen(login_status: LoginStatus, config: &Config) -> bool {
-    // Only show the login screen for providers that actually require OpenAI auth
-    // (OpenAI or equivalents). For OSS/other providers, skip login entirely.
+    // Only show the login screen for providers that actually require MidnightCoder auth
+    // (MidnightCoder or equivalents). For OSS/other providers, skip login entirely.
     if !config.model_provider.requires_openai_auth {
         return false;
     }
@@ -2137,7 +2138,7 @@ mod tests {
             LoaderOverrides::default(),
             /*strict_config*/ false,
             CloudConfigBundleLoader::default(),
-            codex_feedback::CodexFeedback::new(),
+            codex_feedback::MidnightCoderFeedback::new(),
             /*log_db*/ None,
             state_db,
             Arc::new(EnvironmentManager::default_for_tests()),
@@ -2879,7 +2880,7 @@ mod tests {
             LoaderOverrides::default(),
             /*strict_config*/ false,
             CloudConfigBundleLoader::default(),
-            codex_feedback::CodexFeedback::new(),
+            codex_feedback::MidnightCoderFeedback::new(),
             /*log_db*/ None,
             /*state_db*/ None,
             Arc::new(EnvironmentManager::default_for_tests()),

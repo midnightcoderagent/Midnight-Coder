@@ -1,14 +1,14 @@
 interface:
-  display_name: "OpenAI Docs"
-  short_description: "Reference OpenAI docs, Codex self-knowledge, and model migration guidance"
+  display_name: "Midnight Coder Docs"
+  short_description: "Reference Midnight Coder docs, Midnight Coder self-knowledge, and model migration guidance"
   icon_small: "./assets/openai-small.svg"
   icon_large: "./assets/openai.png"
-  default_prompt: "Use OpenAI Docs for official docs lookup, questions about Codex itself or Codex surfaces, model selection, model migration, and prompt-upgrade work."
+  default_prompt: "Use Midnight Coder Docs for official docs lookup, questions about Midnight Coder itself or Midnight Coder surfaces, model selection, model migration, and prompt-upgrade work."
 
 dependencies:
   tools:
     - type: "mcp"
       value: "openaiDeveloperDocs"
-      description: "OpenAI Developer Docs MCP server"
+      description: "Midnight Coder Developer Docs MCP server"
       transport: "streamable_http"
       url: "https://developers.openai.com/mcp"

@@ -366,7 +366,7 @@ const buildOutline = (manual) => {
   };
 };
 
-const outlineMarkdown = (outline) => `# Codex Manual Outline\n\n${outline.text}\n`;
+const outlineMarkdown = (outline) => `# Midnight Coder Manual Outline\n\n${outline.text}\n`;
 
 const manualStatusLine = (status) =>
   status.cacheStatus === "hit"
@@ -405,7 +405,7 @@ const writeOutline = async (cacheDir, outlineText) => {
   await rename(tmpPath, outlineFilePath(cacheDir));
 };
 
-const fetchCodexManual = async ({
+const fetchMidnightCoderManual = async ({
   manualUrl = DEFAULT_MANUAL_URL,
   cacheDir,
   timeoutMs = 30000,
@@ -413,7 +413,7 @@ const fetchCodexManual = async ({
   const resolvedCacheDir = await resolveCacheDir(cacheDir);
   if (!resolvedCacheDir) {
     throw new ManualFetchError(
-      "Manual cache directory is unavailable; pass --cache-dir to override or use OpenAI Docs MCP fallback."
+      "Manual cache directory is unavailable; pass --cache-dir to override or use Midnight Coder Docs MCP fallback."
     );
   }
   await mkdir(resolvedCacheDir, { recursive: true });
@@ -531,7 +531,7 @@ const parseArgs = (argv) => {
 
 const main = async () => {
   const args = parseArgs(process.argv.slice(2));
-  const { outlineText, status } = await fetchCodexManual(args);
+  const { outlineText, status } = await fetchMidnightCoderManual(args);
 
   process.stdout.write(formatResult({ status, outlineText }));
 
@@ -595,4 +595,4 @@ if (isCliEntrypoint()) {
   });
 }
 
-export { DEFAULT_MANUAL_URL, fetchCodexManual };
+export { DEFAULT_MANUAL_URL, fetchMidnightCoderManual };

@@ -7,7 +7,10 @@ use crate::client_common::ResponseEvent;
 use crate::compact::CompactionAnalyticsAttempt;
 use crate::compact::CompactionAnalyticsDetails;
 use crate::compact::InitialContextInjection;
+use crate::compact::compact_model_info;
 use crate::compact::compaction_status_from_result;
+use crate::compact::install_drop_history_compaction;
+use crate::compact::should_drop_history_resume_type;
 use crate::compact_remote::process_compacted_history;
 use crate::compact_remote::should_keep_compacted_history_item;
 use crate::compact_remote::trim_function_call_history_to_fit_context_window;
@@ -15,9 +18,9 @@ use crate::hook_runtime::PostCompactHookOutcome;
 use crate::hook_runtime::PreCompactHookOutcome;
 use crate::hook_runtime::run_post_compact_hooks;
 use crate::hook_runtime::run_pre_compact_hooks;
-use crate::responses_metadata::CodexResponsesMetadata;
-use crate::responses_metadata::CodexResponsesRequestKind;
 use crate::responses_metadata::CompactionTurnMetadata;
+use crate::responses_metadata::MidnightCoderResponsesMetadata;
+use crate::responses_metadata::MidnightCoderResponsesRequestKind;
 use crate::responses_retry::ResponsesStreamRequest;
 use crate::responses_retry::handle_retryable_response_stream_error;
 use crate::session::session::Session;
@@ -28,8 +31,8 @@ use codex_analytics::CompactionImplementation;
 use codex_analytics::CompactionPhase;
 use codex_analytics::CompactionReason;
 use codex_analytics::CompactionTrigger;
-use codex_protocol::error::CodexErr;
-use codex_protocol::error::Result as CodexResult;
+use codex_protocol::error::MidnightCoderErr;
+use codex_protocol::error::Result as MidnightCoderResult;
 use codex_protocol::items::ContextCompactionItem;
 use codex_protocol::items::TurnItem;
 use codex_protocol::models::ContentItem;
@@ -61,7 +64,7 @@ pub(crate) async fn run_inline_remote_auto_compact_task(
     initial_context_injection: InitialContextInjection,
     reason: CompactionReason,
     phase: CompactionPhase,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     run_remote_compact_task_inner(
         &sess,
         &step_context,
@@ -77,7 +80,7 @@ pub(crate) async fn run_inline_remote_auto_compact_task(
 pub(crate) async fn run_remote_compact_task(
     sess: Arc<Session>,
     turn_context: Arc<TurnContext>,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     // Standalone compaction is its own request boundary, so it captures a fresh step.
     let step_context = sess.capture_step_context(Arc::clone(&turn_context)).await;
     let start_event = EventMsg::TurnStarted(TurnStartedEvent {
@@ -109,7 +112,7 @@ async fn run_remote_compact_task_inner(
     trigger: CompactionTrigger,
     reason: CompactionReason,
     phase: CompactionPhase,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     let turn_context = &step_context.turn;
     let compaction_metadata = CompactionTurnMetadata::new(
         trigger,
@@ -134,7 +137,7 @@ async fn run_remote_compact_task_inner(
     match pre_compact_outcome {
         PreCompactHookOutcome::Continue => {}
         PreCompactHookOutcome::Stopped => {
-            let error = CodexErr::TurnAborted;
+            let error = MidnightCoderErr::TurnAborted;
             attempt
                 .track(
                     sess.as_ref(),
@@ -163,7 +166,7 @@ async fn run_remote_compact_task_inner(
             attempt
                 .track(sess.as_ref(), status, codex_error, analytics_details)
                 .await;
-            return Err(CodexErr::TurnAborted);
+            return Err(MidnightCoderErr::TurnAborted);
         }
     }
     attempt
@@ -171,7 +174,7 @@ async fn run_remote_compact_task_inner(
         .await;
     match result {
         Ok(()) => Ok(()),
-        Err(err @ CodexErr::TurnAborted) => Err(err),
+        Err(err @ MidnightCoderErr::TurnAborted) => Err(err),
         Err(err) => {
             sess.track_turn_codex_error(turn_context, &err);
             let event = EventMsg::Error(
@@ -190,13 +193,14 @@ async fn run_remote_compact_task_inner_impl(
     initial_context_injection: InitialContextInjection,
     compaction_metadata: CompactionTurnMetadata,
     analytics_details: &mut CompactionAnalyticsDetails,
-) -> CodexResult<()> {
+) -> MidnightCoderResult<()> {
     let turn_context = &step_context.turn;
     let context_compaction_item = ContextCompactionItem::new();
+    let compact_model_info = compact_model_info(sess.as_ref(), turn_context.as_ref()).await;
     let compaction_trace = sess.services.rollout_thread_trace.compaction_trace_context(
         turn_context.sub_id.as_str(),
         context_compaction_item.id.as_str(),
-        turn_context.model_info.slug.as_str(),
+        compact_model_info.slug.as_str(),
         turn_context.provider.info().name.as_str(),
     );
     let compaction_item = TurnItem::ContextCompaction(context_compaction_item);
@@ -231,7 +235,18 @@ async fn run_remote_compact_task_inner_impl(
     }
 
     let trace_input_history = history.raw_items().to_vec();
-    let prompt_input = history.for_prompt(&turn_context.model_info.input_modalities);
+    if should_drop_history_resume_type(turn_context.as_ref()) {
+        install_drop_history_compaction(
+            sess.as_ref(),
+            turn_context.as_ref(),
+            &trace_input_history,
+            &initial_context_injection,
+            compaction_item,
+        )
+        .await?;
+        return Ok(());
+    }
+    let prompt_input = history.for_prompt(&compact_model_info.input_modalities);
     let tool_router = built_tools(
         sess.as_ref(),
         step_context.as_ref(),
@@ -243,7 +258,7 @@ async fn run_remote_compact_task_inner_impl(
     let prompt = Prompt {
         input,
         tools: tool_router.model_visible_specs(),
-        parallel_tool_calls: turn_context.model_info.supports_parallel_tool_calls,
+        parallel_tool_calls: compact_model_info.supports_parallel_tool_calls,
         base_instructions,
         output_schema: None,
         output_schema_strict: true,
@@ -253,10 +268,10 @@ async fn run_remote_compact_task_inner_impl(
     let responses_metadata = turn_context.turn_metadata_state.to_responses_metadata(
         sess.installation_id.clone(),
         window_id,
-        CodexResponsesRequestKind::Compaction(compaction_metadata),
+        MidnightCoderResponsesRequestKind::Compaction(compaction_metadata),
     );
     let trace_attempt = compaction_trace.start_attempt(&serde_json::json!({
-        "model": turn_context.model_info.slug.as_str(),
+        "model": compact_model_info.slug.as_str(),
         "instructions": prompt.base_instructions.text.as_str(),
         "input": &prompt.input,
         "parallel_tool_calls": prompt.parallel_tool_calls,
@@ -274,6 +289,7 @@ async fn run_remote_compact_task_inner_impl(
         sess,
         turn_context,
         client_session,
+        &compact_model_info,
         &prompt,
         &responses_metadata,
     )
@@ -348,9 +364,10 @@ async fn run_remote_compaction_request_v2(
     sess: &Session,
     turn_context: &TurnContext,
     client_session: &mut ModelClientSession,
+    compact_model_info: &codex_protocol::openai_models::ModelInfo,
     prompt: &Prompt,
-    responses_metadata: &CodexResponsesMetadata,
-) -> CodexResult<RemoteCompactionV2Output> {
+    responses_metadata: &MidnightCoderResponsesMetadata,
+) -> MidnightCoderResult<RemoteCompactionV2Output> {
     let max_retries = turn_context
         .provider
         .info()
@@ -361,11 +378,12 @@ async fn run_remote_compaction_request_v2(
         let result = match client_session
             .stream(
                 prompt,
-                &turn_context.model_info,
+                compact_model_info,
                 &turn_context.session_telemetry,
                 turn_context.reasoning_effort.clone(),
                 turn_context.reasoning_summary,
                 turn_context.config.service_tier.clone(),
+                turn_context.provider_request_options(),
                 responses_metadata,
                 &InferenceTraceContext::disabled(),
             )
@@ -396,7 +414,7 @@ async fn run_remote_compaction_request_v2(
 
 async fn collect_compaction_output(
     mut stream: ResponseStream,
-) -> CodexResult<RemoteCompactionV2Output> {
+) -> MidnightCoderResult<RemoteCompactionV2Output> {
     let mut output_item_count = 0usize;
     let mut compaction_count = 0usize;
     let mut compaction_output = None;
@@ -423,14 +441,14 @@ async fn collect_compaction_output(
     }
 
     if !saw_completed {
-        return Err(CodexErr::Stream(
+        return Err(MidnightCoderErr::Stream(
             "remote compaction v2 stream closed before response.completed".to_string(),
             None,
         ));
     }
 
     if compaction_count != 1 {
-        return Err(CodexErr::Fatal(format!(
+        return Err(MidnightCoderErr::Fatal(format!(
             "remote compaction v2 expected exactly one compaction output item, got {compaction_count} from {output_item_count} output items"
         )));
     }
@@ -598,7 +616,7 @@ mod tests {
         }
     }
 
-    fn response_stream(events: Vec<CodexResult<ResponseEvent>>) -> ResponseStream {
+    fn response_stream(events: Vec<MidnightCoderResult<ResponseEvent>>) -> ResponseStream {
         let (tx_event, rx_event) = mpsc::channel(events.len().max(1));
         for event in events {
             tx_event

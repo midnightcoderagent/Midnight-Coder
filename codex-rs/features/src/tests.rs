@@ -379,8 +379,11 @@ fn collab_is_legacy_alias_for_multi_agent() {
 
 #[test]
 fn codex_hooks_is_legacy_alias_for_hooks() {
-    assert_eq!(feature_for_key("hooks"), Some(Feature::CodexHooks));
-    assert_eq!(feature_for_key("codex_hooks"), Some(Feature::CodexHooks));
+    assert_eq!(feature_for_key("hooks"), Some(Feature::MidnightCoderHooks));
+    assert_eq!(
+        feature_for_key("codex_hooks"),
+        Some(Feature::MidnightCoderHooks)
+    );
 }
 
 #[test]

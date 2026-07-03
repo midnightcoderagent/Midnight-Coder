@@ -244,6 +244,8 @@ impl ForcedChatgptWorkspaceIds {
 pub struct Config {
     pub model: Option<String>,
     pub review_model: Option<String>,
+    pub mini_model: Option<String>,
+    pub resume_type: Option<String>,
     pub model_context_window: Option<i64>,
     pub model_auto_compact_token_limit: Option<i64>,
     pub model_auto_compact_token_limit_scope: Option<AutoCompactTokenLimitScope>,

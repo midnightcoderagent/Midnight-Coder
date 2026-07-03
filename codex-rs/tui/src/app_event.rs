@@ -254,7 +254,7 @@ pub(crate) enum AppEvent {
 
     /// Forward a command to the Agent. Using an `AppEvent` for this avoids
     /// bubbling channels through layers of widgets.
-    CodexOp(AppCommand),
+    MidnightCoderOp(AppCommand),
 
     /// Restore an output-free interrupted turn into the composer and roll it back.
     RestoreCancelledTurn(UserMessage),
@@ -398,7 +398,7 @@ pub(crate) enum AppEvent {
         url: String,
     },
 
-    /// Open the current thread in Codex Desktop.
+    /// Open the current thread in MidnightCoder Desktop.
     OpenDesktopThread {
         thread_id: ThreadId,
     },
@@ -727,6 +727,26 @@ pub(crate) enum AppEvent {
         effort: Option<ReasoningEffort>,
     },
 
+    /// Persist the model used specifically for context compaction.
+    PersistMiniModelSelection {
+        model: String,
+    },
+
+    /// Persist the strategy used when context compaction is triggered.
+    PersistResumeTypeSelection {
+        resume_type: String,
+    },
+
+    /// Persist the context window and matching auto-compaction threshold.
+    PersistContextWindow {
+        tokens: i64,
+    },
+
+    /// Persist whether automatic context compaction is enabled.
+    PersistAutoCompaction {
+        enabled: bool,
+    },
+
     /// Persist the selected personality to the appropriate config.
     PersistPersonalitySelection {
         personality: Personality,
@@ -751,6 +771,11 @@ pub(crate) enum AppEvent {
     /// Open the full model picker (non-auto models).
     OpenAllModelsPopup {
         models: Vec<ModelPreset>,
+    },
+
+    /// Probe and persist a local provider from an address such as 127.0.0.1:11434.
+    ConfigureProvider {
+        address: String,
     },
 
     /// Open the confirmation prompt before enabling full access mode.

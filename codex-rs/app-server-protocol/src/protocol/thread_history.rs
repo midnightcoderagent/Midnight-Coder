@@ -1566,7 +1566,6 @@ mod tests {
     use codex_protocol::protocol::AgentReasoningEvent;
     use codex_protocol::protocol::AgentReasoningRawContentEvent;
     use codex_protocol::protocol::ApplyPatchApprovalRequestEvent;
-    use codex_protocol::protocol::CodexErrorInfo;
     use codex_protocol::protocol::CompactedItem;
     use codex_protocol::protocol::DynamicToolCallResponseEvent;
     use codex_protocol::protocol::ExecCommandEndEvent;
@@ -1574,6 +1573,7 @@ mod tests {
     use codex_protocol::protocol::ItemStartedEvent;
     use codex_protocol::protocol::McpInvocation;
     use codex_protocol::protocol::McpToolCallEndEvent;
+    use codex_protocol::protocol::MidnightCoderErrorInfo;
     use codex_protocol::protocol::PatchApplyBeginEvent;
     use codex_protocol::protocol::ThreadRolledBackEvent;
     use codex_protocol::protocol::TurnAbortReason;
@@ -3642,7 +3642,7 @@ mod tests {
             }),
             EventMsg::Error(ErrorEvent {
                 message: "rollback failed".into(),
-                codex_error_info: Some(CodexErrorInfo::ThreadRollbackFailed),
+                codex_error_info: Some(MidnightCoderErrorInfo::ThreadRollbackFailed),
             }),
         ];
 
@@ -3683,7 +3683,7 @@ mod tests {
             }),
             EventMsg::Error(ErrorEvent {
                 message: "request-level failure".into(),
-                codex_error_info: Some(CodexErrorInfo::BadRequest),
+                codex_error_info: Some(MidnightCoderErrorInfo::BadRequest),
             }),
         ];
 
@@ -3735,7 +3735,7 @@ mod tests {
             }),
             EventMsg::Error(ErrorEvent {
                 message: "stream failure".into(),
-                codex_error_info: Some(CodexErrorInfo::ResponseStreamDisconnected {
+                codex_error_info: Some(MidnightCoderErrorInfo::ResponseStreamDisconnected {
                     http_status_code: Some(502),
                 }),
             }),
@@ -3761,7 +3761,7 @@ mod tests {
             Some(TurnError {
                 message: "stream failure".into(),
                 codex_error_info: Some(
-                    crate::protocol::v2::CodexErrorInfo::ResponseStreamDisconnected {
+                    crate::protocol::v2::MidnightCoderErrorInfo::ResponseStreamDisconnected {
                         http_status_code: Some(502),
                     }
                 ),

@@ -7,7 +7,7 @@ from typing import Annotated, Any, Literal
 from enum import Enum
 
 
-class CodexAppServerProtocolV2(BaseModel):
+class MidnightCoderAppServerProtocolV2(BaseModel):
     pass
     model_config = ConfigDict(
         populate_by_name=True,
@@ -302,7 +302,7 @@ class ClientInfo(BaseModel):
     version: str
 
 
-class CodexErrorInfoValue(Enum):
+class MidnightCoderErrorInfoValue(Enum):
     context_window_exceeded = "contextWindowExceeded"
     usage_limit_exceeded = "usageLimitExceeded"
     server_overloaded = "serverOverloaded"
@@ -322,7 +322,7 @@ class HttpConnectionFailed(BaseModel):
     http_status_code: Annotated[int | None, Field(alias="httpStatusCode", ge=0)] = None
 
 
-class HttpConnectionFailedCodexErrorInfo(BaseModel):
+class HttpConnectionFailedMidnightCoderErrorInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         populate_by_name=True,
@@ -337,7 +337,7 @@ class ResponseStreamConnectionFailed(BaseModel):
     http_status_code: Annotated[int | None, Field(alias="httpStatusCode", ge=0)] = None
 
 
-class ResponseStreamConnectionFailedCodexErrorInfo(BaseModel):
+class ResponseStreamConnectionFailedMidnightCoderErrorInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         populate_by_name=True,
@@ -354,7 +354,7 @@ class ResponseStreamDisconnected(BaseModel):
     http_status_code: Annotated[int | None, Field(alias="httpStatusCode", ge=0)] = None
 
 
-class ResponseStreamDisconnectedCodexErrorInfo(BaseModel):
+class ResponseStreamDisconnectedMidnightCoderErrorInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         populate_by_name=True,
@@ -371,7 +371,7 @@ class ResponseTooManyFailedAttempts(BaseModel):
     http_status_code: Annotated[int | None, Field(alias="httpStatusCode", ge=0)] = None
 
 
-class ResponseTooManyFailedAttemptsCodexErrorInfo(BaseModel):
+class ResponseTooManyFailedAttemptsMidnightCoderErrorInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         populate_by_name=True,
@@ -641,7 +641,7 @@ class ProjectConfigLayerSource(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
     )
-    dot_codex_folder: Annotated[AbsolutePathBuf, Field(alias="dotCodexFolder")]
+    dot_codex_folder: Annotated[AbsolutePathBuf, Field(alias="dotMidnightCoderFolder")]
     type: Annotated[Literal["project"], Field(title="ProjectConfigLayerSourceType")]
 
 
@@ -1673,7 +1673,7 @@ class ChatgptAuthTokensLoginAccountParams(BaseModel):
         str | None,
         Field(
             alias="chatgptPlanType",
-            description="Optional plan type supplied by the client.\n\nWhen `null`, Codex attempts to derive the plan type from access-token claims. If unavailable, the plan defaults to `unknown`.",
+            description="Optional plan type supplied by the client.\n\nWhen `null`, MidnightCoder attempts to derive the plan type from access-token claims. If unavailable, the plan defaults to `unknown`.",
         ),
     ] = None
     type: Annotated[
@@ -5400,7 +5400,7 @@ class ActiveTurnNotSteerable(BaseModel):
     turn_kind: Annotated[NonSteerableTurnKind, Field(alias="turnKind")]
 
 
-class ActiveTurnNotSteerableCodexErrorInfo(BaseModel):
+class ActiveTurnNotSteerableMidnightCoderErrorInfo(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
         populate_by_name=True,
@@ -5410,26 +5410,26 @@ class ActiveTurnNotSteerableCodexErrorInfo(BaseModel):
     ]
 
 
-class CodexErrorInfo(
+class MidnightCoderErrorInfo(
     RootModel[
-        CodexErrorInfoValue
-        | HttpConnectionFailedCodexErrorInfo
-        | ResponseStreamConnectionFailedCodexErrorInfo
-        | ResponseStreamDisconnectedCodexErrorInfo
-        | ResponseTooManyFailedAttemptsCodexErrorInfo
-        | ActiveTurnNotSteerableCodexErrorInfo
+        MidnightCoderErrorInfoValue
+        | HttpConnectionFailedMidnightCoderErrorInfo
+        | ResponseStreamConnectionFailedMidnightCoderErrorInfo
+        | ResponseStreamDisconnectedMidnightCoderErrorInfo
+        | ResponseTooManyFailedAttemptsMidnightCoderErrorInfo
+        | ActiveTurnNotSteerableMidnightCoderErrorInfo
     ]
 ):
     model_config = ConfigDict(
         populate_by_name=True,
     )
     root: Annotated[
-        CodexErrorInfoValue
-        | HttpConnectionFailedCodexErrorInfo
-        | ResponseStreamConnectionFailedCodexErrorInfo
-        | ResponseStreamDisconnectedCodexErrorInfo
-        | ResponseTooManyFailedAttemptsCodexErrorInfo
-        | ActiveTurnNotSteerableCodexErrorInfo,
+        MidnightCoderErrorInfoValue
+        | HttpConnectionFailedMidnightCoderErrorInfo
+        | ResponseStreamConnectionFailedMidnightCoderErrorInfo
+        | ResponseStreamDisconnectedMidnightCoderErrorInfo
+        | ResponseTooManyFailedAttemptsMidnightCoderErrorInfo
+        | ActiveTurnNotSteerableMidnightCoderErrorInfo,
         Field(
             description="This translation layer make sure that we expose codex error code in camel case.\n\nWhen an upstream HTTP status is available (for example, from the Responses API or a provider), it is forwarded in `httpStatusCode` on the relevant `codexErrorInfo` variant."
         ),
@@ -6907,7 +6907,7 @@ class TurnError(BaseModel):
         populate_by_name=True,
     )
     additional_details: Annotated[str | None, Field(alias="additionalDetails")] = None
-    codex_error_info: Annotated[CodexErrorInfo | None, Field(alias="codexErrorInfo")] = None
+    codex_error_info: Annotated[MidnightCoderErrorInfo | None, Field(alias="codexErrorInfo")] = None
     message: str
 
 

@@ -34,6 +34,12 @@ pub enum ConfigEdit {
         model: Option<String>,
         effort: Option<ReasoningEffort>,
     },
+    /// Update the model used specifically for context compaction.
+    SetMiniModel { model: Option<String> },
+    /// Update the strategy used when context compaction is triggered.
+    SetResumeType { resume_type: Option<String> },
+    /// Update context window and auto-compaction threshold together.
+    SetContextWindow { tokens: Option<i64> },
     /// Update the service tier preference for future turns.
     SetServiceTier { service_tier: Option<String> },
     /// Update the active (or default) model personality.
@@ -227,6 +233,23 @@ impl ConfigDocument {
                     &["model_reasoning_effort"],
                     effort.as_ref().map(|effort| value(effort.to_string())),
                 );
+                mutated
+            }),
+            ConfigEdit::SetMiniModel { model } => Ok(self.write_optional_value(
+                &["mini_model"],
+                model.as_ref().map(|model_value| value(model_value.clone())),
+            )),
+            ConfigEdit::SetResumeType { resume_type } => Ok(self.write_optional_value(
+                &["resume_type"],
+                resume_type
+                    .as_ref()
+                    .map(|resume_type| value(resume_type.clone())),
+            )),
+            ConfigEdit::SetContextWindow { tokens } => Ok({
+                let mut mutated = false;
+                mutated |= self.write_optional_value(&["model_context_window"], tokens.map(value));
+                mutated |= self
+                    .write_optional_value(&["model_auto_compact_token_limit"], tokens.map(value));
                 mutated
             }),
             ConfigEdit::SetServiceTier { service_tier } => Ok(self.write_optional_value(
@@ -781,6 +804,25 @@ impl ConfigEditsBuilder {
             model: model.map(ToOwned::to_owned),
             effort,
         });
+        self
+    }
+
+    pub fn set_mini_model(mut self, model: Option<&str>) -> Self {
+        self.edits.push(ConfigEdit::SetMiniModel {
+            model: model.map(ToOwned::to_owned),
+        });
+        self
+    }
+
+    pub fn set_resume_type(mut self, resume_type: Option<&str>) -> Self {
+        self.edits.push(ConfigEdit::SetResumeType {
+            resume_type: resume_type.map(ToOwned::to_owned),
+        });
+        self
+    }
+
+    pub fn set_context_window(mut self, tokens: Option<i64>) -> Self {
+        self.edits.push(ConfigEdit::SetContextWindow { tokens });
         self
     }
 
