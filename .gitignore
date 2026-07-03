@@ -68,6 +68,7 @@ apply_patch/
 
 # coverage
 coverage/
+*.snap.new
 
 # personal files
 personal/
