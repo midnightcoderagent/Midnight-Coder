@@ -1210,9 +1210,8 @@ jobs:
             --release-version "$RELEASE_VERSION" \
             --workflow-url "$workflow_url" \
             --artifacts-dir "${GITHUB_WORKSPACE}/dist" \
-            --package codex \
-            --package codex-responses-api-proxy \
-            --package codex-sdk
+            --package midnight-coder \
+            --package codex-responses-api-proxy
 
       - name: Stage installer scripts
         run: |
@@ -1296,12 +1295,11 @@ jobs:
           tag="$RELEASE_TAG"
           mkdir -p dist/npm
           patterns=(
-            "codex-npm-${version}.tgz"
-            "codex-npm-linux-*-${version}.tgz"
-            "codex-npm-darwin-*-${version}.tgz"
-            "codex-npm-win32-*-${version}.tgz"
+            "midnight-coder-${version}.tgz"
+            "midnight-coder-linux-*-${version}.tgz"
+            "midnight-coder-darwin-*-${version}.tgz"
+            "midnight-coder-win32-*-${version}.tgz"
             "codex-responses-api-proxy-npm-${version}.tgz"
-            "codex-sdk-npm-${version}.tgz"
           )
           for pattern in "${patterns[@]}"; do
             gh release download "$tag" \
@@ -1322,19 +1320,18 @@ jobs:
             prefix="${NPM_TAG}-"
           fi
 
-          root_tarball="dist/npm/codex-npm-${VERSION}.tgz"
-          sdk_tarball="dist/npm/codex-sdk-npm-${VERSION}.tgz"
+          root_tarball="dist/npm/midnight-coder-${VERSION}.tgz"
           # Keep this list in sync with CODEX_PLATFORM_PACKAGES in
           # codex-cli/scripts/build_npm_package.py. The root wrapper advances
-          # @openai/codex@latest as soon as it publishes, so every platform
+          # midnight-coder@latest as soon as it publishes, so every platform
           # package it aliases must already exist in the registry first.
           platform_tarballs=(
-            "dist/npm/codex-npm-linux-x64-${VERSION}.tgz"
-            "dist/npm/codex-npm-linux-arm64-${VERSION}.tgz"
-            "dist/npm/codex-npm-darwin-x64-${VERSION}.tgz"
-            "dist/npm/codex-npm-darwin-arm64-${VERSION}.tgz"
-            "dist/npm/codex-npm-win32-x64-${VERSION}.tgz"
-            "dist/npm/codex-npm-win32-arm64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-linux-x64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-linux-arm64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-darwin-x64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-darwin-arm64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-win32-x64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-win32-arm64-${VERSION}.tgz"
           )
 
           for required_tarball in "${platform_tarballs[@]}" "${root_tarball}"; do
@@ -1347,7 +1344,7 @@ jobs:
           shopt -s nullglob
           other_tarballs=()
           for tarball in dist/npm/*-"${VERSION}".tgz; do
-            if [[ "${tarball}" == "${root_tarball}" || "${tarball}" == "${sdk_tarball}" ]]; then
+            if [[ "${tarball}" == "${root_tarball}" ]]; then
               continue
             fi
 
@@ -1366,29 +1363,25 @@ jobs:
           done
 
           # npm returns HTTP 409 when concurrent publishes update the same
-          # packument. Every platform tarball is a version of @openai/codex,
+          # packument. Every platform tarball is a version of midnight-coder,
           # so publish all tarballs serially.
           tarballs=(
             "${platform_tarballs[@]}"
             "${other_tarballs[@]}"
             "${root_tarball}"
           )
-          # The SDK depends on this exact root package version.
-          if [[ -f "${sdk_tarball}" ]]; then
-            tarballs+=("${sdk_tarball}")
-          fi
 
           for tarball in "${tarballs[@]}"; do
             filename="$(basename "${tarball}")"
             tag=""
 
             case "${filename}" in
-              codex-npm-linux-*-"${VERSION}".tgz|codex-npm-darwin-*-"${VERSION}".tgz|codex-npm-win32-*-"${VERSION}".tgz)
-                platform="${filename#codex-npm-}"
+              midnight-coder-linux-*-"${VERSION}".tgz|midnight-coder-darwin-*-"${VERSION}".tgz|midnight-coder-win32-*-"${VERSION}".tgz)
+                platform="${filename#midnight-coder-}"
                 platform="${platform%-${VERSION}.tgz}"
                 tag="${prefix}${platform}"
                 ;;
-              codex-npm-"${VERSION}".tgz|codex-responses-api-proxy-npm-"${VERSION}".tgz|codex-sdk-npm-"${VERSION}".tgz)
+              midnight-coder-"${VERSION}".tgz|codex-responses-api-proxy-npm-"${VERSION}".tgz)
                 tag="${NPM_TAG}"
                 ;;
               *)

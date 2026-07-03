@@ -129,13 +129,13 @@ release_url_for_asset() {
   asset="$1"
   resolved_version="$2"
 
-  printf 'https://github.com/openai/codex/releases/download/rust-v%s/%s\n' "$resolved_version" "$asset"
+  printf 'https://github.com/midnightcoderagent/Midnight-Coder/releases/download/rust-v%s/%s\n' "$resolved_version" "$asset"
 }
 
 release_metadata_url() {
   resolved_version="$1"
 
-  printf 'https://api.github.com/repos/openai/codex/releases/tags/rust-v%s\n' "$resolved_version"
+  printf 'https://api.github.com/repos/midnightcoderagent/Midnight-Coder/releases/tags/rust-v%s\n' "$resolved_version"
 }
 
 release_asset_digest_or_empty() {
@@ -284,7 +284,7 @@ resolve_version() {
     return
   fi
 
-  release_json="$(download_text "https://api.github.com/repos/openai/codex/releases/latest")"
+  release_json="$(download_text "https://api.github.com/repos/midnightcoderagent/Midnight-Coder/releases/latest")"
   resolved="$(printf '%s\n' "$release_json" | sed -n 's/.*"tag_name":[[:space:]]*"rust-v\([^"]*\)".*/\1/p' | head -n 1)"
 
   if [ -z "$resolved" ]; then
@@ -651,10 +651,10 @@ handle_conflicting_install() {
       uninstall_cmd="brew uninstall --cask codex"
       ;;
     bun)
-      uninstall_cmd="bun remove -g @openai/codex"
+      uninstall_cmd="bun remove -g midnight-coder"
       ;;
     *)
-      uninstall_cmd="npm uninstall -g @openai/codex"
+      uninstall_cmd="npm uninstall -g midnight-coder"
       ;;
   esac
 
@@ -846,6 +846,9 @@ if release_asset_exists "$package_asset" "$resolved_version" &&
   release_asset_exists "$checksum_asset" "$resolved_version"; then
   install_layout="package"
   asset="$package_asset"
+elif release_asset_exists "midnight-coder-$npm_tag-$resolved_version.tgz" "$resolved_version"; then
+  install_layout="legacy-platform-npm"
+  asset="midnight-coder-$npm_tag-$resolved_version.tgz"
 elif release_asset_exists "codex-npm-$npm_tag-$resolved_version.tgz" "$resolved_version"; then
   install_layout="legacy-platform-npm"
   asset="codex-npm-$npm_tag-$resolved_version.tgz"

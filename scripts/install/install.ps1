@@ -82,7 +82,7 @@ function Find-ReleaseAssetMetadata {
         [string]$ResolvedVersion
     )
 
-    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/openai/codex/releases/tags/rust-v$ResolvedVersion"
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/midnightcoderagent/Midnight-Coder/releases/tags/rust-v$ResolvedVersion"
     $asset = $release.assets | Where-Object { $_.name -eq $AssetName } | Select-Object -First 1
     if ($null -eq $asset) {
         return $null
@@ -223,7 +223,7 @@ function Resolve-Version {
         return $normalizedVersion
     }
 
-    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/openai/codex/releases/latest"
+    $release = Invoke-RestMethod -Uri "https://api.github.com/repos/midnightcoderagent/Midnight-Coder/releases/latest"
     if (-not $release.tag_name) {
         Write-Error "Failed to resolve the latest MidnightCoder release version."
         exit 1
@@ -667,9 +667,9 @@ function Maybe-HandleConflictingInstall {
     $manager = $Conflict.Manager
 
     $uninstallArgs = if ($manager -eq "bun") {
-        @("remove", "-g", "@openai/codex")
+        @("remove", "-g", "midnight-coder")
     } else {
-        @("uninstall", "-g", "@openai/codex")
+        @("uninstall", "-g", "midnight-coder")
     }
     $uninstallCommand = if ($manager -eq "bun") { "bun" } else { "npm" }
 
@@ -769,8 +769,12 @@ $packageMetadata = Find-ReleaseAssetMetadata -AssetName $packageAsset -ResolvedV
 $checksumMetadata = Find-ReleaseAssetMetadata -AssetName $checksumAsset -ResolvedVersion $resolvedVersion
 $installLayout = "Package"
 if ($null -eq $packageMetadata -or $null -eq $checksumMetadata) {
-    $packageAsset = "codex-npm-$npmTag-$resolvedVersion.tgz"
+    $packageAsset = "midnight-coder-$npmTag-$resolvedVersion.tgz"
     $packageMetadata = Find-ReleaseAssetMetadata -AssetName $packageAsset -ResolvedVersion $resolvedVersion
+    if ($null -eq $packageMetadata) {
+        $packageAsset = "codex-npm-$npmTag-$resolvedVersion.tgz"
+        $packageMetadata = Find-ReleaseAssetMetadata -AssetName $packageAsset -ResolvedVersion $resolvedVersion
+    }
     if ($null -ne $packageMetadata) {
         $installLayout = "LegacyPlatformNpm"
     } else {

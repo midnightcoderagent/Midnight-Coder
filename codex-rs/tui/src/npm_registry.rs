@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 
 #[cfg(not(debug_assertions))]
-pub(crate) const PACKAGE_URL: &str = "https://registry.npmjs.org/@openai%2fcodex";
+pub(crate) const PACKAGE_URL: &str = "https://registry.npmjs.org/midnight-coder";
 
 #[derive(Deserialize, Debug, Clone)]
 pub(crate) struct NpmPackageInfo {
@@ -74,11 +74,13 @@ mod tests {
 
     fn version_json(version: &str) -> serde_json::Value {
         serde_json::json!({
-            "dist": {
-                "integrity": format!("sha512-{version}"),
-                "tarball": format!("https://registry.npmjs.org/@openai/codex/-/codex-{version}.tgz"),
-            }
-        })
+                "dist": {
+                    "integrity": format!("sha512-{version}"),
+                "tarball": format!(
+                    "https://registry.npmjs.org/midnight-coder/-/midnight-coder-{version}.tgz"
+                ),
+                }
+            })
     }
 
     fn package_info(github_latest: &str, npm_latest: &str) -> NpmPackageInfo {
