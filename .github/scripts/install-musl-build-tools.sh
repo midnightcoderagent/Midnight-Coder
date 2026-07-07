@@ -68,8 +68,11 @@ if [[ ! -f "${libcap_prefix}/lib/libcap.a" ]]; then
   libcap_source_dir="${libcap_src_root}/libcap-${libcap_version}"
   make -C "${libcap_source_dir}/libcap" -j"$(nproc)" \
     CC="${musl_linker}" \
+    BUILD_CC=cc \
     AR=ar \
-    RANLIB=ranlib
+    RANLIB=ranlib \
+    SHARED=no \
+    PTHREADS=no
 
   cp "${libcap_source_dir}/libcap/libcap.a" "${libcap_prefix}/lib/libcap.a"
   cp "${libcap_source_dir}/libcap/include/uapi/linux/capability.h" "${libcap_prefix}/include/linux/capability.h"
