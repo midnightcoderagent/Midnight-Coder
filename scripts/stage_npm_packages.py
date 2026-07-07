@@ -20,14 +20,6 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 BUILD_SCRIPT = REPO_ROOT / "codex-cli" / "scripts" / "build_npm_package.py"
 WORKFLOW_NAME = ".github/workflows/rust-release.yml"
 GITHUB_REPO = "midnightcoderagent/Midnight-Coder"
-BINARY_TARGETS = (
-    "x86_64-unknown-linux-musl",
-    "aarch64-unknown-linux-musl",
-    "x86_64-apple-darwin",
-    "aarch64-apple-darwin",
-    "x86_64-pc-windows-msvc",
-    "aarch64-pc-windows-msvc",
-)
 
 _SPEC = importlib.util.spec_from_file_location("codex_build_npm_package", BUILD_SCRIPT)
 if _SPEC is None or _SPEC.loader is None:
@@ -39,6 +31,10 @@ PACKAGE_EXPANSIONS = getattr(_BUILD_MODULE, "PACKAGE_EXPANSIONS", {})
 CODEX_PLATFORM_PACKAGES = getattr(_BUILD_MODULE, "CODEX_PLATFORM_PACKAGES", {})
 CODEX_PACKAGE_COMPONENT = getattr(
     _BUILD_MODULE, "CODEX_PACKAGE_COMPONENT", "codex-package"
+)
+BINARY_TARGETS = tuple(
+    package_config["target_triple"]
+    for package_config in CODEX_PLATFORM_PACKAGES.values()
 )
 
 
