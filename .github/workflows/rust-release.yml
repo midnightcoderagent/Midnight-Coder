@@ -86,7 +86,7 @@ jobs:
             target: x86_64-unknown-linux-musl
             bundle: primary
             artifact_name: x86_64-unknown-linux-musl
-            binaries: "codex codex-responses-api-proxy bwrap"
+            binaries: "midnight-coder codex-responses-api-proxy bwrap"
             build_dmg: "false"
           - runner: ubuntu-24.04
             target: x86_64-unknown-linux-musl
@@ -98,7 +98,7 @@ jobs:
             target: aarch64-unknown-linux-musl
             bundle: primary
             artifact_name: aarch64-unknown-linux-musl
-            binaries: "codex codex-responses-api-proxy bwrap"
+            binaries: "midnight-coder codex-responses-api-proxy bwrap"
             build_dmg: "false"
           - runner: ubuntu-24.04-arm
             target: aarch64-unknown-linux-musl
@@ -324,7 +324,7 @@ jobs:
             bundle_root="${RUNNER_TEMP}/codex-${{ matrix.target }}-bundle"
             rm -rf "$bundle_root"
             mkdir -p "$bundle_root/codex-resources"
-            cp "$dest/codex-${{ matrix.target }}" "$bundle_root/codex"
+            cp "$dest/midnight-coder-${{ matrix.target }}" "$bundle_root/codex"
             cp "$dest/bwrap-${{ matrix.target }}" "$bundle_root/codex-resources/bwrap"
             chmod 0755 "$bundle_root/codex" "$bundle_root/codex-resources/bwrap"
             tar -C "$bundle_root" -cf - codex codex-resources/bwrap |

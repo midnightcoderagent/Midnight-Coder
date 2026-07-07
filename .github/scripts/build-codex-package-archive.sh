@@ -93,7 +93,7 @@ fi
 case "$bundle" in
   primary)
     variant="codex"
-    entrypoint="codex"
+    entrypoint="midnight-coder"
     archive_stem="codex-package"
     ;;
   app-server)
