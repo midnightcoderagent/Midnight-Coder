@@ -1,0 +1,30 @@
+name: fix-npm-dist-tags
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/fix-npm-dist-tags.yml
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Repair Midnight Coder npm dist-tags
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          npm dist-tag add midnight-coder@0.1.0-alpha.6 latest
+          npm dist-tag add midnight-coder@0.1.0-alpha.6 alpha
+          npm dist-tag add midnight-coder@0.1.0-alpha.6-linux-x64 alpha-linux-x64
+          npm dist-tag add midnight-coder@0.1.0-alpha.6-linux-arm64 alpha-linux-arm64
+          npm dist-tag ls midnight-coder

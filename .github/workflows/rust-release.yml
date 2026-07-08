@@ -1354,3 +1354,8 @@ jobs:
             exit "${publish_status}"
           done
 
+          npm dist-tag add "midnight-coder@${VERSION}" latest
+          if [[ -n "${NPM_TAG}" ]]; then
+            npm dist-tag add "midnight-coder@${VERSION}" "${NPM_TAG}"
+          fi
+
