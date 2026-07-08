@@ -1291,7 +1291,7 @@ async fn plugins_popup_remote_section_fallback_states_snapshot() {
         .join("\n\n"),
         @"
     MidnightCoder Curated marketplace.
-    Loading MidnightCoder Curated plugins...  This updates when MidnightCoder Curated plugins finis…
+    Loading MidnightCoder Curated plugins...  This updates when MidnightCoder Curated plugins finish…
 
     Loading Workspace plugins.
     Loading Workspace plugins...  This updates when workspace plugins finish loading.
