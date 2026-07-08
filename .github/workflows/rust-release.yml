@@ -533,7 +533,7 @@ jobs:
             zstd -d --stdout "$unsigned_path" >"$signed_path"
             chmod 0755 "$signed_path"
 
-            .github/scripts/macos-signing/sign_macos_code.sh \
+            bash .github/scripts/macos-signing/sign_macos_code.sh \
               --target "$signed_path" \
               --identity unused \
               --deep false \
@@ -546,7 +546,7 @@ jobs:
             rcodesign print-signature-info "$signed_path" \
               >"${report_dir}/${binary}/signature-info.yaml"
 
-            .github/scripts/macos-signing/notarize_macos_binary_with_rcodesign.sh \
+            bash .github/scripts/macos-signing/notarize_macos_binary_with_rcodesign.sh \
               --binary "$signed_path" \
               --report-dir "${report_dir}/${binary}"
           done
@@ -830,7 +830,7 @@ jobs:
             exit 1
           fi
 
-          .github/scripts/macos-signing/sign_macos_code.sh \
+          bash .github/scripts/macos-signing/sign_macos_code.sh \
             --target "$dmg_path" \
             --identity unused \
             --deep false \
@@ -840,7 +840,7 @@ jobs:
           rcodesign print-signature-info "$dmg_path" \
             >"${report_dir}/signature-info-before-notarization.yaml"
 
-          .github/scripts/macos-signing/notarize_macos_dmg_with_rcodesign.sh \
+          bash .github/scripts/macos-signing/notarize_macos_dmg_with_rcodesign.sh \
             --dmg "$dmg_path" \
             --report-dir "$report_dir"
 
@@ -1179,7 +1179,7 @@ jobs:
           RELEASE_VERSION: ${{ steps.release_name.outputs.name }}
         run: |
           workflow_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          ./scripts/stage_npm_packages.py \
+          python3 ./scripts/stage_npm_packages.py \
             --release-version "$RELEASE_VERSION" \
             --workflow-url "$workflow_url" \
             --artifacts-dir "${GITHUB_WORKSPACE}/dist" \

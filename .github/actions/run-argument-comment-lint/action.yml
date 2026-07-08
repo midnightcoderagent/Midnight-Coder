@@ -31,8 +31,8 @@ runs:
         BUILDBUDDY_API_KEY: ${{ inputs.buildbuddy-api-key }}
       shell: bash
       run: |
-        bazel_targets="$(./tools/argument-comment-lint/list-bazel-targets.sh)"
-        ./.github/scripts/run-bazel-ci.sh \
+        bazel_targets="$(bash ./tools/argument-comment-lint/list-bazel-targets.sh)"
+        bash ./.github/scripts/run-bazel-ci.sh \
           -- \
           build \
           --config=argument-comment-lint \
@@ -47,7 +47,7 @@ runs:
         BUILDBUDDY_API_KEY: ${{ inputs.buildbuddy-api-key }}
       shell: bash
       run: |
-        ./.github/scripts/run-argument-comment-lint-bazel.sh \
+        bash ./.github/scripts/run-argument-comment-lint-bazel.sh \
           --config=argument-comment-lint \
           --platforms=//:local_windows \
           --keep_going \
