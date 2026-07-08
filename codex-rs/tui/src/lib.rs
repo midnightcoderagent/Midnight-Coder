@@ -62,7 +62,6 @@ use codex_utils_absolute_path::AbsolutePathBuf;
 use codex_utils_absolute_path::canonicalize_existing_preserving_symlinks;
 use codex_utils_home_dir::find_codex_home;
 use codex_utils_oss::ensure_oss_provider_ready;
-use codex_utils_oss::get_default_model_for_oss_provider;
 use color_eyre::eyre::WrapErr;
 use cwd_prompt::CwdPromptAction;
 pub use session_archive_commands::DeleteConfirmation;
@@ -84,6 +83,8 @@ use url::Url;
 use uuid::Uuid;
 
 pub(crate) use codex_app_server_client::legacy_core;
+
+const DEFAULT_MODEL: &str = "MidnightCoder-30B";
 
 mod additional_dirs;
 mod app;
@@ -874,8 +875,7 @@ pub async fn run_main(
             .push("web_search=\"live\"".to_string());
     }
 
-    // When using `--oss`, let the bootstrapper pick the model (defaulting to
-    // gpt-oss:20b) and ensure it is present locally. Also, force the built‑in
+    // When using `--oss`, ensure the default model is present locally. Also, force the built-in
     let raw_overrides = cli.config_overrides.raw_overrides.clone();
     // `oss` model provider.
     let overrides_cli = codex_utils_cli::CliConfigOverrides { raw_overrides };
@@ -1033,17 +1033,10 @@ pub async fn run_main(
         None
     };
 
-    // Let the bootstrapper pick the model based on the local provider.
     let model = if let Some(model) = &cli.model {
         Some(model.clone())
-    } else if use_local_provider {
-        // Use the provider from model_provider_override
-        model_provider_override
-            .as_ref()
-            .and_then(|provider_id| get_default_model_for_oss_provider(provider_id))
-            .map(std::borrow::ToOwned::to_owned)
     } else {
-        None // No model specified, will use the default.
+        Some(DEFAULT_MODEL.to_string())
     };
 
     let additional_dirs = cli.add_dir.clone();

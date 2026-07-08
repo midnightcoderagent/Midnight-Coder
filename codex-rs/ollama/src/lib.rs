@@ -21,7 +21,9 @@ pub use request_options::request_options_for_provider;
 use semver::Version;
 
 /// Default OSS model to use when `--oss` is passed without an explicit `-m`.
-pub const DEFAULT_OSS_MODEL: &str = "gpt-oss:20b";
+pub const DEFAULT_OSS_MODEL: &str = "MidnightCoder-30B";
+const MISSING_DEFAULT_MODEL_MESSAGE: &str =
+    "* MidnightCoder-30B is not installed. Download it with Ollama or from Hugging Face.";
 
 /// Prepare the local OSS environment when `--oss` is selected.
 ///
@@ -50,13 +52,19 @@ pub async fn ensure_oss_ready(config: &Config) -> std::io::Result<()> {
             if !models.iter().any(|m| m == model) {
                 if !allow_pull {
                     return Err(std::io::Error::other(format!(
-                        "model `{model}` is not installed on the configured remote Ollama server; refusing to pull it automatically"
+                        "{MISSING_DEFAULT_MODEL_MESSAGE} The configured remote Ollama server does not have model `{model}`, and Midnight Coder will not pull models on remote servers automatically."
                     )));
                 }
                 let mut reporter = crate::CliProgressReporter::new();
                 ollama_client
                     .pull_with_reporter(model, &mut reporter)
-                    .await?;
+                    .await
+                    .map_err(|err| {
+                        std::io::Error::new(
+                            err.kind(),
+                            format!("{MISSING_DEFAULT_MODEL_MESSAGE} {err}"),
+                        )
+                    })?;
             }
         }
         Err(err) => {
