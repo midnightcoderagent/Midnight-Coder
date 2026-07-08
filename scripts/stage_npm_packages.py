@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import tarfile
 import tempfile
 from pathlib import Path
@@ -189,8 +190,8 @@ def install_native_components(
     vendor_dir.mkdir(parents=True, exist_ok=True)
 
     workflow_id = workflow_url.rstrip("/").split("/")[-1]
-    print(f"Downloading native artifacts from workflow {workflow_id}...", flush=True)
-    with _gha_group(f"Download native artifacts from workflow {workflow_id}"):
+    print(f"Preparing native artifacts from workflow {workflow_id}...", flush=True)
+    with _gha_group(f"Prepare native artifacts from workflow {workflow_id}"):
         artifacts_dir.mkdir(parents=True, exist_ok=True)
         install_from_workflow_artifacts(
             workflow_id,
@@ -207,8 +208,10 @@ def install_from_workflow_artifacts(
     components: Sequence[str],
     vendor_dir: Path,
 ) -> None:
-    artifacts = select_target_artifacts(workflow_id, components)
-    download_artifacts(workflow_id, artifacts_dir, artifacts)
+    artifacts = select_cached_target_artifacts(artifacts_dir, components)
+    if artifacts is None:
+        artifacts = select_target_artifacts(workflow_id, components)
+        download_artifacts(workflow_id, artifacts_dir, artifacts)
     if CODEX_PACKAGE_COMPONENT in components:
         install_codex_package_archives(artifacts_dir, vendor_dir, BINARY_TARGETS)
     install_binary_components(
@@ -216,6 +219,38 @@ def install_from_workflow_artifacts(
         vendor_dir,
         [BINARY_COMPONENTS[name] for name in components if name in BINARY_COMPONENTS],
     )
+
+
+def select_cached_target_artifacts(
+    artifacts_dir: Path,
+    components: Sequence[str],
+) -> list[WorkflowArtifact] | None:
+    needs_target_artifacts = CODEX_PACKAGE_COMPONENT in components or any(
+        component in BINARY_COMPONENTS for component in components
+    )
+    if not needs_target_artifacts:
+        return []
+
+    selected_artifacts: list[WorkflowArtifact] = []
+    for target in BINARY_TARGETS:
+        for artifact_name in [target, f"{target}-unsigned"]:
+            artifact_dir = artifacts_dir / artifact_name
+            if artifact_dir.is_dir() and any(artifact_dir.iterdir()):
+                selected_artifacts.append(
+                    WorkflowArtifact(
+                        name=artifact_name,
+                        size_in_bytes=sum(
+                            path.stat().st_size
+                            for path in artifact_dir.rglob("*")
+                            if path.is_file()
+                        ),
+                    )
+                )
+                break
+        else:
+            return None
+
+    return selected_artifacts
 
 
 def select_target_artifacts(
@@ -550,6 +585,7 @@ def main() -> int:
             print(f"Staging {package} in {staging_dir}", flush=True)
 
             cmd = [
+                sys.executable,
                 str(BUILD_SCRIPT),
                 "--package",
                 package,
