@@ -634,6 +634,9 @@ pub struct Config {
     /// Native Ollama context window override for `/api/chat` and `/api/generate`.
     pub ollama_num_ctx: Option<i64>,
 
+    /// Automatically size Ollama `num_ctx` from the active context size.
+    pub ollama_smart_context: bool,
+
     /// Size of the context window for the model, in tokens.
     pub model_context_window: Option<i64>,
 
@@ -3782,6 +3785,7 @@ impl Config {
             mini_model: cfg.mini_model,
             resume_type: cfg.resume_type,
             ollama_num_ctx: cfg.ollama_num_ctx,
+            ollama_smart_context: cfg.ollama_smart_context.unwrap_or(false),
             model_context_window: cfg.model_context_window,
             model_auto_compact_token_limit: cfg.model_auto_compact_token_limit,
             model_auto_compact_token_limit_scope: cfg

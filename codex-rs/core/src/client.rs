@@ -72,6 +72,7 @@ use codex_otel::SessionTelemetry;
 use codex_otel::current_span_w3c_trace_context;
 use codex_protocol::auth::AuthMode;
 
+use crate::session::turn_context::bucket_ollama_smart_context;
 use codex_protocol::ThreadId;
 use codex_protocol::config_types::ReasoningSummary as ReasoningSummaryConfig;
 use codex_protocol::config_types::Verbosity as VerbosityConfig;
@@ -82,11 +83,13 @@ use codex_protocol::openai_models::ModelInfo;
 use codex_protocol::openai_models::ReasoningEffort as ReasoningEffortConfig;
 use codex_protocol::protocol::InternalSessionSource;
 use codex_protocol::protocol::SessionSource;
+use codex_protocol::protocol::TokenUsage;
 use codex_protocol::protocol::W3cTraceContext;
 use codex_rollout_trace::CompactionTraceContext;
 use codex_rollout_trace::InferenceTraceAttempt;
 use codex_rollout_trace::InferenceTraceContext;
 use codex_tools::create_tools_json_for_responses_api;
+use codex_utils_output_truncation::approx_token_count;
 use eventsource_stream::Event;
 use eventsource_stream::EventStreamError;
 use futures::StreamExt;
@@ -94,6 +97,10 @@ use http::HeaderMap as ApiHeaderMap;
 use http::HeaderValue;
 use http::StatusCode as HttpStatusCode;
 use reqwest::StatusCode;
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value;
+use serde_json::json;
 use std::time::Duration;
 use std::time::Instant;
 use tokio::sync::mpsc;
@@ -172,6 +179,66 @@ pub(crate) struct CompactConversationRequestSettings {
     pub(crate) summary: ReasoningSummaryConfig,
     pub(crate) service_tier: Option<String>,
     pub(crate) provider_request_options: Option<ProviderRequestOptions>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum OllamaSmartContextSetting {
+    Disabled,
+    Enabled,
+}
+
+impl OllamaSmartContextSetting {
+    pub(crate) fn from_enabled(enabled: bool) -> Self {
+        if enabled {
+            Self::Enabled
+        } else {
+            Self::Disabled
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct OllamaChatRequest {
+    model: String,
+    messages: Vec<OllamaChatMessage>,
+    stream: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    options: Option<ProviderRequestOptions>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct OllamaChatMessage {
+    role: String,
+    content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<OllamaToolCall>>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct OllamaToolCall {
+    function: OllamaToolCallFunction,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct OllamaToolCallFunction {
+    name: String,
+    arguments: Value,
+}
+
+#[derive(Debug, Deserialize)]
+struct OllamaChatStreamChunk {
+    #[serde(default)]
+    message: Option<OllamaChatMessage>,
+    #[serde(default)]
+    done: bool,
+    #[serde(default)]
+    prompt_eval_count: Option<i64>,
+    #[serde(default)]
+    eval_count: Option<i64>,
+    #[serde(default)]
+    error: Option<String>,
 }
 
 fn reasoning_effort_for_request(effort: ReasoningEffortConfig) -> ReasoningEffortConfig {
@@ -820,7 +887,7 @@ impl ModelClient {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn build_responses_request(
+    pub(crate) fn build_responses_request(
         &self,
         provider: &codex_api::Provider,
         prompt: &Prompt,
@@ -916,6 +983,116 @@ impl ModelClient {
             client_metadata: Some(responses_metadata.client_metadata()),
         };
         Ok(request)
+    }
+
+    pub(crate) fn estimate_responses_request_token_count(
+        &self,
+        request: &ResponsesApiRequest,
+    ) -> i64 {
+        let mut request = request.clone();
+        self.prepare_response_items_for_request(&mut request.input, request.store);
+        let request_json = match serde_json::to_string(&request) {
+            Ok(request_json) => request_json,
+            Err(err) => {
+                tracing::warn!(
+                    %err,
+                    "failed to serialize responses request for token estimate"
+                );
+                return i64::MAX;
+            }
+        };
+        i64::try_from(approx_token_count(&request_json)).unwrap_or(i64::MAX)
+    }
+
+    async fn finalize_ollama_request_options(
+        &self,
+        provider: &ApiProvider,
+        request: &mut ResponsesApiRequest,
+        ollama_smart_context: OllamaSmartContextSetting,
+    ) -> std::result::Result<(), ApiError> {
+        self.apply_ollama_smart_context_to_request(request, ollama_smart_context);
+        self.ensure_ollama_context_model_alias(provider, request)
+            .await
+    }
+
+    fn apply_ollama_smart_context_to_request(
+        &self,
+        request: &mut ResponsesApiRequest,
+        ollama_smart_context: OllamaSmartContextSetting,
+    ) {
+        match ollama_smart_context {
+            OllamaSmartContextSetting::Disabled => (),
+            OllamaSmartContextSetting::Enabled => {
+                let active_context_tokens = self.estimate_responses_request_token_count(request);
+                let num_ctx = bucket_ollama_smart_context(active_context_tokens);
+                request.options = Some(ProviderRequestOptions {
+                    num_ctx: Some(num_ctx),
+                });
+                tracing::debug!(
+                    active_context_tokens,
+                    num_ctx,
+                    "applied Ollama smart context to final request"
+                );
+            }
+        }
+    }
+
+    async fn ensure_ollama_context_model_alias(
+        &self,
+        provider: &ApiProvider,
+        request: &mut ResponsesApiRequest,
+    ) -> std::result::Result<(), ApiError> {
+        if !is_ollama_provider(provider) {
+            return Ok(());
+        }
+
+        let Some(num_ctx) = request.options.as_ref().and_then(|options| options.num_ctx) else {
+            return Ok(());
+        };
+
+        let source_model = request.model.clone();
+        let alias_model = ollama_context_model_alias(&source_model, num_ctx);
+        if alias_model == source_model {
+            return Ok(());
+        }
+
+        let host_root = ollama_host_root(&provider.base_url);
+        let create_url = format!("{}/api/create", host_root.trim_end_matches('/'));
+        let body = json!({
+            "from": source_model,
+            "model": alias_model,
+            "parameters": {
+                "num_ctx": num_ctx,
+            },
+            "stream": false,
+        });
+
+        let response = build_reqwest_client()
+            .post(create_url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|err| {
+                ApiError::Stream(format!(
+                    "failed to create Ollama context model alias `{alias_model}`: {err}"
+                ))
+            })?;
+        let status = response.status();
+        let response_text = response.text().await.unwrap_or_default();
+        if !status.is_success() {
+            return Err(ApiError::Stream(format!(
+                "failed to create Ollama context model alias `{alias_model}`: HTTP {status}: {response_text}"
+            )));
+        }
+
+        tracing::debug!(
+            source_model,
+            alias_model,
+            num_ctx,
+            "using Ollama context model alias for request"
+        );
+        request.model = alias_model;
+        Ok(())
     }
 
     fn prepare_response_items_for_request(&self, input: &mut [ResponseItem], store: bool) {
@@ -1385,6 +1562,7 @@ impl ModelClientSession {
         service_tier: Option<String>,
         provider_request_options: Option<ProviderRequestOptions>,
         responses_metadata: &MidnightCoderResponsesMetadata,
+        ollama_smart_context: OllamaSmartContextSetting,
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
         let auth_manager = self.client.state.provider.auth_manager();
@@ -1429,6 +1607,35 @@ impl ModelClientSession {
             let store = request.store;
             self.client
                 .prepare_response_items_for_request(&mut request.input, store);
+            if uses_native_ollama_chat(&client_setup.api_provider, &request, ollama_smart_context) {
+                compact_midnightcoder_base_instructions_for_ollama(
+                    &mut request,
+                    ollama_smart_context,
+                );
+                self.client
+                    .apply_ollama_smart_context_to_request(&mut request, ollama_smart_context);
+                let request_session_telemetry =
+                    session_telemetry_for_request(session_telemetry, &request);
+                let inference_trace_attempt = inference_trace.start_attempt();
+                inference_trace_attempt.record_started(&request);
+                return self
+                    .stream_native_ollama_chat(
+                        &client_setup.api_provider,
+                        request,
+                        request_session_telemetry,
+                        inference_trace_attempt,
+                    )
+                    .await
+                    .map_err(|err| self.client.state.provider.map_api_error(err));
+            }
+            self.client
+                .finalize_ollama_request_options(
+                    &client_setup.api_provider,
+                    &mut request,
+                    ollama_smart_context,
+                )
+                .await
+                .map_err(|err| self.client.state.provider.map_api_error(err))?;
             let request_session_telemetry =
                 session_telemetry_for_request(session_telemetry, &request);
             let inference_trace_attempt = inference_trace.start_attempt();
@@ -1488,6 +1695,48 @@ impl ModelClientSession {
         }
     }
 
+    async fn stream_native_ollama_chat(
+        &self,
+        provider: &ApiProvider,
+        request: ResponsesApiRequest,
+        session_telemetry: SessionTelemetry,
+        inference_trace_attempt: InferenceTraceAttempt,
+    ) -> std::result::Result<ResponseStream, ApiError> {
+        let body = ollama_chat_request_from_responses_request(request)?;
+        let url = format!(
+            "{}/api/chat",
+            ollama_host_root(&provider.base_url).trim_end_matches('/')
+        );
+        tracing::debug!(
+            model = %body.model,
+            num_ctx = ?body.options.as_ref().and_then(|options| options.num_ctx),
+            "sending native Ollama chat request"
+        );
+        let response = build_reqwest_client()
+            .post(url)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|err| ApiError::Stream(format!("native Ollama chat request failed: {err}")))?;
+        let status = response.status();
+        if !status.is_success() {
+            let message = response.text().await.unwrap_or_default();
+            let status = HttpStatusCode::from_u16(status.as_u16())
+                .unwrap_or(HttpStatusCode::INTERNAL_SERVER_ERROR);
+            return Err(ApiError::Api { status, message });
+        }
+
+        let api_stream = native_ollama_chat_response_stream(response.bytes_stream());
+        let (stream, _) = map_response_events(
+            /*upstream_request_id*/ None,
+            api_stream,
+            session_telemetry,
+            inference_trace_attempt,
+            Arc::clone(&self.client.state.provider),
+        );
+        Ok(stream)
+    }
+
     /// Streams a turn via the Responses API over WebSocket transport.
     #[allow(clippy::too_many_arguments)]
     #[instrument(
@@ -1513,6 +1762,7 @@ impl ModelClientSession {
         service_tier: Option<String>,
         provider_request_options: Option<ProviderRequestOptions>,
         responses_metadata: &MidnightCoderResponsesMetadata,
+        ollama_smart_context: OllamaSmartContextSetting,
         warmup: bool,
         request_trace: Option<W3cTraceContext>,
         inference_trace: &InferenceTraceContext,
@@ -1531,7 +1781,7 @@ impl ModelClientSession {
                 client_setup.agent_identity_telemetry.clone(),
                 pending_retry,
             );
-            let request = self.client.build_responses_request(
+            let mut request = self.client.build_responses_request(
                 &client_setup.api_provider,
                 prompt,
                 model_info,
@@ -1541,6 +1791,17 @@ impl ModelClientSession {
                 provider_request_options.clone(),
                 responses_metadata,
             )?;
+            let store = request.store;
+            self.client
+                .prepare_response_items_for_request(&mut request.input, store);
+            self.client
+                .finalize_ollama_request_options(
+                    &client_setup.api_provider,
+                    &mut request,
+                    ollama_smart_context,
+                )
+                .await
+                .map_err(|err| self.client.state.provider.map_api_error(err))?;
             let request_session_telemetry = if warmup {
                 // `generate=false` prewarm is connection setup, not an inference request.
                 session_telemetry.clone()
@@ -1723,6 +1984,7 @@ impl ModelClientSession {
                 service_tier,
                 /*provider_request_options*/ None,
                 responses_metadata,
+                OllamaSmartContextSetting::Disabled,
                 /*warmup*/ true,
                 current_span_w3c_trace_context(),
                 &disabled_trace,
@@ -1769,6 +2031,36 @@ impl ModelClientSession {
         responses_metadata: &MidnightCoderResponsesMetadata,
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
+        self.stream_with_smart_context(
+            prompt,
+            model_info,
+            session_telemetry,
+            effort,
+            summary,
+            service_tier,
+            provider_request_options,
+            responses_metadata,
+            OllamaSmartContextSetting::Disabled,
+            inference_trace,
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn stream_with_smart_context(
+        &mut self,
+        prompt: &Prompt,
+        model_info: &ModelInfo,
+        session_telemetry: &SessionTelemetry,
+        effort: Option<ReasoningEffortConfig>,
+        summary: ReasoningSummaryConfig,
+        service_tier: Option<String>,
+        provider_request_options: Option<ProviderRequestOptions>,
+        responses_metadata: &MidnightCoderResponsesMetadata,
+        ollama_smart_context: OllamaSmartContextSetting,
+        inference_trace: &InferenceTraceContext,
+    ) -> Result<ResponseStream> {
+        tracing::debug!(?ollama_smart_context, "stream request smartcontext setting");
         let wire_api = self.client.state.provider.info().wire_api;
         match wire_api {
             WireApi::Responses => {
@@ -1784,6 +2076,7 @@ impl ModelClientSession {
                             service_tier.clone(),
                             provider_request_options.clone(),
                             responses_metadata,
+                            ollama_smart_context,
                             /*warmup*/ false,
                             request_trace,
                             inference_trace,
@@ -1806,6 +2099,7 @@ impl ModelClientSession {
                     service_tier,
                     provider_request_options,
                     responses_metadata,
+                    ollama_smart_context,
                     inference_trace,
                 )
                 .await
@@ -2427,9 +2721,416 @@ fn uses_ollama_responses_compat(
         return true;
     }
 
+    is_ollama_provider(provider)
+}
+
+fn uses_native_ollama_chat(
+    provider: &ApiProvider,
+    request: &ResponsesApiRequest,
+    ollama_smart_context: OllamaSmartContextSetting,
+) -> bool {
+    if !is_ollama_provider(provider) {
+        return false;
+    }
+
+    matches!(ollama_smart_context, OllamaSmartContextSetting::Enabled)
+        || request
+            .tools
+            .as_ref()
+            .is_some_and(|tools| !tools.is_empty())
+}
+
+fn compact_midnightcoder_base_instructions_for_ollama(
+    request: &mut ResponsesApiRequest,
+    ollama_smart_context: OllamaSmartContextSetting,
+) {
+    if !matches!(ollama_smart_context, OllamaSmartContextSetting::Enabled)
+        || !is_midnightcoder_model(&request.model)
+        || request.instructions.trim().is_empty()
+    {
+        return;
+    }
+
+    request.instructions = compact_ollama_base_instructions(&request.instructions);
+    tracing::debug!(
+        model = %request.model,
+        "using compact MidnightCoder base instructions for Ollama request"
+    );
+}
+
+fn is_midnightcoder_model(model: &str) -> bool {
+    let model = model.to_ascii_lowercase();
+    model.starts_with("midnightcoder") || model.starts_with("midnight-coder")
+}
+
+fn ollama_chat_request_from_responses_request(
+    request: ResponsesApiRequest,
+) -> std::result::Result<OllamaChatRequest, ApiError> {
+    let ResponsesApiRequest {
+        model,
+        instructions,
+        input,
+        tools,
+        options,
+        ..
+    } = request;
+    let mut messages = Vec::new();
+    if !instructions.trim().is_empty() {
+        messages.push(OllamaChatMessage {
+            role: "system".to_string(),
+            content: instructions,
+            tool_calls: None,
+        });
+    }
+
+    for item in input {
+        append_ollama_message_from_response_item(item, &mut messages)?;
+    }
+
+    Ok(OllamaChatRequest {
+        model,
+        messages,
+        stream: true,
+        tools: convert_responses_tools_to_ollama_tools(tools),
+        options,
+    })
+}
+
+fn convert_responses_tools_to_ollama_tools(tools: Option<Vec<Value>>) -> Option<Vec<Value>> {
+    let converted_tools: Vec<Value> = tools?
+        .into_iter()
+        .filter_map(|tool| {
+            if tool.get("type").and_then(Value::as_str) != Some("function") {
+                return None;
+            }
+            if tool.get("function").is_some() {
+                return Some(tool);
+            }
+
+            let name = tool.get("name")?.clone();
+            let description = tool.get("description").cloned().unwrap_or(Value::Null);
+            let parameters = tool.get("parameters").cloned().unwrap_or_else(|| {
+                json!({
+                    "type": "object",
+                    "properties": {},
+                })
+            });
+            Some(json!({
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": description,
+                    "parameters": parameters,
+                },
+            }))
+        })
+        .collect();
+
+    (!converted_tools.is_empty()).then_some(converted_tools)
+}
+
+fn append_ollama_message_from_response_item(
+    item: ResponseItem,
+    messages: &mut Vec<OllamaChatMessage>,
+) -> std::result::Result<(), ApiError> {
+    match item {
+        ResponseItem::Message { role, content, .. } => {
+            let role = match role.as_str() {
+                "developer" => "system",
+                "system" | "user" | "assistant" | "tool" => role.as_str(),
+                _ => role.as_str(),
+            };
+            messages.push(OllamaChatMessage {
+                role: role.to_string(),
+                content: ollama_content_text(content)?,
+                tool_calls: None,
+            });
+        }
+        ResponseItem::FunctionCall {
+            name, arguments, ..
+        } => {
+            let arguments = serde_json::from_str(&arguments).unwrap_or(Value::String(arguments));
+            messages.push(OllamaChatMessage {
+                role: "assistant".to_string(),
+                content: String::new(),
+                tool_calls: Some(vec![OllamaToolCall {
+                    function: OllamaToolCallFunction { name, arguments },
+                }]),
+            });
+        }
+        ResponseItem::FunctionCallOutput {
+            call_id, output, ..
+        } => {
+            messages.push(OllamaChatMessage {
+                role: "tool".to_string(),
+                content: format!("Tool output for {call_id}:\n{output}"),
+                tool_calls: None,
+            });
+        }
+        ResponseItem::CustomToolCall { name, input, .. } => {
+            let arguments = serde_json::from_str(&input).unwrap_or(Value::String(input));
+            messages.push(OllamaChatMessage {
+                role: "assistant".to_string(),
+                content: String::new(),
+                tool_calls: Some(vec![OllamaToolCall {
+                    function: OllamaToolCallFunction { name, arguments },
+                }]),
+            });
+        }
+        ResponseItem::CustomToolCallOutput {
+            call_id, output, ..
+        } => {
+            messages.push(OllamaChatMessage {
+                role: "tool".to_string(),
+                content: format!("Tool output for {call_id}:\n{output}"),
+                tool_calls: None,
+            });
+        }
+        ResponseItem::AdditionalTools { .. }
+        | ResponseItem::Reasoning { .. }
+        | ResponseItem::LocalShellCall { .. }
+        | ResponseItem::ToolSearchCall { .. }
+        | ResponseItem::ToolSearchOutput { .. }
+        | ResponseItem::WebSearchCall { .. }
+        | ResponseItem::ImageGenerationCall { .. }
+        | ResponseItem::Compaction { .. }
+        | ResponseItem::CompactionTrigger { .. }
+        | ResponseItem::ContextCompaction { .. }
+        | ResponseItem::AgentMessage { .. }
+        | ResponseItem::Other => {}
+    }
+    Ok(())
+}
+
+fn ollama_content_text(content: Vec<ContentItem>) -> std::result::Result<String, ApiError> {
+    let mut parts = Vec::new();
+    for item in content {
+        match item {
+            ContentItem::InputText { text } | ContentItem::OutputText { text } => {
+                parts.push(text);
+            }
+            ContentItem::InputImage { .. } => {
+                return Err(ApiError::InvalidRequest {
+                    message: "native Ollama smartcontext does not support image inputs yet"
+                        .to_string(),
+                });
+            }
+        }
+    }
+    Ok(parts.join("\n"))
+}
+
+fn native_ollama_chat_response_stream<S>(mut byte_stream: S) -> codex_api::ResponseStream
+where
+    S: futures::Stream<Item = std::result::Result<bytes::Bytes, reqwest::Error>>
+        + Unpin
+        + Send
+        + 'static,
+{
+    let (tx_event, rx_event) = mpsc::channel::<std::result::Result<ResponseEvent, ApiError>>(1600);
+    tokio::spawn(async move {
+        let mut pending = String::new();
+        let mut content = String::new();
+        let mut tool_calls = Vec::new();
+        let mut prompt_eval_count = None;
+        let mut eval_count = None;
+        while let Some(chunk) = byte_stream.next().await {
+            let chunk = match chunk {
+                Ok(chunk) => chunk,
+                Err(err) => {
+                    let _ = tx_event
+                        .send(Err(ApiError::Stream(format!(
+                            "native Ollama chat stream failed: {err}"
+                        ))))
+                        .await;
+                    return;
+                }
+            };
+            pending.push_str(&String::from_utf8_lossy(&chunk));
+            while let Some(newline) = pending.find('\n') {
+                let line = pending[..newline].trim().to_string();
+                pending = pending[newline + 1..].to_string();
+                if line.is_empty() {
+                    continue;
+                }
+                if !process_ollama_chat_line(
+                    &line,
+                    &mut content,
+                    &mut tool_calls,
+                    &mut prompt_eval_count,
+                    &mut eval_count,
+                    &tx_event,
+                )
+                .await
+                {
+                    return;
+                }
+            }
+        }
+
+        let line = pending.trim();
+        if !line.is_empty()
+            && !process_ollama_chat_line(
+                line,
+                &mut content,
+                &mut tool_calls,
+                &mut prompt_eval_count,
+                &mut eval_count,
+                &tx_event,
+            )
+            .await
+        {
+            return;
+        }
+
+        emit_native_ollama_done(
+            content,
+            tool_calls,
+            prompt_eval_count,
+            eval_count,
+            &tx_event,
+        )
+        .await;
+    });
+
+    codex_api::ResponseStream {
+        rx_event,
+        upstream_request_id: None,
+    }
+}
+
+async fn process_ollama_chat_line(
+    line: &str,
+    content: &mut String,
+    tool_calls: &mut Vec<OllamaToolCall>,
+    prompt_eval_count: &mut Option<i64>,
+    eval_count: &mut Option<i64>,
+    tx_event: &mpsc::Sender<std::result::Result<ResponseEvent, ApiError>>,
+) -> bool {
+    let chunk = match serde_json::from_str::<OllamaChatStreamChunk>(line) {
+        Ok(chunk) => chunk,
+        Err(err) => {
+            let _ = tx_event
+                .send(Err(ApiError::Stream(format!(
+                    "failed to parse native Ollama chat stream line: {err}: {line}"
+                ))))
+                .await;
+            return false;
+        }
+    };
+    if let Some(error) = chunk.error {
+        let _ = tx_event
+            .send(Err(ApiError::InvalidRequest { message: error }))
+            .await;
+        return false;
+    }
+    if let Some(message) = chunk.message {
+        content.push_str(&message.content);
+        if let Some(calls) = message.tool_calls {
+            tool_calls.extend(calls);
+        }
+    }
+    if chunk.prompt_eval_count.is_some() {
+        *prompt_eval_count = chunk.prompt_eval_count;
+    }
+    if chunk.eval_count.is_some() {
+        *eval_count = chunk.eval_count;
+    }
+    if chunk.done {
+        emit_native_ollama_done(
+            std::mem::take(content),
+            std::mem::take(tool_calls),
+            *prompt_eval_count,
+            *eval_count,
+            tx_event,
+        )
+        .await;
+        return false;
+    }
+    true
+}
+
+async fn emit_native_ollama_done(
+    content: String,
+    tool_calls: Vec<OllamaToolCall>,
+    prompt_eval_count: Option<i64>,
+    eval_count: Option<i64>,
+    tx_event: &mpsc::Sender<std::result::Result<ResponseEvent, ApiError>>,
+) {
+    let response_id = "ollama-chat-response".to_string();
+    for (index, tool_call) in tool_calls.into_iter().enumerate() {
+        let arguments = serde_json::to_string(&tool_call.function.arguments)
+            .unwrap_or_else(|_| "{}".to_string());
+        let item = ResponseItem::FunctionCall {
+            id: Some(format!("ollama-tool-call-{index}")),
+            name: tool_call.function.name.clone(),
+            namespace: None,
+            arguments,
+            call_id: format!("ollama-tool-call-{index}-{}", tool_call.function.name),
+            internal_chat_message_metadata_passthrough: None,
+        };
+        if tx_event
+            .send(Ok(ResponseEvent::OutputItemDone(item)))
+            .await
+            .is_err()
+        {
+            return;
+        }
+    }
+    if !content.is_empty() {
+        let item = ResponseItem::Message {
+            id: Some("ollama-message".to_string()),
+            role: "assistant".to_string(),
+            content: vec![ContentItem::OutputText { text: content }],
+            phase: None,
+            internal_chat_message_metadata_passthrough: None,
+        };
+        if tx_event
+            .send(Ok(ResponseEvent::OutputItemDone(item)))
+            .await
+            .is_err()
+        {
+            return;
+        }
+    }
+    let input_tokens = prompt_eval_count.unwrap_or_default();
+    let output_tokens = eval_count.unwrap_or_default();
+    let token_usage = Some(TokenUsage {
+        input_tokens,
+        cached_input_tokens: 0,
+        output_tokens,
+        reasoning_output_tokens: 0,
+        total_tokens: input_tokens + output_tokens,
+    });
+    let _ = tx_event
+        .send(Ok(ResponseEvent::Completed {
+            response_id,
+            token_usage,
+            end_turn: Some(true),
+        }))
+        .await;
+}
+
+fn is_ollama_provider(provider: &ApiProvider) -> bool {
     let provider_name = provider.name.to_ascii_lowercase();
     let base_url = provider.base_url.to_ascii_lowercase();
     provider_name.contains("ollama") || base_url.contains(":11434")
+}
+
+fn ollama_host_root(base_url: &str) -> String {
+    base_url
+        .trim_end_matches('/')
+        .strip_suffix("/v1")
+        .unwrap_or_else(|| base_url.trim_end_matches('/'))
+        .to_string()
+}
+
+fn ollama_context_model_alias(model: &str, num_ctx: i64) -> String {
+    let model_without_tag = match model.rsplit_once(':') {
+        Some((name, tag)) if !tag.contains('/') => name,
+        Some(_) | None => model,
+    };
+    format!("{model_without_tag}_ctx{num_ctx}")
 }
 
 fn uses_compact_ollama_prompt(
@@ -2447,7 +3148,11 @@ fn retain_ollama_compatible_tools(tools: &mut Vec<serde_json::Value>) {
 }
 
 fn compact_ollama_base_instructions(base_instructions: &str) -> String {
-    if base_instructions == BASE_INSTRUCTIONS_DEFAULT {
+    let is_default_base_instructions = base_instructions == BASE_INSTRUCTIONS_DEFAULT
+        || (base_instructions.contains("You are a coding agent running in")
+            && base_instructions.contains("Your capabilities:")
+            && base_instructions.contains("Emit function calls"));
+    if is_default_base_instructions {
         return OLLAMA_COMPACT_BASE_INSTRUCTIONS.to_string();
     }
 

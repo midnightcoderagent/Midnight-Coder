@@ -166,6 +166,9 @@ pub struct ConfigToml {
     /// Native Ollama context window override for `/api/chat` and `/api/generate`.
     pub ollama_num_ctx: Option<i64>,
 
+    /// Automatically size Ollama `num_ctx` from the active context size.
+    pub ollama_smart_context: Option<bool>,
+
     /// Provider to use from the model_providers map.
     pub model_provider: Option<String>,
 

@@ -27,6 +27,19 @@ use tracing::instrument;
 const OLLAMA_CONTEXT_WINDOW_BUCKETS: [i64; 8] = [
     4_096, 8_192, 16_384, 32_768, 65_536, 131_072, 262_144, 524_288,
 ];
+const OLLAMA_SMART_CONTEXT_BUCKETS: [(i64, i64); 10] = [
+    (3_000, 4_096),
+    (6_000, 8_192),
+    (12_000, 16_384),
+    (28_000, 32_768),
+    (42_000, 49_152),
+    (60_000, 65_536),
+    (85_000, 98_304),
+    (115_000, 131_072),
+    (170_000, 196_608),
+    (i64::MAX, 245_760),
+];
+const OLLAMA_SMART_CONTEXT_MARGIN_PERCENT: i64 = 5;
 const DEFAULT_OLLAMA_NUM_CTX: i64 = 32_768;
 
 fn bucket_ollama_context_window(context_window: i64) -> i64 {
@@ -34,6 +47,24 @@ fn bucket_ollama_context_window(context_window: i64) -> i64 {
         .into_iter()
         .find(|bucket| *bucket >= context_window)
         .unwrap_or(context_window)
+}
+
+pub(crate) fn bucket_ollama_smart_context(active_context_tokens: i64) -> i64 {
+    let bucket = OLLAMA_SMART_CONTEXT_BUCKETS
+        .into_iter()
+        .find_map(|(limit, bucket)| (active_context_tokens <= limit).then_some(bucket))
+        .unwrap_or(245_760);
+
+    let margin = active_context_tokens.saturating_mul(OLLAMA_SMART_CONTEXT_MARGIN_PERCENT) / 100;
+    let estimated_tokens = active_context_tokens.saturating_add(margin);
+    if estimated_tokens <= bucket {
+        bucket
+    } else {
+        OLLAMA_SMART_CONTEXT_BUCKETS
+            .into_iter()
+            .find_map(|(_, next_bucket)| (estimated_tokens <= next_bucket).then_some(next_bucket))
+            .unwrap_or(245_760)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -209,18 +240,30 @@ impl TurnContext {
     }
 
     pub(crate) fn provider_request_options(&self) -> Option<ProviderRequestOptions> {
+        self.provider_request_options_for_active_context_tokens(None)
+    }
+
+    pub(crate) fn provider_request_options_for_active_context_tokens(
+        &self,
+        active_context_tokens: Option<i64>,
+    ) -> Option<ProviderRequestOptions> {
         if !self.uses_ollama_provider() {
             return None;
         }
 
-        let num_ctx = self
-            .config
-            .ollama_num_ctx
-            .or_else(|| {
-                self.model_context_window()
-                    .map(bucket_ollama_context_window)
-            })
-            .or(Some(DEFAULT_OLLAMA_NUM_CTX));
+        let num_ctx = if self.config.ollama_smart_context {
+            active_context_tokens
+                .map(bucket_ollama_smart_context)
+                .or(Some(DEFAULT_OLLAMA_NUM_CTX))
+        } else {
+            self.config
+                .ollama_num_ctx
+                .or_else(|| {
+                    self.model_context_window()
+                        .map(bucket_ollama_context_window)
+                })
+                .or(Some(DEFAULT_OLLAMA_NUM_CTX))
+        };
         let options = ProviderRequestOptions { num_ctx };
         (!options.is_empty()).then_some(options)
     }

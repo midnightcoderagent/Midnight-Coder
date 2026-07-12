@@ -1033,11 +1033,11 @@ pub async fn run_main(
         None
     };
 
-    let model = if let Some(model) = &cli.model {
-        Some(model.clone())
-    } else {
-        Some(DEFAULT_MODEL.to_string())
-    };
+    let config_sets_model = bootstrap_config_toml.model.is_some()
+        || cli_kv_overrides
+            .iter()
+            .any(|(path, _value)| path == "model");
+    let model = initial_model_override(cli.model.as_deref(), use_local_provider, config_sets_model);
 
     let additional_dirs = cli.add_dir.clone();
 
@@ -1270,6 +1270,16 @@ pub async fn run_main(
     )
     .await
     .map_err(|err| std::io::Error::other(err.to_string()))
+}
+
+fn initial_model_override(
+    cli_model: Option<&str>,
+    use_local_provider: bool,
+    config_sets_model: bool,
+) -> Option<String> {
+    cli_model
+        .map(str::to_string)
+        .or_else(|| (use_local_provider && !config_sets_model).then(|| DEFAULT_MODEL.to_string()))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2289,6 +2299,36 @@ mod tests {
         assert!(!target.uses_remote_workspace());
         assert_eq!(target.thread_params_mode(), ThreadParamsMode::Embedded);
         Ok(())
+    }
+
+    #[test]
+    fn initial_model_override_preserves_configured_model() {
+        assert_eq!(
+            initial_model_override(
+                /*cli_model*/ None, /*use_local_provider*/ false, true
+            ),
+            None
+        );
+        assert_eq!(
+            initial_model_override(
+                /*cli_model*/ None, /*use_local_provider*/ true, true
+            ),
+            None
+        );
+        assert_eq!(
+            initial_model_override(
+                /*cli_model*/ None, /*use_local_provider*/ true, false
+            ),
+            Some(DEFAULT_MODEL.to_string())
+        );
+        assert_eq!(
+            initial_model_override(
+                Some("selected-model"),
+                /*use_local_provider*/ true,
+                true
+            ),
+            Some("selected-model".to_string())
+        );
     }
 
     #[test]

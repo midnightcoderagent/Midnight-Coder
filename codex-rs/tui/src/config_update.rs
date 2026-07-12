@@ -129,6 +129,13 @@ pub(crate) fn build_auto_compaction_edits(
     vec![edit]
 }
 
+pub(crate) fn build_ollama_smart_context_edits(enabled: bool) -> Vec<ConfigEdit> {
+    vec![replace_config_value(
+        "ollama_smart_context",
+        serde_json::json!(enabled),
+    )]
+}
+
 pub(crate) fn build_service_tier_selection_edits(service_tier: Option<&str>) -> Vec<ConfigEdit> {
     let service_tier_edit = service_tier.map_or_else(
         || clear_config_value("service_tier"),

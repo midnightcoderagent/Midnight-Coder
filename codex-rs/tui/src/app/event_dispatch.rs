@@ -1618,6 +1618,8 @@ impl App {
                 .await
                 {
                     Ok(_) => {
+                        self.config.model = Some(model.clone());
+                        self.chat_widget.set_model(model.as_str());
                         let effort_label = effort
                             .as_ref()
                             .map(std::string::ToString::to_string)
@@ -1720,6 +1722,41 @@ impl App {
                         );
                         self.chat_widget
                             .add_error_message(format!("Failed to save context window: {error}"));
+                    }
+                }
+            }
+            AppEvent::PersistOllamaSmartContext { enabled } => {
+                match crate::config_update::write_config_batch(
+                    app_server.request_handle(),
+                    crate::config_update::build_ollama_smart_context_edits(enabled),
+                )
+                .await
+                {
+                    Ok(_) => {
+                        self.config.ollama_smart_context = enabled;
+                        self.chat_widget.set_ollama_smart_context(enabled);
+                        self.chat_widget.add_info_message(
+                            if enabled {
+                                "Ollama smart context enabled".to_string()
+                            } else {
+                                "Ollama smart context disabled".to_string()
+                            },
+                            Some(if enabled {
+                                "Ollama num_ctx will grow with the active context.".to_string()
+                            } else {
+                                "Ollama num_ctx will use the configured/default value.".to_string()
+                            }),
+                        );
+                    }
+                    Err(err) => {
+                        let error = format_config_error(&err);
+                        tracing::error!(
+                            error = %error,
+                            "failed to persist Ollama smart context"
+                        );
+                        self.chat_widget.add_error_message(format!(
+                            "Failed to save Ollama smart context: {error}"
+                        ));
                     }
                 }
             }

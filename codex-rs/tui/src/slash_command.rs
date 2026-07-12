@@ -31,6 +31,8 @@ pub enum SlashCommand {
     Import,
     Hooks,
     Context,
+    #[strum(to_string = "smartcontext")]
+    SmartContext,
     #[strum(to_string = "miniModel", serialize = "mini-model")]
     MiniModel,
     Review,
@@ -112,6 +114,7 @@ impl SlashCommand {
             SlashCommand::Import => "import setup, this project, and recent chats from Claude Code",
             SlashCommand::Hooks => "view and manage lifecycle hooks",
             SlashCommand::Context => "set max context tokens before auto-compaction",
+            SlashCommand::SmartContext => "toggle automatic Ollama context sizing",
             SlashCommand::MiniModel => "set the model used for context compaction",
             SlashCommand::ResumeType => "set compaction strategy",
             SlashCommand::Status => "show current session configuration and token usage",
@@ -176,6 +179,7 @@ impl SlashCommand {
                 | SlashCommand::Raw
                 | SlashCommand::Usage
                 | SlashCommand::Context
+                | SlashCommand::SmartContext
                 | SlashCommand::MiniModel
                 | SlashCommand::ResumeType
                 | SlashCommand::Compact
@@ -219,6 +223,7 @@ impl SlashCommand {
             | SlashCommand::Memories
             | SlashCommand::Import
             | SlashCommand::Context
+            | SlashCommand::SmartContext
             | SlashCommand::MiniModel
             | SlashCommand::ResumeType
             | SlashCommand::Review

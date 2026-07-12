@@ -36,6 +36,7 @@ const SIDE_SLASH_COMMAND_UNAVAILABLE_HINT: &str =
     "Press Ctrl+C to return to the main thread first.";
 const GOAL_USAGE_HINT: &str = "Example: /goal improve benchmark coverage";
 const RAW_USAGE: &str = "Usage: /raw [on|off]";
+const SMART_CONTEXT_USAGE: &str = "Usage: /smartcontext [true|false|on|off]";
 const COMPACT_USAGE: &str = "Usage: /compact [on|off|0|1]\n0 = summarize, 1 = cut history";
 const CONTEXT_USAGE: &str = "Usage: /context <tokens>";
 const MINI_MODEL_USAGE: &str = "Usage: /miniModel <model>";
@@ -390,6 +391,9 @@ impl ChatWidget {
             }
             SlashCommand::Context => {
                 self.add_error_message(CONTEXT_USAGE.to_string());
+            }
+            SlashCommand::SmartContext => {
+                self.add_error_message(SMART_CONTEXT_USAGE.to_string());
             }
             SlashCommand::MiniModel => {
                 self.add_error_message(MINI_MODEL_USAGE.to_string());
@@ -750,6 +754,13 @@ impl ChatWidget {
                 }
                 None => self.add_error_message(CONTEXT_USAGE.to_string()),
             },
+            SlashCommand::SmartContext => match parse_bool_arg(trimmed) {
+                Some(enabled) => {
+                    self.app_event_tx
+                        .send(AppEvent::PersistOllamaSmartContext { enabled });
+                }
+                None => self.add_error_message(SMART_CONTEXT_USAGE.to_string()),
+            },
             SlashCommand::MiniModel => {
                 let model = trimmed.trim();
                 if model.is_empty() || model.contains(char::is_whitespace) {
@@ -1109,6 +1120,7 @@ impl ChatWidget {
             | SlashCommand::Usage
             | SlashCommand::DebugConfig
             | SlashCommand::Context
+            | SlashCommand::SmartContext
             | SlashCommand::MiniModel
             | SlashCommand::ResumeType
             | SlashCommand::Ps
@@ -1226,6 +1238,14 @@ fn parse_context_tokens(input: &str) -> Option<i64> {
     };
     let tokens = digits.parse::<i64>().ok()?.checked_mul(multiplier)?;
     (tokens > 0).then_some(tokens)
+}
+
+fn parse_bool_arg(input: &str) -> Option<bool> {
+    match input.trim().to_ascii_lowercase().as_str() {
+        "true" | "on" => Some(true),
+        "false" | "off" => Some(false),
+        _ => None,
+    }
 }
 
 fn parse_resume_type(input: &str) -> Option<&'static str> {

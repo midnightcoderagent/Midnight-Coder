@@ -742,6 +742,11 @@ pub(crate) enum AppEvent {
         tokens: i64,
     },
 
+    /// Persist whether Ollama context sizing follows active context usage.
+    PersistOllamaSmartContext {
+        enabled: bool,
+    },
+
     /// Persist whether automatic context compaction is enabled.
     PersistAutoCompaction {
         enabled: bool,

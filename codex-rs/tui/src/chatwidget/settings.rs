@@ -265,6 +265,11 @@ impl ChatWidget {
         self.config.mini_model = model;
     }
 
+    pub(crate) fn set_ollama_smart_context(&mut self, enabled: bool) {
+        self.config.ollama_smart_context = enabled;
+        self.refresh_status_surfaces();
+    }
+
     /// Set the model provider in the widget's config copy.
     pub(crate) fn set_model_provider(
         &mut self,

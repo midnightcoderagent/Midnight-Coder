@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering;
 use crate::SkillInjections;
 use crate::build_skill_injections;
 use crate::client::ModelClientSession;
+use crate::client::OllamaSmartContextSetting;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
 use crate::collect_explicit_skill_mentions;
@@ -1918,16 +1919,18 @@ async fn try_run_sampling_request(
         turn_context.provider.info().name.as_str(),
     );
     let sampling_timing_guard = turn_context.turn_timing_state.begin_sampling();
+    let provider_request_options = turn_context.provider_request_options();
     let mut stream = client_session
-        .stream(
+        .stream_with_smart_context(
             prompt,
             &turn_context.model_info,
             &turn_context.session_telemetry,
             turn_context.reasoning_effort.clone(),
             turn_context.reasoning_summary,
             turn_context.config.service_tier.clone(),
-            turn_context.provider_request_options(),
+            provider_request_options,
             responses_metadata,
+            OllamaSmartContextSetting::from_enabled(turn_context.config.ollama_smart_context),
             &inference_trace,
         )
         .instrument(trace_span!("stream_request"))

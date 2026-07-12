@@ -2951,6 +2951,30 @@ async fn raw_slash_command_reports_usage_for_invalid_arg() {
 }
 
 #[tokio::test]
+async fn smartcontext_slash_command_accepts_true_false_args() {
+    let (mut chat, mut rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
+
+    chat.dispatch_command_with_args(SlashCommand::SmartContext, "true".to_string(), Vec::new());
+    let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, AppEvent::PersistOllamaSmartContext { enabled: true })),
+        "expected smartcontext true persistence event, got {events:?}"
+    );
+
+    chat.dispatch_command_with_args(SlashCommand::SmartContext, "false".to_string(), Vec::new());
+    let events = std::iter::from_fn(|| rx.try_recv().ok()).collect::<Vec<_>>();
+    assert!(
+        events.iter().any(|event| matches!(
+            event,
+            AppEvent::PersistOllamaSmartContext { enabled: false }
+        )),
+        "expected smartcontext false persistence event, got {events:?}"
+    );
+}
+
+#[tokio::test]
 async fn compact_queues_user_messages_snapshot() {
     let (mut chat, _rx, _op_rx) = make_chatwidget_manual(/*model_override*/ None).await;
     chat.thread_id = Some(ThreadId::new());

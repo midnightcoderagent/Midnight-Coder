@@ -10,8 +10,8 @@ use super::CompactionId;
 use super::ConversationItemId;
 use super::EdgeId;
 use super::InferenceCallId;
-use super::ModelVisibleCallId;
 use super::MidnightCoderTurnId;
+use super::ModelVisibleCallId;
 use super::ToolCallId;
 use super::session::ExecutionWindow;
 

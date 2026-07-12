@@ -134,6 +134,10 @@ pub(crate) enum StatusLineItem {
     /// Whether raw scrollback mode is currently active.
     RawOutput,
 
+    /// Whether Ollama smart context sizing is active.
+    #[strum(to_string = "smart-context", serialize = "smartcontext")]
+    SmartContext,
+
     /// Current thread title (if set by user).
     ThreadTitle,
 
@@ -185,6 +189,7 @@ impl StatusLineItem {
             StatusLineItem::SessionId => "Current thread identifier (omitted until thread starts)",
             StatusLineItem::FastMode => "Whether Fast mode is currently active",
             StatusLineItem::RawOutput => "Whether raw scrollback mode is active",
+            StatusLineItem::SmartContext => "Whether Ollama smart context sizing is active",
             StatusLineItem::ThreadTitle => {
                 "Current thread title, or thread identifier when unnamed"
             }
@@ -222,6 +227,7 @@ impl StatusLineItem {
             StatusLineItem::SessionId => StatusSurfacePreviewItem::SessionId,
             StatusLineItem::FastMode => StatusSurfacePreviewItem::FastMode,
             StatusLineItem::RawOutput => StatusSurfacePreviewItem::RawOutput,
+            StatusLineItem::SmartContext => StatusSurfacePreviewItem::SmartContext,
             StatusLineItem::ThreadTitle => StatusSurfacePreviewItem::ThreadTitle,
             StatusLineItem::WorkspaceHeadline => StatusSurfacePreviewItem::WorkspaceHeadline,
             StatusLineItem::TaskProgress => StatusSurfacePreviewItem::TaskProgress,
@@ -505,6 +511,19 @@ mod tests {
         assert_eq!(
             items,
             Ok(vec![StatusLineItem::Status, StatusLineItem::TaskProgress,])
+        );
+    }
+
+    #[test]
+    fn smart_context_accepts_command_style_alias() {
+        assert_eq!(StatusLineItem::SmartContext.to_string(), "smart-context");
+        assert_eq!(
+            "smart-context".parse::<StatusLineItem>(),
+            Ok(StatusLineItem::SmartContext)
+        );
+        assert_eq!(
+            "smartcontext".parse::<StatusLineItem>(),
+            Ok(StatusLineItem::SmartContext)
         );
     }
 

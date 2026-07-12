@@ -1,5 +1,5 @@
-use codex_core::ModelClient;
 use codex_core::MidnightCoderThread;
+use codex_core::ModelClient;
 use codex_core::NewThread;
 use codex_core::Prompt;
 use codex_core::ResponseEvent;

@@ -21,11 +21,26 @@ fn defaults() -> NewThreadModelDefaults {
 }
 
 #[tokio::test]
-async fn applies_managed_defaults_to_a_new_thread_config() {
+async fn preserves_persisted_model_settings_over_managed_defaults() {
     let mut actual = test_config().await;
     actual.model = Some("configured-model".to_string());
     actual.model_reasoning_effort = Some(ReasoningEffort::Low);
     actual.service_tier = Some("flex".to_string());
+    let expected = actual.clone();
+
+    apply_managed_new_thread_defaults(
+        &mut actual,
+        Some(&defaults()),
+        &[],
+        &ConfigOverrides::default(),
+    );
+
+    assert_eq!(actual, expected);
+}
+
+#[tokio::test]
+async fn applies_managed_defaults_when_model_settings_are_unset() {
+    let mut actual = test_config().await;
     let mut expected = actual.clone();
     expected.model = Some("managed-model".to_string());
     expected.model_reasoning_effort = Some(ReasoningEffort::High);

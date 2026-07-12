@@ -26,15 +26,20 @@ pub(crate) fn apply_managed_new_thread_defaults(
         || has_cli_override("model")
         || has_cli_override("model_reasoning_effort");
 
-    if !has_explicit_model_settings && let Some(model) = defaults.model.as_ref() {
+    if !has_explicit_model_settings
+        && config.model.is_none()
+        && let Some(model) = defaults.model.as_ref()
+    {
         config.model = Some(model.clone());
     }
     if !has_explicit_model_settings
+        && config.model_reasoning_effort.is_none()
         && let Some(reasoning_effort) = defaults.model_reasoning_effort.as_ref()
     {
         config.model_reasoning_effort = Some(reasoning_effort.clone());
     }
-    if harness_overrides.service_tier.is_none()
+    if config.service_tier.is_none()
+        && harness_overrides.service_tier.is_none()
         && !has_cli_override("service_tier")
         && let Some(service_tier) = defaults.service_tier.as_ref()
     {

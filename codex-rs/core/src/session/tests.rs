@@ -1566,6 +1566,8 @@ disabled_tools = [
     let mut next_config = load_latest_config_for_session(&session).await;
     next_config.model = Some("gpt-5.4".to_string());
     next_config.notify = Some(vec!["echo".to_string()]);
+    next_config.ollama_smart_context = true;
+    next_config.ollama_num_ctx = Some(8_192);
 
     session.refresh_runtime_config(next_config).await;
 
@@ -1588,6 +1590,8 @@ disabled_tools = [
     assert_eq!(app.destructive_enabled, Some(false));
     assert_eq!(config.model, original.model);
     assert_eq!(config.notify, original.notify);
+    assert!(config.ollama_smart_context);
+    assert_eq!(config.ollama_num_ctx, Some(8_192));
     assert_eq!(
         config.tool_suggest.disabled_tools,
         vec![
@@ -2288,6 +2292,43 @@ async fn ollama_turns_bucket_context_for_responses_compat() {
         default_skill_metadata_budget(turn_context.model_context_window()),
         SkillMetadataBudget::Tokens(2_560)
     );
+}
+
+#[tokio::test]
+async fn ollama_smart_context_buckets_active_context_tokens() {
+    let (_session, mut turn_context) = make_session_and_context().await;
+
+    let mut config = (*turn_context.config).clone();
+    config.model_provider_id = "ollama".to_string();
+    config.model_provider =
+        create_oss_provider_with_base_url("http://localhost:11434/v1", WireApi::Responses);
+    config.ollama_num_ctx = Some(4_096);
+    config.ollama_smart_context = true;
+    turn_context.config = Arc::new(config);
+
+    let cases = [
+        (2_800, 4_096),
+        (5_500, 8_192),
+        (11_000, 16_384),
+        (26_000, 32_768),
+        (40_000, 49_152),
+        (57_000, 65_536),
+        (80_000, 98_304),
+        (110_000, 131_072),
+        (160_000, 196_608),
+        (220_000, 245_760),
+    ];
+
+    for (active_context_tokens, expected_num_ctx) in cases {
+        assert_eq!(
+            turn_context
+                .provider_request_options_for_active_context_tokens(Some(active_context_tokens))
+                .unwrap()
+                .num_ctx,
+            Some(expected_num_ctx),
+            "active context tokens: {active_context_tokens}"
+        );
+    }
 }
 
 #[tokio::test]

@@ -154,6 +154,26 @@ fn response_message_item_id(request: &ResponsesRequest, role: &str, text: &str) 
         .unwrap_or_else(|| panic!("missing item ID for {role} message {text:?}"))
 }
 
+fn large_output_schema(property_count: usize) -> serde_json::Value {
+    let mut properties = serde_json::Map::with_capacity(property_count);
+    for index in 0..property_count {
+        properties.insert(
+            format!("field_{index}"),
+            json!({
+                "type": "string",
+                "description": format!("field {index} {}", "x".repeat(48)),
+            }),
+        );
+    }
+
+    json!({
+        "type": "object",
+        "properties": properties,
+        "required": [],
+        "additionalProperties": false,
+    })
+}
+
 fn assert_codex_client_metadata(
     request_body: &serde_json::Value,
     installation_id: &str,
@@ -1323,6 +1343,11 @@ async fn ollama_provider_sends_configured_context_window_to_responses_api() {
     skip_if_no_network!();
 
     let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/create"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"status": "success"})))
+        .mount(&server)
+        .await;
     let resp_mock = mount_sse_once(
         &server,
         sse(vec![ev_response_created("resp1"), ev_completed("resp1")]),
@@ -1368,6 +1393,10 @@ async fn ollama_provider_sends_configured_context_window_to_responses_api() {
 
     let request_body = resp_mock.single_request().body_json();
     assert_eq!(
+        request_body["model"],
+        json!("Qwen3-Coder-30B-A3B-Instruct-UD-TQ1_0_ctx4096")
+    );
+    assert_eq!(
         request_body["options"],
         json!({
             "num_ctx": 4096
@@ -1387,6 +1416,177 @@ async fn ollama_provider_sends_configured_context_window_to_responses_api() {
             .is_some_and(|tools| tools.iter().all(|tool| tool["type"] == "function")),
         "expected Ollama-compatible function tools, got {:?}",
         request_body["tools"]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ollama_provider_with_tools_uses_native_chat_without_smart_context() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/chat"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"message":{"role":"assistant","content":"OK"},"done":false}
+{"message":{"role":"assistant","content":""},"done":true,"prompt_eval_count":10,"eval_count":1}
+"#,
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut model_provider =
+        built_in_model_providers(/*openai_base_url*/ None)[OLLAMA_OSS_PROVIDER_ID].clone();
+    model_provider.name = "Ollama Remote".to_string();
+    model_provider.base_url = Some(format!("{}/v1", server.uri()));
+    model_provider.supports_websockets = false;
+    model_provider.wire_api = WireApi::Responses;
+
+    let test = test_codex()
+        .with_auth(MidnightCoderAuth::from_api_key("Test API Key"))
+        .with_config(move |config| {
+            config.model = Some("MidnightCoder-30B_OllamaSystemFromGGUF".to_string());
+            config.model_provider_id = "ollama-remote".to_string();
+            config.model_provider = model_provider;
+            config.ollama_smart_context = false;
+        })
+        .build(&server)
+        .await
+        .expect("create new conversation");
+    let codex = test.codex;
+
+    codex
+        .submit(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: "hello".into(),
+                text_elements: Vec::new(),
+            }],
+            final_output_json_schema: None,
+            responsesapi_client_metadata: None,
+            additional_context: Default::default(),
+            thread_settings: Default::default(),
+        })
+        .await
+        .unwrap();
+
+    wait_for_event(&codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
+
+    let requests = server.received_requests().await.unwrap_or_default();
+    let chat_request = requests
+        .iter()
+        .find(|request| request.url.path() == "/api/chat")
+        .expect("expected native Ollama chat request");
+    let body: serde_json::Value =
+        serde_json::from_slice(&chat_request.body).expect("chat request body should be JSON");
+    assert_eq!(
+        body["model"],
+        json!("MidnightCoder-30B_OllamaSystemFromGGUF")
+    );
+
+    let first_tool = body["tools"]
+        .as_array()
+        .and_then(|tools| tools.first())
+        .expect("expected native Ollama tools");
+    assert_eq!(first_tool["type"], json!("function"));
+    assert!(first_tool.get("name").is_none());
+    assert!(
+        first_tool["function"]["name"].is_string(),
+        "expected Ollama nested function tool schema, got {body:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn ollama_smart_context_scales_with_final_request_body() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/api/chat"))
+        .and(body_string_contains(
+            r#""model":"MidnightCoder-30B_TQ1_smartcontext""#,
+        ))
+        .and(body_string_contains(r#""num_ctx":16384"#))
+        .respond_with(ResponseTemplate::new(200).set_body_string(
+            r#"{"message":{"role":"assistant","content":"OK"},"done":false}
+{"message":{"role":"assistant","content":""},"done":true,"prompt_eval_count":5000,"eval_count":1}
+"#,
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let mut model_provider =
+        built_in_model_providers(/*openai_base_url*/ None)[OLLAMA_OSS_PROVIDER_ID].clone();
+    model_provider.name = "Ollama Remote".to_string();
+    model_provider.base_url = Some(format!("{}/v1", server.uri()));
+    model_provider.supports_websockets = false;
+    model_provider.wire_api = WireApi::Responses;
+
+    let mut builder = test_codex()
+        .with_auth(MidnightCoderAuth::from_api_key("Test API Key"))
+        .with_config(move |config| {
+            config.model = Some("MidnightCoder-30B_TQ1_smartcontext".to_string());
+            config.model_provider_id = "ollama-remote".to_string();
+            config.model_provider = model_provider;
+            config.ollama_num_ctx = Some(4096);
+            config.ollama_smart_context = false;
+        });
+    let test = builder
+        .build(&server)
+        .await
+        .expect("create new conversation");
+    let mut refreshed_config = test.config.clone();
+    refreshed_config.ollama_smart_context = true;
+    test.codex.refresh_runtime_config(refreshed_config).await;
+    let codex = test.codex;
+
+    codex
+        .submit(Op::UserInput {
+            items: vec![UserInput::Text {
+                text: "hello".into(),
+                text_elements: Vec::new(),
+            }],
+            final_output_json_schema: Some(large_output_schema(180)),
+            responsesapi_client_metadata: None,
+            additional_context: Default::default(),
+            thread_settings: Default::default(),
+        })
+        .await
+        .unwrap();
+
+    wait_for_event(&codex, |ev| matches!(ev, EventMsg::TurnComplete(_))).await;
+
+    let requests = server.received_requests().await.unwrap_or_default();
+    let chat_request = requests
+        .iter()
+        .find(|request| request.url.path() == "/api/chat")
+        .expect("expected native Ollama chat request");
+    let body: serde_json::Value =
+        serde_json::from_slice(&chat_request.body).expect("chat request body should be JSON");
+    assert_eq!(body["model"], json!("MidnightCoder-30B_TQ1_smartcontext"));
+    assert_eq!(body["options"], json!({ "num_ctx": 16384 }));
+    let first_tool = body["tools"]
+        .as_array()
+        .and_then(|tools| tools.first())
+        .expect("expected native Ollama tools");
+    assert!(first_tool.get("name").is_none());
+    assert!(
+        first_tool["function"]["name"].is_string(),
+        "expected Ollama nested function tool schema, got {body:?}"
+    );
+    let messages = body["messages"]
+        .as_array()
+        .expect("expected native Ollama chat messages");
+    let system_message = messages
+        .iter()
+        .find(|message| message["role"] == "system")
+        .expect("expected compact system instructions");
+    let system_content = system_message["content"]
+        .as_str()
+        .expect("system content should be text");
+    assert!(
+        system_content.contains("Use tools when needed"),
+        "expected compact tool-use guidance, got {body:?}"
+    );
+    assert!(
+        !system_content.contains("You are a coding agent running in"),
+        "expected verbose base instructions to be compacted, got {body:?}"
     );
 }
 
