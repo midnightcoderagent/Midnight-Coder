@@ -34,8 +34,10 @@ CODEX_PACKAGE_COMPONENT = getattr(
     _BUILD_MODULE, "CODEX_PACKAGE_COMPONENT", "codex-package"
 )
 BINARY_TARGETS = tuple(
-    package_config["target_triple"]
-    for package_config in CODEX_PLATFORM_PACKAGES.values()
+    dict.fromkeys(
+        package_config["target_triple"]
+        for package_config in CODEX_PLATFORM_PACKAGES.values()
+    )
 )
 
 

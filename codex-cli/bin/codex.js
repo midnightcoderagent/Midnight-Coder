@@ -12,27 +12,40 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 
-const PLATFORM_PACKAGE_BY_TARGET = {
-  "x86_64-unknown-linux-musl": "midnight-coder-linux-x64",
-  "aarch64-unknown-linux-musl": "midnight-coder-linux-arm64",
-  "x86_64-apple-darwin": "midnight-coder-darwin-x64",
-  "aarch64-apple-darwin": "midnight-coder-darwin-arm64",
-  "x86_64-pc-windows-msvc": "midnight-coder-win32-x64",
-  "aarch64-pc-windows-msvc": "midnight-coder-win32-arm64",
+const PLATFORM_PACKAGE_BY_PLATFORM_AND_ARCH = {
+  linux: {
+    x64: "midnight-coder-linux-x64",
+    arm64: "midnight-coder-linux-arm64",
+  },
+  android: {
+    x64: "midnight-coder-android-x64",
+    arm64: "midnight-coder-android-arm64",
+  },
+  darwin: {
+    x64: "midnight-coder-darwin-x64",
+    arm64: "midnight-coder-darwin-arm64",
+  },
+  win32: {
+    x64: "midnight-coder-win32-x64",
+    arm64: "midnight-coder-win32-arm64",
+  },
 };
 
 const { platform, arch } = process;
 
 let targetTriple = null;
+let platformPackage = null;
 switch (platform) {
   case "linux":
   case "android":
     switch (arch) {
       case "x64":
         targetTriple = "x86_64-unknown-linux-musl";
+        platformPackage = PLATFORM_PACKAGE_BY_PLATFORM_AND_ARCH[platform][arch];
         break;
       case "arm64":
         targetTriple = "aarch64-unknown-linux-musl";
+        platformPackage = PLATFORM_PACKAGE_BY_PLATFORM_AND_ARCH[platform][arch];
         break;
       default:
         break;
@@ -42,9 +55,11 @@ switch (platform) {
     switch (arch) {
       case "x64":
         targetTriple = "x86_64-apple-darwin";
+        platformPackage = PLATFORM_PACKAGE_BY_PLATFORM_AND_ARCH[platform][arch];
         break;
       case "arm64":
         targetTriple = "aarch64-apple-darwin";
+        platformPackage = PLATFORM_PACKAGE_BY_PLATFORM_AND_ARCH[platform][arch];
         break;
       default:
         break;
@@ -54,9 +69,11 @@ switch (platform) {
     switch (arch) {
       case "x64":
         targetTriple = "x86_64-pc-windows-msvc";
+        platformPackage = PLATFORM_PACKAGE_BY_PLATFORM_AND_ARCH[platform][arch];
         break;
       case "arm64":
         targetTriple = "aarch64-pc-windows-msvc";
+        platformPackage = PLATFORM_PACKAGE_BY_PLATFORM_AND_ARCH[platform][arch];
         break;
       default:
         break;
@@ -69,10 +86,8 @@ switch (platform) {
 if (!targetTriple) {
   throw new Error(`Unsupported platform: ${platform} (${arch})`);
 }
-
-const platformPackage = PLATFORM_PACKAGE_BY_TARGET[targetTriple];
 if (!platformPackage) {
-  throw new Error(`Unsupported target triple: ${targetTriple}`);
+  throw new Error(`Unsupported platform package for: ${platform} (${arch})`);
 }
 
 function findMidnightCoderExecutable() {

@@ -10,8 +10,7 @@ const APP_TOOLTIP: &str = "Try the **MidnightCoder App**. Run 'codex app'.";
 const FAST_TOOLTIP: &str =
     "*New* Use **/fast** to enable our fastest inference with increased plan usage.";
 const OTHER_TOOLTIP: &str = "*New* Build faster with the **MidnightCoder App**. Run 'codex app'.";
-const OTHER_TOOLTIP_NON_MAC: &str = "*New* Build faster with MidnightCoder.";
-const FREE_GO_TOOLTIP: &str = "*New* For a limited time, MidnightCoder is included in your plan for free – let’s build together.";
+const MODELS_TOOLTIP: &str = "Optimize context with **Midnight Coder models** on [Ollama](https://ollama.com/midnightcoderagent) or [Hugging Face](https://huggingface.co/midnightcoderagent).";
 
 const RAW_TOOLTIPS: &str = include_str!("../tooltips.txt");
 
@@ -67,13 +66,13 @@ pub(crate) fn get_tooltip(plan: Option<PlanType>, fast_mode_enabled: bool) -> Op
                 }
             }
             Some(PlanType::Go) | Some(PlanType::Free) => {
-                return Some(FREE_GO_TOOLTIP.to_string());
+                return Some(MODELS_TOOLTIP.to_string());
             }
             _ => {
                 let tooltip = if IS_MACOS {
                     OTHER_TOOLTIP
                 } else {
-                    OTHER_TOOLTIP_NON_MAC
+                    MODELS_TOOLTIP
                 };
                 return Some(tooltip.to_string());
             }

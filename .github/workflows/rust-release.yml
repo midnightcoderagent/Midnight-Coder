@@ -1026,7 +1026,6 @@ jobs:
           if-no-files-found: error
 
   build-windows:
-    if: ${{ false }}
     needs: tag-check
     uses: ./.github/workflows/rust-release-windows.yml
     permissions:
@@ -1045,12 +1044,14 @@ jobs:
     needs:
       - tag-check
       - build
+      - build-windows
       - argument-comment-lint-release-assets
     if: >-
       ${{
         always() &&
         needs.tag-check.result == 'success' &&
         needs.build.result == 'success' &&
+        needs.build-windows.result == 'success' &&
         needs.argument-comment-lint-release-assets.result == 'success'
       }}
     name: release
@@ -1095,6 +1096,18 @@ jobs:
         with:
           path: dist
           pattern: "{aarch64,x86_64}-unknown-linux-musl{,-app-server}"
+
+      - name: Download macOS target artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          pattern: "{aarch64,x86_64}-apple-darwin{,-app-server}"
+
+      - name: Download Windows target artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          pattern: "{aarch64,x86_64}-pc-windows-msvc{,-app-server}"
 
       - name: Download supplemental release artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1241,7 +1254,7 @@ jobs:
           mkdir -p dist/npm
           patterns=(
             "midnight-coder-${version}.tgz"
-            "midnight-coder-linux-*-${version}.tgz"
+            "midnight-coder-*-*-${version}.tgz"
           )
           for pattern in "${patterns[@]}"; do
             gh release download "$tag" \
@@ -1272,6 +1285,12 @@ jobs:
           platform_tarballs=(
             "dist/npm/midnight-coder-linux-x64-${VERSION}.tgz"
             "dist/npm/midnight-coder-linux-arm64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-darwin-x64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-darwin-arm64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-android-x64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-android-arm64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-win32-x64-${VERSION}.tgz"
+            "dist/npm/midnight-coder-win32-arm64-${VERSION}.tgz"
           )
 
           for required_tarball in "${platform_tarballs[@]}" "${root_tarball}"; do
@@ -1316,7 +1335,7 @@ jobs:
             tag=""
 
             case "${filename}" in
-              midnight-coder-linux-*-"${VERSION}".tgz)
+              midnight-coder-*-*-"${VERSION}".tgz)
                 platform="${filename#midnight-coder-}"
                 platform="${platform%-${VERSION}.tgz}"
                 tag="${prefix}${platform}"
