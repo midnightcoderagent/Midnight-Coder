@@ -106,6 +106,30 @@ jobs:
             artifact_name: aarch64-unknown-linux-musl-app-server
             binaries: "codex-app-server"
             build_dmg: "false"
+          - runner: macos-15-xlarge
+            target: x86_64-apple-darwin
+            bundle: primary
+            artifact_name: x86_64-apple-darwin
+            binaries: "midnight-coder codex-responses-api-proxy"
+            build_dmg: "false"
+          - runner: macos-15-xlarge
+            target: x86_64-apple-darwin
+            bundle: app-server
+            artifact_name: x86_64-apple-darwin-app-server
+            binaries: "codex-app-server"
+            build_dmg: "false"
+          - runner: macos-15-xlarge
+            target: aarch64-apple-darwin
+            bundle: primary
+            artifact_name: aarch64-apple-darwin
+            binaries: "midnight-coder codex-responses-api-proxy"
+            build_dmg: "false"
+          - runner: macos-15-xlarge
+            target: aarch64-apple-darwin
+            bundle: app-server
+            artifact_name: aarch64-apple-darwin-app-server
+            binaries: "codex-app-server"
+            build_dmg: "false"
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -306,7 +330,6 @@ jobs:
           binaries: ${{ matrix.binaries }}
 
       - name: Stage artifacts
-        if: ${{ runner.os != 'macOS' }}
         shell: bash
         run: |
           dest="dist/${{ matrix.target }}"
@@ -336,7 +359,6 @@ jobs:
           fi
 
       - name: Build Codex package archive
-        if: ${{ runner.os != 'macOS' }}
         shell: bash
         env:
           TARGET: ${{ matrix.target }}
@@ -401,7 +423,6 @@ jobs:
           if-no-files-found: error
 
       - name: Compress artifacts
-        if: ${{ runner.os != 'macOS' }}
         shell: bash
         run: |
           # Path that contains the uncompressed binaries for the current
@@ -438,7 +459,6 @@ jobs:
           done
 
       - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        if: ${{ runner.os != 'macOS' }}
         with:
           name: ${{ matrix.artifact_name }}
           # Upload the per-binary .zst files, .tar.gz equivalents, and any
@@ -466,7 +486,7 @@ jobs:
           - target: aarch64-apple-darwin
             bundle: primary
             artifact_name: aarch64-apple-darwin
-            binaries: "codex codex-responses-api-proxy"
+            binaries: "midnight-coder codex-responses-api-proxy"
           - target: aarch64-apple-darwin
             bundle: app-server
             artifact_name: aarch64-apple-darwin-app-server
@@ -474,7 +494,7 @@ jobs:
           - target: x86_64-apple-darwin
             bundle: primary
             artifact_name: x86_64-apple-darwin
-            binaries: "codex codex-responses-api-proxy"
+            binaries: "midnight-coder codex-responses-api-proxy"
           - target: x86_64-apple-darwin
             bundle: app-server
             artifact_name: x86_64-apple-darwin-app-server
@@ -585,7 +605,7 @@ jobs:
           - target: aarch64-apple-darwin
             bundle: primary
             artifact_name: aarch64-apple-darwin
-            binaries: "codex codex-responses-api-proxy"
+            binaries: "midnight-coder codex-responses-api-proxy"
             build_dmg: "true"
           - target: aarch64-apple-darwin
             bundle: app-server
@@ -595,7 +615,7 @@ jobs:
           - target: x86_64-apple-darwin
             bundle: primary
             artifact_name: x86_64-apple-darwin
-            binaries: "codex codex-responses-api-proxy"
+            binaries: "midnight-coder codex-responses-api-proxy"
             build_dmg: "true"
           - target: x86_64-apple-darwin
             bundle: app-server
@@ -883,7 +903,7 @@ jobs:
           - target: aarch64-apple-darwin
             bundle: primary
             artifact_name: aarch64-apple-darwin
-            binaries: "codex codex-responses-api-proxy"
+            binaries: "midnight-coder codex-responses-api-proxy"
             verify_dmg: "true"
           - target: aarch64-apple-darwin
             bundle: app-server
@@ -893,7 +913,7 @@ jobs:
           - target: x86_64-apple-darwin
             bundle: primary
             artifact_name: x86_64-apple-darwin
-            binaries: "codex codex-responses-api-proxy"
+            binaries: "midnight-coder codex-responses-api-proxy"
             verify_dmg: "true"
           - target: x86_64-apple-darwin
             bundle: app-server
@@ -1377,4 +1397,3 @@ jobs:
           if [[ -n "${NPM_TAG}" ]]; then
             npm dist-tag add "midnight-coder@${VERSION}" "${NPM_TAG}"
           fi
-
