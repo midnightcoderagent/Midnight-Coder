@@ -231,7 +231,42 @@ jobs:
             ls -lh "target/${{ matrix.target }}/release/${binary}.exe"
           done
 
+      - name: Check Windows signing configuration
+        id: signing
+        shell: bash
+        env:
+          AZURE_ARTIFACT_SIGNING_CLIENT_ID: ${{ secrets.AZURE_ARTIFACT_SIGNING_CLIENT_ID }}
+          AZURE_ARTIFACT_SIGNING_TENANT_ID: ${{ secrets.AZURE_ARTIFACT_SIGNING_TENANT_ID }}
+          AZURE_ARTIFACT_SIGNING_SUBSCRIPTION_ID: ${{ secrets.AZURE_ARTIFACT_SIGNING_SUBSCRIPTION_ID }}
+          AZURE_ARTIFACT_SIGNING_ENDPOINT: ${{ secrets.AZURE_ARTIFACT_SIGNING_ENDPOINT }}
+          AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME: ${{ secrets.AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME }}
+          AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME: ${{ secrets.AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME }}
+        run: |
+          set -euo pipefail
+          required=(
+            AZURE_ARTIFACT_SIGNING_CLIENT_ID
+            AZURE_ARTIFACT_SIGNING_TENANT_ID
+            AZURE_ARTIFACT_SIGNING_SUBSCRIPTION_ID
+            AZURE_ARTIFACT_SIGNING_ENDPOINT
+            AZURE_ARTIFACT_SIGNING_ACCOUNT_NAME
+            AZURE_ARTIFACT_SIGNING_CERTIFICATE_PROFILE_NAME
+          )
+          missing=()
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} == 0 )); then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Windows signing skipped because Azure Trusted Signing secrets are missing: ${missing[*]}"
+          fi
+
       - name: Sign Windows binaries with Azure Trusted Signing
+        if: ${{ steps.signing.outputs.enabled == 'true' }}
         uses: ./.github/actions/windows-code-sign
         with:
           target: ${{ matrix.target }}

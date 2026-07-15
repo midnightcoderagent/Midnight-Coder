@@ -106,30 +106,6 @@ jobs:
             artifact_name: aarch64-unknown-linux-musl-app-server
             binaries: "codex-app-server"
             build_dmg: "false"
-          - runner: macos-15-xlarge
-            target: x86_64-apple-darwin
-            bundle: primary
-            artifact_name: x86_64-apple-darwin
-            binaries: "midnight-coder codex-responses-api-proxy"
-            build_dmg: "false"
-          - runner: macos-15-xlarge
-            target: x86_64-apple-darwin
-            bundle: app-server
-            artifact_name: x86_64-apple-darwin-app-server
-            binaries: "codex-app-server"
-            build_dmg: "false"
-          - runner: macos-15-xlarge
-            target: aarch64-apple-darwin
-            bundle: primary
-            artifact_name: aarch64-apple-darwin
-            binaries: "midnight-coder codex-responses-api-proxy"
-            build_dmg: "false"
-          - runner: macos-15-xlarge
-            target: aarch64-apple-darwin
-            bundle: app-server
-            artifact_name: aarch64-apple-darwin-app-server
-            binaries: "codex-app-server"
-            build_dmg: "false"
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -1305,8 +1281,6 @@ jobs:
           platform_tarballs=(
             "dist/npm/midnight-coder-linux-x64-${VERSION}.tgz"
             "dist/npm/midnight-coder-linux-arm64-${VERSION}.tgz"
-            "dist/npm/midnight-coder-darwin-x64-${VERSION}.tgz"
-            "dist/npm/midnight-coder-darwin-arm64-${VERSION}.tgz"
             "dist/npm/midnight-coder-android-x64-${VERSION}.tgz"
             "dist/npm/midnight-coder-android-arm64-${VERSION}.tgz"
             "dist/npm/midnight-coder-win32-x64-${VERSION}.tgz"

@@ -1,6 +1,6 @@
 {
   "name": "midnight-coder",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Midnight Coder is a local coding agent that runs locally on your computer.",
   "license": "Apache-2.0",
   "bin": {
