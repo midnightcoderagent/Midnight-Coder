@@ -130,6 +130,13 @@ use codex_login::auth::AgentIdentityAuthPolicy;
 const OLLAMA_COMPACT_CONTEXT_THRESHOLD: i64 = 8_192;
 const OLLAMA_CUSTOM_INSTRUCTIONS_MAX_CHARS: usize = 2_000;
 const OLLAMA_COMPACT_BASE_INSTRUCTIONS: &str = "You are MidnightCoder, a concise coding agent in a terminal. Follow user and repository instructions. Use tools when needed, explain actions briefly, edit carefully, preserve user changes, and verify with focused commands. On Windows, prefer PowerShell-safe commands. Do not download models unless explicitly asked.";
+const EMBEDDED_MODEL_INSTRUCTIONS_STUB: &str = "\
+Follow the instructions embedded in the selected MidnightCoder model.
+Use the supplied tools, current conversation context, repository instructions, and runtime state.
+For coding tasks, keep working autonomously until the requested deliverable is complete: inspect relevant files, make the necessary edits, verify them with focused commands, and report the result.
+When the user asks to fix, correct, implement, or update code, treat diagnosis as an intermediate step, not the final answer.
+Do not stop after stating intent, after reading files, or after naming a likely cause when more tool work is needed and can safely continue.
+Only stop before editing when required information is missing, the target files cannot be found, or the change is risky enough to need user confirmation.";
 use codex_login::auth_env_telemetry::AuthEnvTelemetry;
 use codex_login::auth_env_telemetry::collect_auth_env_telemetry;
 use codex_model_provider::AgentIdentitySessionFallback;
@@ -193,6 +200,22 @@ impl OllamaSmartContextSetting {
             Self::Enabled
         } else {
             Self::Disabled
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ModelInstructionsSetting {
+    SendBaseInstructions,
+    EmbeddedInModel,
+}
+
+impl ModelInstructionsSetting {
+    pub(crate) fn from_embedded(enabled: bool) -> Self {
+        if enabled {
+            Self::EmbeddedInModel
+        } else {
+            Self::SendBaseInstructions
         }
     }
 }
@@ -630,6 +653,7 @@ impl ModelClient {
             settings.service_tier,
             settings.provider_request_options.clone(),
             responses_metadata,
+            ModelInstructionsSetting::SendBaseInstructions,
         )?;
         let ResponsesApiRequest {
             model,
@@ -897,6 +921,7 @@ impl ModelClient {
         service_tier: Option<String>,
         provider_request_options: Option<ProviderRequestOptions>,
         responses_metadata: &MidnightCoderResponsesMetadata,
+        model_instructions: ModelInstructionsSetting,
     ) -> Result<ResponsesApiRequest> {
         let mut input = prompt.get_formatted_input_for_request(model_info.use_responses_lite);
         if !self.state.provider.info().is_openai() {
@@ -912,18 +937,25 @@ impl ModelClient {
         }
         let compact_ollama_prompt =
             uses_compact_ollama_prompt(provider, provider_request_options.as_ref());
+        let request_instructions = instructions_for_model_request(
+            provider,
+            &model_info.slug,
+            &prompt.base_instructions.text,
+            compact_ollama_prompt,
+            model_instructions,
+        );
         let (instructions, tools) = if model_info.use_responses_lite {
             let mut prefix = vec![ResponseItem::AdditionalTools {
                 id: None,
                 role: "developer".to_string(),
                 tools,
             }];
-            if !prompt.base_instructions.text.is_empty() {
+            if !request_instructions.is_empty() {
                 prefix.push(ResponseItem::Message {
                     id: None,
                     role: "developer".to_string(),
                     content: vec![ContentItem::InputText {
-                        text: prompt.base_instructions.text.clone(),
+                        text: request_instructions,
                     }],
                     phase: None,
                     internal_chat_message_metadata_passthrough: None,
@@ -932,12 +964,7 @@ impl ModelClient {
             input.splice(0..0, prefix);
             (String::new(), None)
         } else {
-            let instructions = if compact_ollama_prompt {
-                compact_ollama_base_instructions(&prompt.base_instructions.text)
-            } else {
-                prompt.base_instructions.text.clone()
-            };
-            (instructions, Some(tools))
+            (request_instructions, Some(tools))
         };
         let reasoning = Self::build_reasoning(model_info, effort, summary);
         let include = if reasoning.is_some() {
@@ -1563,6 +1590,7 @@ impl ModelClientSession {
         provider_request_options: Option<ProviderRequestOptions>,
         responses_metadata: &MidnightCoderResponsesMetadata,
         ollama_smart_context: OllamaSmartContextSetting,
+        model_instructions: ModelInstructionsSetting,
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
         let auth_manager = self.client.state.provider.auth_manager();
@@ -1603,6 +1631,7 @@ impl ModelClientSession {
                 service_tier.clone(),
                 provider_request_options.clone(),
                 responses_metadata,
+                model_instructions,
             )?;
             let store = request.store;
             self.client
@@ -1763,6 +1792,7 @@ impl ModelClientSession {
         provider_request_options: Option<ProviderRequestOptions>,
         responses_metadata: &MidnightCoderResponsesMetadata,
         ollama_smart_context: OllamaSmartContextSetting,
+        model_instructions: ModelInstructionsSetting,
         warmup: bool,
         request_trace: Option<W3cTraceContext>,
         inference_trace: &InferenceTraceContext,
@@ -1790,6 +1820,7 @@ impl ModelClientSession {
                 service_tier.clone(),
                 provider_request_options.clone(),
                 responses_metadata,
+                model_instructions,
             )?;
             let store = request.store;
             self.client
@@ -1985,6 +2016,7 @@ impl ModelClientSession {
                 /*provider_request_options*/ None,
                 responses_metadata,
                 OllamaSmartContextSetting::Disabled,
+                ModelInstructionsSetting::SendBaseInstructions,
                 /*warmup*/ true,
                 current_span_w3c_trace_context(),
                 &disabled_trace,
@@ -2041,6 +2073,7 @@ impl ModelClientSession {
             provider_request_options,
             responses_metadata,
             OllamaSmartContextSetting::Disabled,
+            ModelInstructionsSetting::SendBaseInstructions,
             inference_trace,
         )
         .await
@@ -2058,9 +2091,14 @@ impl ModelClientSession {
         provider_request_options: Option<ProviderRequestOptions>,
         responses_metadata: &MidnightCoderResponsesMetadata,
         ollama_smart_context: OllamaSmartContextSetting,
+        model_instructions: ModelInstructionsSetting,
         inference_trace: &InferenceTraceContext,
     ) -> Result<ResponseStream> {
-        tracing::debug!(?ollama_smart_context, "stream request smartcontext setting");
+        tracing::debug!(
+            ?ollama_smart_context,
+            ?model_instructions,
+            "stream request smartcontext setting"
+        );
         let wire_api = self.client.state.provider.info().wire_api;
         match wire_api {
             WireApi::Responses => {
@@ -2077,6 +2115,7 @@ impl ModelClientSession {
                             provider_request_options.clone(),
                             responses_metadata,
                             ollama_smart_context,
+                            model_instructions,
                             /*warmup*/ false,
                             request_trace,
                             inference_trace,
@@ -2100,6 +2139,7 @@ impl ModelClientSession {
                     provider_request_options,
                     responses_metadata,
                     ollama_smart_context,
+                    model_instructions,
                     inference_trace,
                 )
                 .await
@@ -2747,6 +2787,7 @@ fn compact_midnightcoder_base_instructions_for_ollama(
     if !matches!(ollama_smart_context, OllamaSmartContextSetting::Enabled)
         || !is_midnightcoder_model(&request.model)
         || request.instructions.trim().is_empty()
+        || request.instructions == EMBEDDED_MODEL_INSTRUCTIONS_STUB
     {
         return;
     }
@@ -2761,6 +2802,27 @@ fn compact_midnightcoder_base_instructions_for_ollama(
 fn is_midnightcoder_model(model: &str) -> bool {
     let model = model.to_ascii_lowercase();
     model.starts_with("midnightcoder") || model.starts_with("midnight-coder")
+}
+
+fn instructions_for_model_request(
+    provider: &ApiProvider,
+    model: &str,
+    base_instructions: &str,
+    compact_ollama_prompt: bool,
+    model_instructions: ModelInstructionsSetting,
+) -> String {
+    if model_instructions == ModelInstructionsSetting::EmbeddedInModel
+        && is_ollama_provider(provider)
+        && is_midnightcoder_model(model)
+    {
+        return EMBEDDED_MODEL_INSTRUCTIONS_STUB.to_string();
+    }
+
+    if compact_ollama_prompt {
+        compact_ollama_base_instructions(base_instructions)
+    } else {
+        base_instructions.to_string()
+    }
 }
 
 fn ollama_chat_request_from_responses_request(

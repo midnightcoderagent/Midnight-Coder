@@ -1,6 +1,8 @@
 use super::AuthRequestTelemetryContext;
 use super::CompactConversationRequestSettings;
+use super::EMBEDDED_MODEL_INSTRUCTIONS_STUB;
 use super::ModelClient;
+use super::ModelInstructionsSetting;
 use super::PendingUnauthorizedRetry;
 use super::Prompt;
 use super::UnauthorizedRecoveryExecution;
@@ -34,6 +36,7 @@ use codex_model_provider_info::create_oss_provider_with_base_url;
 use codex_otel::SessionTelemetry;
 use codex_protocol::ThreadId;
 use codex_protocol::auth::AuthMode;
+use codex_protocol::models::BASE_INSTRUCTIONS_DEFAULT;
 use codex_protocol::models::BaseInstructions;
 use codex_protocol::models::ContentItem;
 use codex_protocol::models::ResponseItem;
@@ -50,6 +53,11 @@ use codex_rollout_trace::RawTraceEventPayload;
 use codex_rollout_trace::RolloutTrace;
 use codex_rollout_trace::TraceWriter;
 use codex_rollout_trace::replay_bundle;
+use codex_tools::JsonSchema;
+use codex_tools::JsonSchemaPrimitiveType;
+use codex_tools::JsonSchemaType;
+use codex_tools::ResponsesApiTool;
+use codex_tools::ToolSpec;
 use futures::StreamExt;
 use pretty_assertions::assert_eq;
 use serde_json::json;
@@ -269,6 +277,162 @@ fn test_model_info() -> ModelInfo {
         "experimental_supported_tools": []
     }))
     .expect("deserialize test model info")
+}
+
+fn test_model_info_with_slug(slug: &str) -> ModelInfo {
+    let mut model_info = test_model_info();
+    model_info.slug = slug.to_string();
+    model_info
+}
+
+fn test_prompt_with_base_instructions(base_instructions: &str) -> Prompt {
+    Prompt {
+        input: vec![ResponseItem::Message {
+            id: None,
+            role: "user".to_string(),
+            content: vec![ContentItem::InputText {
+                text: "hello".to_string(),
+            }],
+            phase: None,
+            internal_chat_message_metadata_passthrough: None,
+        }],
+        base_instructions: BaseInstructions {
+            text: base_instructions.to_string(),
+        },
+        tools: vec![ToolSpec::Function(ResponsesApiTool {
+            name: "test_tool".to_string(),
+            description: "A test tool".to_string(),
+            strict: false,
+            defer_loading: None,
+            parameters: JsonSchema {
+                schema_type: Some(JsonSchemaType::Single(JsonSchemaPrimitiveType::Object)),
+                properties: Some(BTreeMap::new()),
+                required: Some(Vec::new()),
+                ..Default::default()
+            },
+            output_schema: None,
+        })],
+        ..Default::default()
+    }
+}
+
+fn test_api_provider(base_url: &str) -> codex_api::Provider {
+    create_oss_provider_with_base_url(base_url, WireApi::Responses)
+        .to_api_provider(None)
+        .expect("test provider should convert to API provider")
+}
+
+#[test]
+fn build_responses_request_sends_base_instructions_by_default() {
+    let client = test_model_client(SessionSource::Cli);
+    let provider = test_api_provider("http://localhost:11434/v1");
+    let prompt = test_prompt_with_base_instructions(BASE_INSTRUCTIONS_DEFAULT);
+    let responses_metadata = test_responses_metadata_for_client(
+        &client,
+        /*turn_id*/ None,
+        format!("{}:0", client.state.thread_id),
+        /*parent_thread_id*/ None,
+        TestMidnightCoderResponsesRequestKind::Turn,
+    );
+
+    let request = client
+        .build_responses_request(
+            &provider,
+            &prompt,
+            &test_model_info_with_slug("MidnightCoder-30B-tools"),
+            /*effort*/ None,
+            codex_protocol::config_types::ReasoningSummary::None,
+            /*service_tier*/ None,
+            /*provider_request_options*/ None,
+            &responses_metadata,
+            ModelInstructionsSetting::SendBaseInstructions,
+        )
+        .expect("request should build");
+
+    assert_eq!(request.instructions, BASE_INSTRUCTIONS_DEFAULT);
+    assert!(
+        request
+            .tools
+            .as_ref()
+            .is_some_and(|tools| !tools.is_empty())
+    );
+}
+
+#[test]
+fn build_responses_request_suppresses_base_instructions_for_embedded_midnightcoder_ollama() {
+    let client = test_model_client(SessionSource::Cli);
+    let provider = test_api_provider("http://localhost:11434/v1");
+    let prompt = test_prompt_with_base_instructions(BASE_INSTRUCTIONS_DEFAULT);
+    let responses_metadata = test_responses_metadata_for_client(
+        &client,
+        /*turn_id*/ None,
+        format!("{}:0", client.state.thread_id),
+        /*parent_thread_id*/ None,
+        TestMidnightCoderResponsesRequestKind::Turn,
+    );
+
+    let request = client
+        .build_responses_request(
+            &provider,
+            &prompt,
+            &test_model_info_with_slug("MidnightCoder-30B-tools"),
+            /*effort*/ None,
+            codex_protocol::config_types::ReasoningSummary::None,
+            /*service_tier*/ None,
+            /*provider_request_options*/ None,
+            &responses_metadata,
+            ModelInstructionsSetting::EmbeddedInModel,
+        )
+        .expect("request should build");
+
+    assert_eq!(request.instructions, EMBEDDED_MODEL_INSTRUCTIONS_STUB);
+    assert!(
+        !request
+            .instructions
+            .contains("You are a coding agent running in")
+    );
+    assert!(request.instructions.contains("keep working autonomously"));
+    assert!(
+        request
+            .instructions
+            .contains("Do not stop after stating intent")
+    );
+    assert!(
+        request
+            .tools
+            .as_ref()
+            .is_some_and(|tools| !tools.is_empty())
+    );
+}
+
+#[test]
+fn build_responses_request_keeps_base_instructions_for_non_ollama_provider() {
+    let client = test_model_client(SessionSource::Cli);
+    let provider = test_api_provider("https://example.com/v1");
+    let prompt = test_prompt_with_base_instructions(BASE_INSTRUCTIONS_DEFAULT);
+    let responses_metadata = test_responses_metadata_for_client(
+        &client,
+        /*turn_id*/ None,
+        format!("{}:0", client.state.thread_id),
+        /*parent_thread_id*/ None,
+        TestMidnightCoderResponsesRequestKind::Turn,
+    );
+
+    let request = client
+        .build_responses_request(
+            &provider,
+            &prompt,
+            &test_model_info_with_slug("MidnightCoder-30B-tools"),
+            /*effort*/ None,
+            codex_protocol::config_types::ReasoningSummary::None,
+            /*service_tier*/ None,
+            /*provider_request_options*/ None,
+            &responses_metadata,
+            ModelInstructionsSetting::EmbeddedInModel,
+        )
+        .expect("request should build");
+
+    assert_eq!(request.instructions, BASE_INSTRUCTIONS_DEFAULT);
 }
 
 fn test_session_telemetry() -> SessionTelemetry {

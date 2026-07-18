@@ -169,6 +169,10 @@ pub struct ConfigToml {
     /// Automatically size Ollama `num_ctx` from the active context size.
     pub ollama_smart_context: Option<bool>,
 
+    /// Whether the selected model/template already embeds the stable
+    /// MidnightCoder base instructions.
+    pub model_has_embedded_instructions: Option<bool>,
+
     /// Provider to use from the model_providers map.
     pub model_provider: Option<String>,
 
@@ -1029,5 +1033,13 @@ mod tests {
         let message = err.to_string();
         assert!(message.contains("TOML list of strings"));
         assert!(message.contains("comma-separated strings are not supported"));
+    }
+
+    #[test]
+    fn model_has_embedded_instructions_accepts_boolean() {
+        let config: ConfigToml = toml::from_str("model_has_embedded_instructions = true")
+            .expect("embedded instructions flag should deserialize");
+
+        assert_eq!(config.model_has_embedded_instructions, Some(true));
     }
 }

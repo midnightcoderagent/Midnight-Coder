@@ -67,6 +67,8 @@ use crate::render::renderable::Renderable;
 use crate::resume_picker::SessionSelection;
 use crate::resume_picker::SessionTarget;
 use crate::session_state::ThreadSessionState;
+use crate::system_monitor::SystemMonitor;
+use crate::system_monitor::parse_monitor_line_items;
 #[cfg(test)]
 use crate::test_support::PathBufExt;
 #[cfg(test)]
@@ -505,6 +507,7 @@ pub(crate) struct App {
     pub(crate) session_telemetry: SessionTelemetry,
     pub(crate) app_event_tx: AppEventSender,
     pub(crate) chat_widget: ChatWidget,
+    system_monitor: SystemMonitor,
     workspace_command_runner: Option<WorkspaceCommandRunner>,
     /// Config is stored here so we can recreate ChatWidgets as needed.
     pub(crate) config: Config,
@@ -1004,6 +1007,10 @@ impl App {
             .maybe_prompt_windows_sandbox_enable(should_prompt_windows_sandbox_nux_at_startup);
 
         let file_search = FileSearchManager::new(config.cwd.to_path_buf(), app_event_tx.clone());
+        let system_monitor = SystemMonitor::start(
+            runtime_model_provider_base_url.as_deref(),
+            tui.frame_requester(),
+        );
         let runtime_keymap = RuntimeKeymap::from_config(&config.tui_keymap).map_err(|err| {
             color_eyre::eyre::eyre!(
                 "Invalid `tui.keymap` configuration: {err}\n\
@@ -1019,6 +1026,7 @@ See the MidnightCoder keymap documentation for supported actions and examples."
             session_telemetry: session_telemetry.clone(),
             app_event_tx,
             chat_widget,
+            system_monitor,
             workspace_command_runner: Some(workspace_command_runner),
             config,
             state_db,
@@ -1347,7 +1355,20 @@ See the MidnightCoder keymap documentation for supported actions and examples."
     }
 
     fn render_chat_widget_frame(&mut self, tui: &mut tui::Tui) -> Result<Rect> {
-        let desired_height = self.chat_widget.desired_height(tui.terminal.size()?.width);
+        let terminal_width = tui.terminal.size()?.width;
+        let status_line_2 = self.config.tui_status_line_2.as_ref().and_then(|ids| {
+            let (items, _) = parse_monitor_line_items(ids.clone());
+            if items.is_empty() {
+                None
+            } else {
+                self.system_monitor
+                    .footer_line(&items, self.config.tui_status_line_2_use_colors)
+            }
+        });
+        self.chat_widget.set_status_line_2(status_line_2.clone());
+        self.chat_widget
+            .set_status_line_2_enabled(status_line_2.is_some());
+        let desired_height = self.chat_widget.desired_height(terminal_width);
         let mut rendered_area = Rect::default();
         tui.draw_with_resize_reflow(desired_height, |frame| {
             let area = frame.area();

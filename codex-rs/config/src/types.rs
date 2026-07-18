@@ -726,6 +726,18 @@ pub struct Tui {
     #[serde(default = "default_true")]
     pub status_line_use_colors: bool,
 
+    /// Ordered list of monitor status line item identifiers.
+    ///
+    /// When set, the TUI renders the selected items as a second status line.
+    /// When unset, the second line is hidden.
+    #[serde(default)]
+    pub status_line_2: Option<Vec<String>>,
+
+    /// Color monitor status line items with semantic colors.
+    /// Defaults to `true`.
+    #[serde(default = "default_true")]
+    pub status_line_2_use_colors: bool,
+
     /// Ordered list of terminal title item identifiers.
     ///
     /// When set, the TUI renders the selected items into the terminal window/tab title.

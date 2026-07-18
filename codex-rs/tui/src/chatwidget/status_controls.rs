@@ -5,6 +5,7 @@
 //! history-facing `/status` surface.
 
 use super::*;
+use crate::bottom_pane::SystemMonitorLineSetupView;
 
 impl ChatWidget {
     /// Update the status indicator header and details.
@@ -74,6 +75,16 @@ impl ChatWidget {
         self.bottom_pane.set_status_line_hyperlink(url);
     }
 
+    /// Sets the monitor-backed second footer line.
+    pub(crate) fn set_status_line_2(&mut self, status_line: Option<Line<'static>>) {
+        self.bottom_pane.set_status_line_2(status_line);
+    }
+
+    /// Enables or disables the monitor-backed second footer line.
+    pub(crate) fn set_status_line_2_enabled(&mut self, enabled: bool) {
+        self.bottom_pane.set_status_line_2_enabled(enabled);
+    }
+
     /// Forwards the contextual active-agent label into the bottom-pane footer pipeline.
     ///
     /// `ChatWidget` stays a pass-through here so `App` remains the owner of "which thread is the
@@ -114,6 +125,21 @@ impl ChatWidget {
         let ids = items.iter().map(ToString::to_string).collect::<Vec<_>>();
         self.config.tui_status_line = Some(ids);
         self.config.tui_status_line_use_colors = use_theme_colors;
+        self.refresh_status_line();
+    }
+
+    /// Records that monitor status-line setup was canceled.
+    pub(crate) fn cancel_status_line_2_setup(&self) {
+        tracing::info!("Monitor status line setup canceled by user");
+    }
+
+    /// Applies monitor status-line selection from the setup view to in-memory config.
+    pub(crate) fn setup_status_line_2(&mut self, items: Vec<String>, use_theme_colors: bool) {
+        tracing::info!(
+            "monitor status line setup confirmed with items: {items:#?}, use_theme_colors: {use_theme_colors}"
+        );
+        self.config.tui_status_line_2 = Some(items);
+        self.config.tui_status_line_2_use_colors = use_theme_colors;
         self.refresh_status_line();
     }
 
@@ -292,6 +318,18 @@ impl ChatWidget {
             Some(configured_status_line_items.as_slice()),
             self.config.tui_status_line_use_colors,
             self.status_surface_preview_data(),
+            self.app_event_tx.clone(),
+            self.bottom_pane.list_keymap(),
+        );
+        self.bottom_pane.show_view(Box::new(view));
+    }
+
+    pub(super) fn open_status_line_2_setup(&mut self) {
+        let configured_status_line_items =
+            self.config.tui_status_line_2.clone().unwrap_or_default();
+        let view = SystemMonitorLineSetupView::new(
+            Some(configured_status_line_items.as_slice()),
+            self.config.tui_status_line_2_use_colors,
             self.app_event_tx.clone(),
             self.bottom_pane.list_keymap(),
         );

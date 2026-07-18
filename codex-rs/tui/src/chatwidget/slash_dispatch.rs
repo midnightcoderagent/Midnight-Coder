@@ -485,6 +485,9 @@ impl ChatWidget {
             SlashCommand::Statusline => {
                 self.open_status_line_setup();
             }
+            SlashCommand::Statusline2 => {
+                self.open_status_line_2_setup();
+            }
             SlashCommand::Theme => {
                 self.open_theme_picker();
             }
@@ -1173,6 +1176,7 @@ impl ChatWidget {
             | SlashCommand::Hooks
             | SlashCommand::Title
             | SlashCommand::Statusline
+            | SlashCommand::Statusline2
             | SlashCommand::Theme
             | SlashCommand::Pets => QueueDrain::Stop,
         }

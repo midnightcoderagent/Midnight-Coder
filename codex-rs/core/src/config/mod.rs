@@ -637,6 +637,10 @@ pub struct Config {
     /// Automatically size Ollama `num_ctx` from the active context size.
     pub ollama_smart_context: bool,
 
+    /// Whether the selected model/template already embeds the stable
+    /// MidnightCoder base instructions.
+    pub model_has_embedded_instructions: bool,
+
     /// Size of the context window for the model, in tokens.
     pub model_context_window: Option<i64>,
 
@@ -777,6 +781,14 @@ pub struct Config {
 
     /// Whether to color status line items with colors from the active syntax theme.
     pub tui_status_line_use_colors: bool,
+
+    /// Ordered list of monitor status line item identifiers for the TUI.
+    ///
+    /// When unset, the second line is hidden.
+    pub tui_status_line_2: Option<Vec<String>>,
+
+    /// Whether to color monitor status line items with semantic colors.
+    pub tui_status_line_2_use_colors: bool,
 
     /// Ordered list of terminal title item identifiers for the TUI.
     ///
@@ -3786,6 +3798,7 @@ impl Config {
             resume_type: cfg.resume_type,
             ollama_num_ctx: cfg.ollama_num_ctx,
             ollama_smart_context: cfg.ollama_smart_context.unwrap_or(false),
+            model_has_embedded_instructions: cfg.model_has_embedded_instructions.unwrap_or(false),
             model_context_window: cfg.model_context_window,
             model_auto_compact_token_limit: cfg.model_auto_compact_token_limit,
             model_auto_compact_token_limit_scope: cfg
@@ -3995,6 +4008,12 @@ impl Config {
                 .tui
                 .as_ref()
                 .map(|t| t.status_line_use_colors)
+                .unwrap_or(true),
+            tui_status_line_2: cfg.tui.as_ref().and_then(|t| t.status_line_2.clone()),
+            tui_status_line_2_use_colors: cfg
+                .tui
+                .as_ref()
+                .map(|t| t.status_line_2_use_colors)
                 .unwrap_or(true),
             tui_terminal_title: cfg.tui.as_ref().and_then(|t| t.terminal_title.clone()),
             tui_theme: cfg.tui.as_ref().and_then(|t| t.theme.clone()),

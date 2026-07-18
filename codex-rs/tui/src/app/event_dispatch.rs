@@ -2380,6 +2380,38 @@ impl App {
             AppEvent::StatusLineSetupCancelled => {
                 self.chat_widget.cancel_status_line_setup();
             }
+            AppEvent::StatusLine2Setup {
+                items,
+                use_theme_colors,
+            } => {
+                let ids = items.clone();
+                let items_edit = crate::legacy_core::config::edit::status_line_2_items_edit(&ids);
+                let colors_edit = crate::legacy_core::config::edit::status_line_2_use_colors_edit(
+                    use_theme_colors,
+                );
+                let apply_result = ConfigEditsBuilder::for_config(&self.config)
+                    .with_edits([items_edit, colors_edit])
+                    .apply()
+                    .await;
+                match apply_result {
+                    Ok(()) => {
+                        self.config.tui_status_line_2 = Some(ids.clone());
+                        self.config.tui_status_line_2_use_colors = use_theme_colors;
+                        self.chat_widget
+                            .setup_status_line_2(items, use_theme_colors);
+                    }
+                    Err(err) => {
+                        let error = format_config_error(&err);
+                        tracing::error!(error = %error, "failed to persist monitor status line settings; keeping previous selection");
+                        self.chat_widget.add_error_message(format!(
+                            "Failed to save monitor status line settings: {error}"
+                        ));
+                    }
+                }
+            }
+            AppEvent::StatusLine2SetupCancelled => {
+                self.chat_widget.cancel_status_line_2_setup();
+            }
             AppEvent::TerminalTitleSetup { items } => {
                 let ids = items.iter().map(ToString::to_string).collect::<Vec<_>>();
                 let edit = crate::legacy_core::config::edit::terminal_title_items_edit(&ids);

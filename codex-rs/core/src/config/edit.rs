@@ -133,6 +133,24 @@ pub fn status_line_use_colors_edit(enabled: bool) -> ConfigEdit {
     }
 }
 
+/// Produces a config edit that sets `[tui].status_line_2` to an explicit ordered list.
+pub fn status_line_2_items_edit(items: &[String]) -> ConfigEdit {
+    let array = items.iter().cloned().collect::<toml_edit::Array>();
+
+    ConfigEdit::SetPath {
+        segments: vec!["tui".to_string(), "status_line_2".to_string()],
+        value: TomlItem::Value(array.into()),
+    }
+}
+
+/// Produces a config edit that sets `[tui].status_line_2_use_colors`.
+pub fn status_line_2_use_colors_edit(enabled: bool) -> ConfigEdit {
+    ConfigEdit::SetPath {
+        segments: vec!["tui".to_string(), "status_line_2_use_colors".to_string()],
+        value: value(enabled),
+    }
+}
+
 /// Produces a config edit that sets `[tui].terminal_title` to an explicit ordered list.
 ///
 /// The array is written even when it is empty so "disabled title updates" stays

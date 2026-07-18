@@ -7,6 +7,7 @@ use std::sync::atomic::Ordering;
 use crate::SkillInjections;
 use crate::build_skill_injections;
 use crate::client::ModelClientSession;
+use crate::client::ModelInstructionsSetting;
 use crate::client::OllamaSmartContextSetting;
 use crate::client_common::Prompt;
 use crate::client_common::ResponseEvent;
@@ -1931,6 +1932,9 @@ async fn try_run_sampling_request(
             provider_request_options,
             responses_metadata,
             OllamaSmartContextSetting::from_enabled(turn_context.config.ollama_smart_context),
+            ModelInstructionsSetting::from_embedded(
+                turn_context.config.model_has_embedded_instructions,
+            ),
             &inference_trace,
         )
         .instrument(trace_span!("stream_request"))

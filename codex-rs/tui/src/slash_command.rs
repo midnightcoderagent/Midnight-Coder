@@ -61,6 +61,8 @@ pub enum SlashCommand {
     DebugConfig,
     Title,
     Statusline,
+    #[strum(to_string = "statusline2", serialize = "status-line-2")]
+    Statusline2,
     Theme,
     #[strum(to_string = "pets", serialize = "pet")]
     Pets,
@@ -122,6 +124,7 @@ impl SlashCommand {
             SlashCommand::DebugConfig => "show config layers and requirement sources for debugging",
             SlashCommand::Title => "configure which items appear in the terminal title",
             SlashCommand::Statusline => "configure which items appear in the status line",
+            SlashCommand::Statusline2 => "configure which items appear in the second status line",
             SlashCommand::Theme => "choose a syntax highlighting theme",
             SlashCommand::Pets => "choose or hide the terminal pet",
             SlashCommand::Ps => "list background terminals",
@@ -203,6 +206,7 @@ impl SlashCommand {
                 | SlashCommand::Status
                 | SlashCommand::Usage
                 | SlashCommand::Ide
+                | SlashCommand::Statusline2
         )
     }
 
@@ -256,6 +260,7 @@ impl SlashCommand {
             | SlashCommand::Plugins
             | SlashCommand::Title
             | SlashCommand::Statusline
+            | SlashCommand::Statusline2
             | SlashCommand::AutoReview
             | SlashCommand::Feedback
             | SlashCommand::Ide

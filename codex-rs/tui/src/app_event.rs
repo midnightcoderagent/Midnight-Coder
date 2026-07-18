@@ -1047,6 +1047,14 @@ pub(crate) enum AppEvent {
     /// Dismiss the status-line setup UI without changing config.
     StatusLineSetupCancelled,
 
+    /// Apply a user-confirmed monitor status-line item ordering/selection.
+    StatusLine2Setup {
+        items: Vec<String>,
+        use_theme_colors: bool,
+    },
+    /// Dismiss the monitor status-line setup UI without changing config.
+    StatusLine2SetupCancelled,
+
     /// Apply a user-confirmed terminal-title item ordering/selection.
     TerminalTitleSetup {
         items: Vec<TerminalTitleItem>,

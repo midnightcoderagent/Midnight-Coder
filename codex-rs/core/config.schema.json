@@ -5260,6 +5260,10 @@
       "format": "int64",
       "type": "integer"
     },
+    "model_has_embedded_instructions": {
+      "description": "Whether the selected model/template already embeds the stable MidnightCoder base instructions.",
+      "type": "boolean"
+    },
     "model_instructions_file": {
       "allOf": [
         {

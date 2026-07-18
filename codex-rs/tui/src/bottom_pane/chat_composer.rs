@@ -507,6 +507,8 @@ impl ChatComposer {
                 status_line_value: None,
                 status_line_hyperlink_url: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 side_conversation_context_label: None,
                 active_agent_label: None,
                 external_editor_key: Some(key_hint::ctrl(KeyCode::Char('g'))),
@@ -3437,6 +3439,8 @@ impl ChatComposer {
             is_wsl,
             status_line_value: self.footer.status_line_value.clone(),
             status_line_enabled: self.footer.status_line_enabled,
+            status_line_2_value: self.footer.status_line_2_value.clone(),
+            status_line_2_enabled: self.footer.status_line_2_enabled,
             key_hints: FooterKeyHints {
                 toggle_shortcuts: self.footer.toggle_shortcuts_key,
                 queue: self.footer.queue_key,
@@ -3934,6 +3938,22 @@ impl ChatComposer {
         true
     }
 
+    pub(crate) fn set_status_line_2(&mut self, status_line: Option<Line<'static>>) -> bool {
+        if self.footer.status_line_2_value == status_line {
+            return false;
+        }
+        self.footer.status_line_2_value = status_line;
+        true
+    }
+
+    pub(crate) fn set_status_line_2_enabled(&mut self, enabled: bool) -> bool {
+        if self.footer.status_line_2_enabled == enabled {
+            return false;
+        }
+        self.footer.status_line_2_enabled = enabled;
+        true
+    }
+
     pub(crate) fn set_side_conversation_context_label(&mut self, label: Option<String>) -> bool {
         if self.footer.side_conversation_context_label == label {
             return false;
@@ -4159,6 +4179,8 @@ impl ChatComposer {
                 let footer_props = self.footer_props();
                 let show_cycle_hint = !footer_props.is_task_running
                     && self.footer.collaboration_mode_indicator.is_some();
+                let status_line_2_active = footer_props.status_line_2_enabled
+                    && footer_props.status_line_2_value.is_some();
                 let show_shortcuts_hint = match footer_props.mode {
                     FooterMode::ComposerEmpty => !self.is_in_paste_burst(),
                     FooterMode::ComposerHasDraft => false,
@@ -4380,6 +4402,22 @@ impl ChatComposer {
                         && let Some(url) = self.footer.status_line_hyperlink_url.as_deref()
                     {
                         mark_underlined_hyperlink(buf, hint_rect, url);
+                    }
+                    if status_line_active
+                        && status_line_2_active
+                        && let Some(line) = footer_props.status_line_2_value.clone()
+                    {
+                        let line_area = if status_line_active {
+                            Rect::new(
+                                hint_rect.x,
+                                hint_rect.y.saturating_add(1),
+                                hint_rect.width,
+                                1,
+                            )
+                        } else {
+                            hint_rect
+                        };
+                        render_footer_line(line_area, buf, line);
                     }
                 }
             }

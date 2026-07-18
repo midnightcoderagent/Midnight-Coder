@@ -21,6 +21,7 @@ pub(super) async fn make_test_app() -> App {
         session_telemetry,
         app_event_tx,
         chat_widget,
+        system_monitor: crate::system_monitor::SystemMonitor::disabled(),
         workspace_command_runner: None,
         config,
         state_db: None,

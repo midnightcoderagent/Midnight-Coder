@@ -77,6 +77,8 @@ pub(crate) struct FooterProps {
     pub(crate) quit_shortcut_key: KeyBinding,
     pub(crate) status_line_value: Option<Line<'static>>,
     pub(crate) status_line_enabled: bool,
+    pub(crate) status_line_2_value: Option<Line<'static>>,
+    pub(crate) status_line_2_enabled: bool,
     pub(crate) key_hints: FooterKeyHints,
     /// Active thread label shown when the footer is rendering contextual information instead of an
     /// instructional hint.
@@ -228,6 +230,13 @@ pub(crate) fn reset_mode_after_activity(current: FooterMode) -> FooterMode {
 }
 
 pub(crate) fn footer_height(props: &FooterProps) -> u16 {
+    let status_line_active = props.status_line_enabled && props.status_line_value.is_some();
+    let status_lines = u16::from(status_line_active)
+        + u16::from(
+            status_line_active
+                && props.status_line_2_enabled
+                && props.status_line_2_value.is_some(),
+        );
     let show_shortcuts_hint = match props.mode {
         FooterMode::ComposerEmpty => true,
         FooterMode::ComposerHasDraft => false,
@@ -244,14 +253,16 @@ pub(crate) fn footer_height(props: &FooterProps) -> u16 {
         | FooterMode::ShortcutOverlay
         | FooterMode::EscHint => false,
     };
-    footer_from_props_lines(
-        props,
-        /*collaboration_mode_indicator*/ None,
-        /*show_cycle_hint*/ false,
-        show_shortcuts_hint,
-        show_queue_hint,
+    status_lines.max(
+        footer_from_props_lines(
+            props,
+            /*collaboration_mode_indicator*/ None,
+            /*show_cycle_hint*/ false,
+            show_shortcuts_hint,
+            show_queue_hint,
+        )
+        .len() as u16,
     )
-    .len() as u16
 }
 
 /// Render a single precomputed footer line.
@@ -1567,6 +1578,8 @@ mod tests {
                 quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
                 status_line_value: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
             },
@@ -1585,6 +1598,8 @@ mod tests {
                 quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
                 status_line_value: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 key_hints: FooterKeyHints {
                     insert_newline: Some(key_hint::shift(KeyCode::Enter)),
                     ..FooterKeyHints::default_bindings()
@@ -1606,6 +1621,8 @@ mod tests {
                 quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
                 status_line_value: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
             },
@@ -1624,6 +1641,8 @@ mod tests {
                 quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
                 status_line_value: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
             },
@@ -1642,6 +1661,8 @@ mod tests {
                 quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
                 status_line_value: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
             },
@@ -1660,6 +1681,8 @@ mod tests {
                 quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
                 status_line_value: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
             },
@@ -1678,6 +1701,8 @@ mod tests {
                 quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
                 status_line_value: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
             },
@@ -1696,6 +1721,8 @@ mod tests {
                 quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
                 status_line_value: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
             },
@@ -1714,6 +1741,8 @@ mod tests {
                 quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
                 status_line_value: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
             },
@@ -1734,6 +1763,8 @@ mod tests {
                 quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
                 status_line_value: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
             },
@@ -1754,6 +1785,8 @@ mod tests {
                 quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
                 status_line_value: None,
                 status_line_enabled: false,
+                status_line_2_value: None,
+                status_line_2_enabled: false,
                 key_hints: FooterKeyHints::default_bindings(),
                 active_agent_label: None,
             },
@@ -1770,6 +1803,8 @@ mod tests {
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
             status_line_value: None,
             status_line_enabled: false,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
         };
@@ -1799,6 +1834,8 @@ mod tests {
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
             status_line_value: None,
             status_line_enabled: false,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
         };
@@ -1821,6 +1858,8 @@ mod tests {
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
             status_line_value: Some(Line::from("Status line content".to_string())),
             status_line_enabled: true,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
         };
@@ -1838,6 +1877,8 @@ mod tests {
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
             status_line_value: Some(Line::from("Status line content".to_string())),
             status_line_enabled: true,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
         };
@@ -1855,6 +1896,8 @@ mod tests {
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
             status_line_value: Some(Line::from("Status line content".to_string())),
             status_line_enabled: true,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
         };
@@ -1872,6 +1915,8 @@ mod tests {
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
             status_line_value: None, // command timed out / empty
             status_line_enabled: true,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
         };
@@ -1903,6 +1948,8 @@ mod tests {
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
             status_line_value: None,
             status_line_enabled: false,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
         };
@@ -1926,6 +1973,8 @@ mod tests {
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
             status_line_value: None,
             status_line_enabled: true,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
         };
@@ -1952,6 +2001,8 @@ mod tests {
                 "Status line content that should truncate before the mode indicator".to_string(),
             )),
             status_line_enabled: true,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
         };
@@ -1975,6 +2026,8 @@ mod tests {
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
             status_line_value: None,
             status_line_enabled: false,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: Some("Robie [explorer]".to_string()),
         };
@@ -1992,6 +2045,8 @@ mod tests {
             quit_shortcut_key: key_hint::ctrl(KeyCode::Char('c')),
             status_line_value: Some(Line::from("Status line content".to_string())),
             status_line_enabled: true,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: Some("Robie [explorer]".to_string()),
         };
@@ -2015,6 +2070,8 @@ mod tests {
                     .to_string(),
             )),
             status_line_enabled: true,
+            status_line_2_value: None,
+            status_line_2_enabled: false,
             key_hints: FooterKeyHints::default_bindings(),
             active_agent_label: None,
         };

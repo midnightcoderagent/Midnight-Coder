@@ -104,6 +104,7 @@ pub(crate) mod prompt_args;
 mod skill_popup;
 mod skills_toggle_view;
 pub(crate) mod slash_commands;
+mod system_monitor_line_setup;
 pub(crate) use footer::CollaborationModeIndicator;
 pub(crate) use footer::GoalStatusIndicator;
 #[cfg(test)]
@@ -133,6 +134,7 @@ pub(crate) use status_line_setup::StatusLineItem;
 pub(crate) use status_line_setup::StatusLineSetupView;
 pub(crate) use status_surface_preview::StatusSurfacePreviewData;
 pub(crate) use status_surface_preview::StatusSurfacePreviewItem;
+pub(crate) use system_monitor_line_setup::SystemMonitorLineSetupView;
 pub(crate) use title_setup::TerminalTitleItem;
 pub(crate) use title_setup::TerminalTitleSetupView;
 #[cfg(test)]
@@ -1802,6 +1804,18 @@ impl BottomPane {
 
     pub(crate) fn set_status_line_enabled(&mut self, enabled: bool) {
         if self.composer.set_status_line_enabled(enabled) {
+            self.request_redraw();
+        }
+    }
+
+    pub(crate) fn set_status_line_2(&mut self, status_line: Option<Line<'static>>) {
+        if self.composer.set_status_line_2(status_line) {
+            self.request_redraw();
+        }
+    }
+
+    pub(crate) fn set_status_line_2_enabled(&mut self, enabled: bool) {
+        if self.composer.set_status_line_2_enabled(enabled) {
             self.request_redraw();
         }
     }
