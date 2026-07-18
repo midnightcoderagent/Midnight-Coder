@@ -22,6 +22,15 @@ Useful commands:
 ```text
 /provider_conf
 /model
+/smartcontext true
+```
+
+For Ollama-backed models, `/smartcontext true` enables native smart context sizing. Midnight Coder
+uses the active model context window to send the right `num_ctx` value to Ollama. Use
+`/smartcontext false` to disable it again, or set it directly in `config.toml`:
+
+```toml
+ollama_smart_context = true
 ```
 
 ## Context control
@@ -30,6 +39,7 @@ Midnight Coder keeps session history explicit and bounded.
 
 ```text
 /context
+/smartcontext
 /mini-model
 /resume-type
 /new
@@ -38,11 +48,35 @@ Midnight Coder keeps session history explicit and bounded.
 ```
 
 - `/context` sets the maximum context window before auto-compaction
+- `/smartcontext` toggles Ollama native context sizing for local models
 - `/mini-model` sets the model used for context compaction
 - `/resume-type` sets the compaction strategy
 - `/new` opens another chat during a conversation
 - `/clear` starts a fresh chat
 - `/compact` trims history when the conversation gets long
+
+## Monitor status line
+
+Use `/statusline2` to configure a second footer line with monitor data from the local model host.
+It can show CPU, RAM, swap, GPU, GPU model, VRAM, GPU temperature, Ollama runtime status, context
+usage, and GPU/CPU split.
+
+```text
+/statusline2
+```
+
+You can also configure it in `config.toml`:
+
+```toml
+[tui]
+status_line_2 = ["cpu", "ram", "gpu", "vram", "status", "context"]
+status_line_2_use_colors = true
+```
+
+When a local provider is configured, Midnight Coder reads monitor metrics from the provider host on
+port `9898` at `/metrics`; the line stays hidden until metrics are available.
+
+![Midnight Coder with monitor status line](docs/assets/midnight-coder-monitor.svg)
 
 ## What it includes
 
